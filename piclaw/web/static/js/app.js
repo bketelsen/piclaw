@@ -904,17 +904,17 @@ function Timeline({ posts, hasMore, onLoadMore, onPostClick, onHashtagClick, emp
 function AgentStatus({ status, draft, plan, thought, pendingRequest }) {
     if (!status && !draft && !plan && !thought && !pendingRequest) return null;
 
-    const DRAFT_MAX_CHARS = 2048;
-    const DRAFT_TAIL_CHARS = 256;
+    const THOUGHT_MAX_LINES = 8;
+    const DRAFT_MAX_LINES = 8;
 
-    const truncateDraft = (text) => {
-        const value = text || '';
-        if (value.length <= DRAFT_MAX_CHARS) return { text: value, omitted: 0 };
-        const headLen = Math.max(0, DRAFT_MAX_CHARS - DRAFT_TAIL_CHARS);
-        const head = value.slice(0, headLen);
-        const tail = value.slice(-DRAFT_TAIL_CHARS);
-        const omitted = value.length - head.length - tail.length;
-        return { text: `${head}\n…\n${tail}`, omitted };
+    const truncateLines = (text, maxLines) => {
+        const value = (text || '').replace(/\r\n/g, '\n');
+        if (!value) return { text: '', omitted: 0 };
+        const lines = value.split('\n');
+        if (lines.length <= maxLines) return { text: value, omitted: 0 };
+        const kept = lines.slice(0, maxLines);
+        const omitted = lines.length - maxLines;
+        return { text: kept.join('\n'), omitted };
     };
     
     let content = '';
@@ -950,17 +950,23 @@ function AgentStatus({ status, draft, plan, thought, pendingRequest }) {
                     />
                 </div>
             `}
-            ${thought && html`
-                <div class="agent-thinking">
-                    <div class="agent-thinking-title thought">Thoughts</div>
-                    <div
-                        class="agent-thinking-body"
-                        dangerouslySetInnerHTML=${{ __html: renderThinkingMarkdown(thought) }}
-                    />
-                </div>
-            `}
+            ${thought && (() => {
+                const truncated = truncateLines(thought, THOUGHT_MAX_LINES);
+                return html`
+                    <div class="agent-thinking">
+                        <div class="agent-thinking-title thought">Thoughts</div>
+                        <div
+                            class="agent-thinking-body"
+                            dangerouslySetInnerHTML=${{ __html: renderThinkingMarkdown(truncated.text) }}
+                        />
+                        ${truncated.omitted > 0 && html`
+                            <div class="agent-thinking-truncation">(${truncated.omitted} more lines)</div>
+                        `}
+                    </div>
+                `;
+            })()}
             ${draft && (() => {
-                const truncated = truncateDraft(draft);
+                const truncated = truncateLines(draft, DRAFT_MAX_LINES);
                 return html`
                     <div class="agent-thinking">
                         <div class="agent-thinking-title thought">Draft</div>
@@ -969,7 +975,7 @@ function AgentStatus({ status, draft, plan, thought, pendingRequest }) {
                             dangerouslySetInnerHTML=${{ __html: renderThinkingMarkdown(truncated.text) }}
                         />
                         ${truncated.omitted > 0 && html`
-                            <div class="agent-thinking-truncation">(${truncated.omitted} more characters)</div>
+                            <div class="agent-thinking-truncation">(${truncated.omitted} more lines)</div>
                         `}
                     </div>
                 `;
