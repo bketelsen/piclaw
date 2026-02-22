@@ -1,7 +1,7 @@
 import { extname, resolve } from "path";
 
 import { AgentQueue } from "../queue.js";
-import { ASSISTANT_NAME, WEB_HOST, WEB_PORT } from "../config.js";
+import { ASSISTANT_NAME, WEB_HOST, WEB_IDLE_TIMEOUT, WEB_PORT } from "../config.js";
 import {
   attachMediaToMessage,
   createMedia,
@@ -68,6 +68,7 @@ export class WebChannel {
     this.server = Bun.serve({
       hostname: WEB_HOST,
       port: WEB_PORT,
+      idleTimeout: WEB_IDLE_TIMEOUT,
       fetch: (req) => this.handleRequest(req),
     });
     console.log(`[web] UI listening on http://${WEB_HOST}:${WEB_PORT}`);

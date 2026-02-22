@@ -18,10 +18,11 @@ Usage:
   piclaw [options]
 
 Options:
-  -h, --help           Show this help
-  -v, --version        Show version
-  -p, --port <number>  Web UI port (default: 8080)
-      --host <addr>    Web UI host (default: 0.0.0.0)
+  -h, --help                 Show this help
+  -v, --version              Show version
+  -p, --port <number>        Web UI port (default: 8080)
+      --host <addr>          Web UI host (default: 0.0.0.0)
+      --idle-timeout <secs>  Web idle timeout in seconds (default: 0 = disabled)
 `;
 
 function getVersion(): string {

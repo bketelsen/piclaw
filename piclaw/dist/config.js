@@ -36,8 +36,11 @@ function parsePort(value, fallback) {
 const ENV_WEB_PORT = parseInt(process.env.PICLAW_WEB_PORT || "8080", 10);
 const CLI_WEB_PORT = readCliArg("--port", "-p");
 const CLI_WEB_HOST = readCliArg("--host");
+const ENV_WEB_IDLE_TIMEOUT = parseInt(process.env.PICLAW_WEB_IDLE_TIMEOUT || "0", 10);
+const CLI_WEB_IDLE_TIMEOUT = readCliArg("--idle-timeout");
 export const WEB_PORT = parsePort(CLI_WEB_PORT, ENV_WEB_PORT);
 export const WEB_HOST = CLI_WEB_HOST || process.env.PICLAW_WEB_HOST || "0.0.0.0";
+export const WEB_IDLE_TIMEOUT = parsePort(CLI_WEB_IDLE_TIMEOUT, ENV_WEB_IDLE_TIMEOUT);
 export const SESSIONS_DIR = resolve(DATA_DIR, "sessions");
 function escapeRegex(str) {
     return str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");

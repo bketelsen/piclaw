@@ -1,5 +1,5 @@
 import { extname, resolve } from "path";
-import { ASSISTANT_NAME, WEB_HOST, WEB_PORT } from "../config.js";
+import { ASSISTANT_NAME, WEB_HOST, WEB_IDLE_TIMEOUT, WEB_PORT } from "../config.js";
 import { attachMediaToMessage, createMedia, deleteMessageByRowId, getMediaById, getMediaInfoById, getMessageByRowId, getMessagesByHashtag, getMessagesSince, getRouterState, getTimeline, hasOlderMessages, searchMessages, setRouterState, storeChatMetadata, storeMessage, } from "../db.js";
 import { runAgent } from "../agent-runner.js";
 import { formatMessages, formatOutbound } from "../router.js";
@@ -33,6 +33,7 @@ export class WebChannel {
         this.server = Bun.serve({
             hostname: WEB_HOST,
             port: WEB_PORT,
+            idleTimeout: WEB_IDLE_TIMEOUT,
             fetch: (req) => this.handleRequest(req),
         });
         console.log(`[web] UI listening on http://${WEB_HOST}:${WEB_PORT}`);
