@@ -1157,10 +1157,6 @@ function App() {
         hasMoreRef.current = hasMore;
     }, [hasMore]);
 
-    useEffect(() => {
-        loadMoreRef.current = loadMore;
-    }, [loadMore]);
-
     // Scroll to bottom of timeline (column-reverse: bottom is scrollTop=0)
     const scrollToBottom = useCallback(() => {
         if (timelineRef.current) {
@@ -1227,6 +1223,10 @@ function App() {
             console.error('Failed to load more posts:', error);
         }
     }, [posts, timelineRef]);
+
+    useEffect(() => {
+        loadMoreRef.current = loadMore;
+    }, [loadMore]);
     
     // Handle hashtag click
     const handleHashtagClick = useCallback(async (hashtag) => {
