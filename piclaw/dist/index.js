@@ -183,7 +183,6 @@ async function main() {
         },
         onChatMetadata: (chatJid, timestamp) => storeChatMetadata(chatJid, timestamp),
     });
-    await whatsapp.connect();
     const sendMessage = async (jid, text) => {
         if (jid.startsWith("web:")) {
             await web.sendMessage(jid, text);
@@ -206,6 +205,7 @@ async function main() {
         sendMessage,
         sendNudge,
     });
+    await whatsapp.connect();
     messageLoop();
 }
 main().catch((err) => {

@@ -287,6 +287,23 @@ export class WebChannel {
         let thoughtBuffer = "";
         let draftBuffer = "";
         const toolTitles = new Map();
+        const THOUGHT_PREVIEW_LINES = 8;
+        const DRAFT_PREVIEW_LINES = 8;
+        const PREVIEW_MAX_CHARS_PER_LINE = 160;
+        const countSoftLines = (line, maxChars) => {
+            if (!line)
+                return 1;
+            return Math.max(1, Math.ceil(line.length / maxChars));
+        };
+        const buildPreview = (text, maxLines) => {
+            const value = (text || "").replace(/\r\n/g, "\n");
+            if (!value)
+                return { preview: "", totalLines: 0 };
+            const rawLines = value.split("\n");
+            const totalLines = rawLines.reduce((acc, line) => acc + countSoftLines(line, PREVIEW_MAX_CHARS_PER_LINE), 0);
+            const previewLines = rawLines.slice(0, maxLines);
+            return { preview: previewLines.join("\n"), totalLines };
+        };
         const extractToolArgs = (args) => {
             if (!args)
                 return null;
@@ -368,18 +385,22 @@ export class WebChannel {
                     }
                     if (messageEvent.type === "thinking_delta") {
                         thoughtBuffer += messageEvent.delta;
+                        const { preview, totalLines } = buildPreview(thoughtBuffer, THOUGHT_PREVIEW_LINES);
                         this.broadcastEvent("agent_thought", {
                             thread_id: threadId,
                             agent_id: agentId,
-                            text: thoughtBuffer,
+                            text: preview,
+                            total_lines: totalLines,
                         });
                     }
                     if (messageEvent.type === "thinking_end") {
                         thoughtBuffer = messageEvent.content || thoughtBuffer;
+                        const { preview, totalLines } = buildPreview(thoughtBuffer, THOUGHT_PREVIEW_LINES);
                         this.broadcastEvent("agent_thought", {
                             thread_id: threadId,
                             agent_id: agentId,
-                            text: thoughtBuffer,
+                            text: preview,
+                            total_lines: totalLines,
                         });
                     }
                     if (messageEvent.type === "toolcall_end") {
@@ -397,18 +418,21 @@ export class WebChannel {
                             thread_id: threadId,
                             agent_id: agentId,
                             text: "",
+                            total_lines: 0,
                             kind: "draft",
                             mode: "replace",
                         });
                     }
                     if (messageEvent.type === "text_delta") {
                         draftBuffer += messageEvent.delta;
+                        const { preview, totalLines } = buildPreview(draftBuffer, DRAFT_PREVIEW_LINES);
                         this.broadcastEvent("agent_draft", {
                             thread_id: threadId,
                             agent_id: agentId,
-                            text: messageEvent.delta,
+                            text: preview,
+                            total_lines: totalLines,
                             kind: "draft",
-                            mode: "append",
+                            mode: "replace",
                         });
                     }
                 }
