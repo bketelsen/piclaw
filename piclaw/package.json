@@ -13,7 +13,8 @@
     "build": "tsc",
     "typecheck": "tsc --noEmit",
     "build:web": "cp web/src/app.ts web/static/js/app.js && cp web/src/api.ts web/static/js/api.js",
-    "test": "bun test --max-concurrency=1"
+    "test": "bun test --max-concurrency=1",
+    "test:coverage": "bun test --max-concurrency=1 --coverage --coverage-reporter=text --coverage-reporter=lcov"
   },
   "dependencies": {
     "@mariozechner/pi-coding-agent": "^0.54.0",
