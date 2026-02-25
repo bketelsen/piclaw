@@ -100,8 +100,7 @@ function renderMarkdown(text, onHashtagClick) {
  * Linkify hashtags in rendered HTML, avoiding links/code blocks.
  */
 function linkifyHashtagsInHtml(html_content) {
-    if (!html_content)
-        return html_content;
+    if (!html_content) return html_content;
     const doc = new DOMParser().parseFromString(html_content, 'text/html');
     const walker = doc.createTreeWalker(doc.body, NodeFilter.SHOW_TEXT);
     const nodes = [];
@@ -111,18 +110,14 @@ function linkifyHashtagsInHtml(html_content) {
     }
     for (const textNode of nodes) {
         const value = textNode.nodeValue;
-        if (!value)
-            continue;
+        if (!value) continue;
         HASHTAG_REGEX.lastIndex = 0;
-        if (!HASHTAG_REGEX.test(value))
-            continue;
+        if (!HASHTAG_REGEX.test(value)) continue;
         HASHTAG_REGEX.lastIndex = 0;
         const parent = textNode.parentElement;
-        if (parent && (parent.closest('a') || parent.closest('code') || parent.closest('pre')))
-            continue;
+        if (parent && (parent.closest('a') || parent.closest('code') || parent.closest('pre'))) continue;
         const parts = value.split(HASHTAG_REGEX);
-        if (parts.length <= 1)
-            continue;
+        if (parts.length <= 1) continue;
         const fragment = doc.createDocumentFragment();
         parts.forEach((part, idx) => {
             if (idx % 2 === 1) {
@@ -132,8 +127,7 @@ function linkifyHashtagsInHtml(html_content) {
                 link.setAttribute('data-hashtag', part);
                 link.textContent = `#${part}`;
                 fragment.appendChild(link);
-            }
-            else {
+            } else {
                 fragment.appendChild(doc.createTextNode(part));
             }
         });

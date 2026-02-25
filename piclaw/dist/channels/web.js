@@ -1,7 +1,7 @@
 import { extname, resolve } from "path";
 import { ASSISTANT_NAME, WEB_HOST, WEB_IDLE_TIMEOUT, WEB_PORT } from "../config.js";
 import { attachMediaToMessage, createMedia, deleteMessageByRowId, getMediaById, getMediaInfoById, getMessageByRowId, getMessagesByHashtag, getMessagesSince, getRouterState, getTimeline, hasOlderMessages, searchMessages, setRouterState, storeChatMetadata, storeMessage, } from "../db.js";
-import { formatMessages, formatOutbound } from "../router.js";
+import { detectChannel, formatMessages, formatOutbound } from "../router.js";
 const DEFAULT_CHAT_JID = "web:default";
 const DEFAULT_AGENT_ID = "default";
 const STATE_KEY = "last_agent_timestamp_web";
@@ -279,7 +279,8 @@ export class WebChannel {
         const messages = getMessagesSince(chatJid, since, ASSISTANT_NAME);
         if (messages.length === 0)
             return;
-        const prompt = formatMessages(messages);
+        const channel = detectChannel(chatJid);
+        const prompt = formatMessages(messages, channel);
         const prevCursor = this.lastAgentTimestamp[chatJid] || "";
         this.lastAgentTimestamp[chatJid] = messages[messages.length - 1].timestamp;
         this.saveState();
@@ -480,7 +481,7 @@ export class WebChannel {
             return;
         }
         if (output.result) {
-            const text = formatOutbound(output.result);
+            const text = formatOutbound(output.result, channel);
             if (text) {
                 const interaction = this.storeMessage(chatJid, text, true, []);
                 if (interaction) {

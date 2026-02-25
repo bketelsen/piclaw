@@ -1,7 +1,7 @@
 #!/usr/bin/env bun
 import { mkdirSync, existsSync, readFileSync, writeFileSync } from "fs";
 import { join } from "path";
-import { ASSISTANT_NAME, DATA_DIR, POLL_INTERVAL, PUSHOVER_APP_TOKEN, PUSHOVER_DEVICE, PUSHOVER_PRIORITY, PUSHOVER_SOUND, PUSHOVER_USER_KEY, STORE_DIR, TRIGGER_PATTERN, WORKSPACE_DIR } from "./config.js";
+import { ASSISTANT_NAME, DATA_DIR, POLL_INTERVAL, PUSHOVER_APP_TOKEN, PUSHOVER_DEVICE, PUSHOVER_PRIORITY, PUSHOVER_SOUND, PUSHOVER_USER_KEY, STORE_DIR, TRIGGER_PATTERN, WORKSPACE_DIR, TOOL_OUTPUT_RETENTION_DAYS, TOOL_OUTPUT_CLEANUP_INTERVAL_MS } from "./config.js";
 import { initDatabase, getMessagesSince, getNewMessages, getRouterState, setRouterState, storeMessage, storeChatMetadata } from "./db.js";
 import { AgentPool } from "./agent-pool.js";
 import { AgentQueue } from "./queue.js";
@@ -10,7 +10,8 @@ import { startSchedulerLoop } from "./task-scheduler.js";
 import { WhatsAppChannel } from "./channels/whatsapp.js";
 import { WebChannel } from "./channels/web.js";
 import { PushoverChannel } from "./channels/pushover.js";
-import { formatMessages, formatOutbound } from "./router.js";
+import { detectChannel, formatMessages, formatOutbound } from "./router.js";
+import { startToolOutputCleanup } from "./tool-output.js";
 const HELP_TEXT = `piclaw - Pi Coding Agent Assistant
 
 Usage:
@@ -89,7 +90,8 @@ async function processMessages(chatJid) {
     const hasTrigger = messages.some((m) => TRIGGER_PATTERN.test(m.content.trim()));
     if (!hasTrigger)
         return true;
-    const prompt = formatMessages(messages);
+    const channel = detectChannel(chatJid);
+    const prompt = formatMessages(messages, channel);
     const prevCursor = lastAgentTimestamp[chatJid] || "";
     lastAgentTimestamp[chatJid] = messages[messages.length - 1].timestamp;
     saveState();
@@ -104,7 +106,7 @@ async function processMessages(chatJid) {
         return false;
     }
     if (output.result) {
-        const text = formatOutbound(output.result);
+        const text = formatOutbound(output.result, channel);
         if (text)
             await whatsapp.sendMessage(chatJid, text);
     }
@@ -144,6 +146,7 @@ async function main() {
     mkdirSync(DATA_DIR, { recursive: true });
     mkdirSync(WORKSPACE_DIR, { recursive: true });
     initDatabase();
+    startToolOutputCleanup(TOOL_OUTPUT_RETENTION_DAYS, TOOL_OUTPUT_CLEANUP_INTERVAL_MS);
     loadState();
     loadChats();
     console.log("=== Piclaw - Pi Coding Agent Assistant ===");

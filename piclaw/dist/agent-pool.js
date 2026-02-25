@@ -2,6 +2,7 @@ import { mkdirSync, writeFileSync } from "fs";
 import { join } from "path";
 import { AuthStorage, createAgentSession, DefaultResourceLoader, getAgentDir, ModelRegistry, SessionManager, SettingsManager, } from "@mariozechner/pi-coding-agent";
 import { AGENT_TIMEOUT, SESSIONS_DIR, WORKSPACE_DIR } from "./config.js";
+import { detectChannel } from "./router.js";
 /** How long (ms) an idle session stays cached before being disposed. */
 const IDLE_TTL = 10 * 60 * 1000; // 10 minutes
 const CLEANUP_INTERVAL = 60 * 1000; // check every minute
@@ -59,6 +60,7 @@ export class AgentPool {
             }, AGENT_TIMEOUT);
             // Set chat context for IPC skills (skills read this env var)
             process.env.PICLAW_CHAT_JID = chatJid;
+            process.env.PICLAW_CHANNEL = detectChannel(chatJid);
             try {
                 await session.prompt(prompt);
             }

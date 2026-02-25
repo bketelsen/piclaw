@@ -1,7 +1,7 @@
 import { CronExpressionParser } from "cron-parser";
 import { SCHEDULER_POLL_INTERVAL, TIMEZONE } from "./config.js";
 import { getDueTasks, getTaskById, logTaskRun, updateTaskAfterRun } from "./db.js";
-import { formatOutbound } from "./router.js";
+import { detectChannel, formatOutbound } from "./router.js";
 export function computeNextRun(scheduleType, scheduleValue) {
     if (scheduleType === "cron") {
         try {
@@ -37,7 +37,7 @@ export async function runScheduledTask(task, deps) {
         }
         else if (out.result) {
             result = out.result;
-            const t = formatOutbound(result);
+            const t = formatOutbound(result, detectChannel(task.chat_jid));
             if (t) {
                 await deps.sendMessage(task.chat_jid, t);
                 await deps.sendNudge?.(t);
