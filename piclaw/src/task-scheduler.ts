@@ -3,7 +3,7 @@ import { SCHEDULER_POLL_INTERVAL, TIMEZONE } from "./config.js";
 import type { AgentPool } from "./agent-pool.js";
 import { getDueTasks, getTaskById, logTaskRun, updateTaskAfterRun } from "./db.js";
 import { AgentQueue } from "./queue.js";
-import { formatOutbound } from "./router.js";
+import { detectChannel, formatOutbound } from "./router.js";
 import type { ScheduledTask } from "./types.js";
 
 export interface SchedulerDeps {
@@ -43,7 +43,7 @@ export async function runScheduledTask(task: ScheduledTask, deps: SchedulerDeps)
   try {
     const out = await deps.agentPool.runAgent(task.prompt, task.chat_jid);
     if (out.status === "error") { error = out.error || "Unknown"; }
-    else if (out.result) { result = out.result; const t = formatOutbound(result); if (t) { await deps.sendMessage(task.chat_jid, t); await deps.sendNudge?.(t); } }
+    else if (out.result) { result = out.result; const t = formatOutbound(result, detectChannel(task.chat_jid)); if (t) { await deps.sendMessage(task.chat_jid, t); await deps.sendNudge?.(t); } }
   } catch (e) { error = e instanceof Error ? e.message : String(e); }
 
   logTaskRun({ task_id: task.id, run_at: new Date().toISOString(), duration_ms: Date.now() - start, status: error ? "error" : "success", result, error });

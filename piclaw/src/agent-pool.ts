@@ -12,6 +12,7 @@ import {
   SettingsManager,
 } from "@mariozechner/pi-coding-agent";
 import { AGENT_TIMEOUT, DATA_DIR, SESSIONS_DIR, WORKSPACE_DIR } from "./config.js";
+import { detectChannel } from "./router.js";
 
 export interface AgentOutput {
   status: "success" | "error";
@@ -98,6 +99,7 @@ export class AgentPool {
 
       // Set chat context for IPC skills (skills read this env var)
       process.env.PICLAW_CHAT_JID = chatJid;
+      process.env.PICLAW_CHANNEL = detectChannel(chatJid);
 
       try {
         await session.prompt(prompt);

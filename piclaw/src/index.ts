@@ -11,7 +11,7 @@ import { startSchedulerLoop } from "./task-scheduler.js";
 import { WhatsAppChannel } from "./channels/whatsapp.js";
 import { WebChannel } from "./channels/web.js";
 import { PushoverChannel } from "./channels/pushover.js";
-import { formatMessages, formatOutbound } from "./router.js";
+import { detectChannel, formatMessages, formatOutbound } from "./router.js";
 import { startToolOutputCleanup } from "./tool-output.js";
 
 const HELP_TEXT = `piclaw - Pi Coding Agent Assistant
@@ -96,7 +96,8 @@ async function processMessages(chatJid: string): Promise<boolean> {
   const hasTrigger = messages.some((m) => TRIGGER_PATTERN.test(m.content.trim()));
   if (!hasTrigger) return true;
 
-  const prompt = formatMessages(messages);
+  const channel = detectChannel(chatJid);
+  const prompt = formatMessages(messages, channel);
   const prevCursor = lastAgentTimestamp[chatJid] || "";
   lastAgentTimestamp[chatJid] = messages[messages.length - 1].timestamp;
   saveState();
@@ -117,7 +118,7 @@ async function processMessages(chatJid: string): Promise<boolean> {
   }
 
   if (output.result) {
-    const text = formatOutbound(output.result);
+    const text = formatOutbound(output.result, channel);
     if (text) await whatsapp.sendMessage(chatJid, text);
   }
 

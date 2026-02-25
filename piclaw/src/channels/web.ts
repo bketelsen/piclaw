@@ -21,7 +21,7 @@ import {
   storeChatMetadata,
   storeMessage,
 } from "../db.js";
-import { formatMessages, formatOutbound } from "../router.js";
+import { detectChannel, formatMessages, formatOutbound } from "../router.js";
 import type { InteractionRow } from "../db.js";
 import type { NewMessage } from "../types.js";
 
@@ -339,7 +339,8 @@ export class WebChannel {
     const messages = getMessagesSince(chatJid, since, ASSISTANT_NAME);
     if (messages.length === 0) return;
 
-    const prompt = formatMessages(messages);
+    const channel = detectChannel(chatJid);
+    const prompt = formatMessages(messages, channel);
     const prevCursor = this.lastAgentTimestamp[chatJid] || "";
     this.lastAgentTimestamp[chatJid] = messages[messages.length - 1].timestamp;
     this.saveState();
@@ -557,7 +558,7 @@ export class WebChannel {
     }
 
     if (output.result) {
-      const text = formatOutbound(output.result);
+      const text = formatOutbound(output.result, channel);
       if (text) {
         const interaction = this.storeMessage(chatJid, text, true, []);
         if (interaction) {
