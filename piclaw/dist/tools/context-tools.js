@@ -2,6 +2,7 @@ import { existsSync } from "fs";
 import { Type } from "@sinclair/typebox";
 import { createBashTool } from "@mariozechner/pi-coding-agent";
 import { buildPreview, saveToolOutput, searchToolOutput, getToolOutput, readToolOutputFile } from "../tool-output.js";
+import { createTrackedBashOperations } from "./tracked-bash.js";
 const STORE_THRESHOLD_BYTES = parseInt(process.env.PICLAW_TOOL_OUTPUT_STORE_BYTES || "4096", 10);
 const STORE_THRESHOLD_LINES = parseInt(process.env.PICLAW_TOOL_OUTPUT_STORE_LINES || "40", 10);
 const PREVIEW_LINES = parseInt(process.env.PICLAW_TOOL_OUTPUT_PREVIEW_LINES || "8", 10);
@@ -25,7 +26,7 @@ function shouldStoreOutput(text, lineCount) {
     return bytes > STORE_THRESHOLD_BYTES || lineCount > STORE_THRESHOLD_LINES;
 }
 export function createContextBashTool(cwd) {
-    const base = createBashTool(cwd);
+    const base = createBashTool(cwd, { operations: createTrackedBashOperations() });
     return {
         ...base,
         label: "bash",

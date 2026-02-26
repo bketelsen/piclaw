@@ -1,9 +1,10 @@
 import { mkdirSync, writeFileSync } from "fs";
 import { join } from "path";
-import { AuthStorage, createAgentSession, DefaultResourceLoader, getAgentDir, ModelRegistry, SessionManager, SettingsManager, } from "@mariozechner/pi-coding-agent";
+import { AuthStorage, createAgentSession, createBashTool, createEditTool, createReadTool, createWriteTool, DefaultResourceLoader, getAgentDir, ModelRegistry, SessionManager, SettingsManager, } from "@mariozechner/pi-coding-agent";
 import { applyControlCommand } from "./agent-control.js";
 import { AGENT_TIMEOUT, SESSIONS_DIR, WORKSPACE_DIR } from "./config.js";
 import { detectChannel } from "./router.js";
+import { createTrackedBashOperations } from "./tools/tracked-bash.js";
 /** How long (ms) an idle session stays cached before being disposed. */
 const IDLE_TTL = 10 * 60 * 1000; // 10 minutes
 const CLEANUP_INTERVAL = 60 * 1000; // check every minute
@@ -24,6 +25,7 @@ export class AgentPool {
     logsDir = join(WORKSPACE_DIR, "logs");
     createSession;
     sessionBinder;
+    bashOperations = createTrackedBashOperations();
     constructor(options = {}) {
         this.createSession = options.createSession;
         this.authStorage = AuthStorage.create();
@@ -298,6 +300,12 @@ export class AgentPool {
             settingsManager: this.settingsManager,
             resourceLoader,
             sessionManager: SessionManager.continueRecent(WORKSPACE_DIR, chatSessionDir),
+            tools: [
+                createReadTool(WORKSPACE_DIR),
+                createBashTool(WORKSPACE_DIR, { operations: this.bashOperations }),
+                createEditTool(WORKSPACE_DIR),
+                createWriteTool(WORKSPACE_DIR),
+            ],
         });
         this.pool.set(chatJid, { session, lastUsed: Date.now() });
         if (this.sessionBinder) {

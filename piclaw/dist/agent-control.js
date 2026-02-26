@@ -1,3 +1,4 @@
+import { killTrackedProcesses } from "./process-tracker.js";
 const THINKING_LEVELS = ["off", "minimal", "low", "medium", "high", "xhigh"];
 function stripTrigger(text, triggerPattern) {
     if (!triggerPattern)
@@ -58,6 +59,12 @@ export function parseControlCommand(text, triggerPattern) {
             raw: cleaned,
         };
     }
+    if (command.toLowerCase() === "/restart") {
+        return {
+            type: "restart",
+            raw: cleaned,
+        };
+    }
     return null;
 }
 function normalizeModelMatch(models, provider, modelId) {
@@ -66,6 +73,30 @@ function normalizeModelMatch(models, provider, modelId) {
     return models.find((model) => model.provider.toLowerCase() === providerLower && model.id.toLowerCase() === modelLower);
 }
 export async function applyControlCommand(session, modelRegistry, command) {
+    if (command.type === "restart") {
+        try {
+            await session.abort();
+        }
+        catch {
+            // Ignore abort failures
+        }
+        const killed = killTrackedProcesses();
+        try {
+            await session.reload();
+        }
+        catch (err) {
+            const message = err instanceof Error ? err.message : String(err);
+            return {
+                status: "error",
+                message: `Restart failed after killing ${killed} subprocess${killed === 1 ? "" : "es"}: ${message}`,
+            };
+        }
+        const killedLabel = killed === 1 ? "1 subprocess" : `${killed} subprocesses`;
+        return {
+            status: "success",
+            message: `Agent restarted. Killed ${killedLabel}.`,
+        };
+    }
     if (command.type === "model") {
         modelRegistry.refresh();
         if (!command.modelId) {
@@ -162,6 +193,7 @@ export async function applyControlCommand(session, modelRegistry, command) {
         };
         addLine("/model", "Select model or list available models");
         addLine("/thinking", "Show or set thinking level");
+        addLine("/restart", "Restart the agent and stop subprocesses");
         addLine("/commands", "List available commands");
         const extensionRunner = session.extensionRunner;
         if (extensionRunner) {
