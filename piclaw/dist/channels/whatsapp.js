@@ -14,6 +14,8 @@ const silentLogger = {
     error: () => { },
     fatal: () => { },
 };
+const MAX_RECONNECT_ATTEMPTS = 5;
+const BASE_RECONNECT_DELAY_MS = 2_000; // 2s, 4s, 8s, 16s, 32s
 export class WhatsAppChannel {
     sock;
     connected = false;
@@ -21,6 +23,8 @@ export class WhatsAppChannel {
     flushing = false;
     opts;
     pairingRequested = false;
+    reconnectAttempts = 0;
+    reconnectTimer = null;
     constructor(opts) {
         this.opts = {
             ...opts,
@@ -58,13 +62,26 @@ export class WhatsAppChannel {
                 const reason = lastDisconnect?.error?.output?.statusCode;
                 const shouldReconnect = reason !== DisconnectReason.loggedOut;
                 if (shouldReconnect) {
-                    console.log("[whatsapp] Disconnected, reconnecting...");
+                    this.reconnectAttempts++;
+                    if (this.reconnectAttempts > MAX_RECONNECT_ATTEMPTS) {
+                        console.error(`[whatsapp] Failed to reconnect after ${MAX_RECONNECT_ATTEMPTS} attempts, giving up.`);
+                        if (onFirstOpen) {
+                            onFirstOpen();
+                            onFirstOpen = undefined;
+                        }
+                        return;
+                    }
+                    const delay = BASE_RECONNECT_DELAY_MS * Math.pow(2, this.reconnectAttempts - 1);
+                    console.log(`[whatsapp] Disconnected (reason=${reason}), reconnecting in ${(delay / 1000).toFixed(1)}s ` +
+                        `(attempt ${this.reconnectAttempts}/${MAX_RECONNECT_ATTEMPTS})...`);
                     const pending = onFirstOpen;
                     onFirstOpen = undefined;
-                    this.connectInternal(pending).catch((err) => {
-                        console.error("[whatsapp] Reconnect failed, retrying in 5s:", err);
-                        setTimeout(() => this.connectInternal(pending).catch(console.error), 5000);
-                    });
+                    this.reconnectTimer = setTimeout(() => {
+                        this.reconnectTimer = null;
+                        this.connectInternal(pending).catch((err) => {
+                            console.error("[whatsapp] Reconnect failed:", err);
+                        });
+                    }, delay);
                 }
                 else {
                     console.log("[whatsapp] Logged out. Re-authenticate to continue.");
@@ -73,6 +90,7 @@ export class WhatsAppChannel {
             }
             else if (connection === "open") {
                 this.connected = true;
+                this.reconnectAttempts = 0; // reset on successful connection
                 console.log("[whatsapp] Connected");
                 this.sock.sendPresenceUpdate("available").catch(() => { });
                 this.flushOutgoingQueue().catch(console.error);
@@ -134,6 +152,11 @@ export class WhatsAppChannel {
     isConnected() { return this.connected; }
     async disconnect() {
         this.connected = false;
+        if (this.reconnectTimer) {
+            clearTimeout(this.reconnectTimer);
+            this.reconnectTimer = null;
+        }
+        this.reconnectAttempts = 0;
         this.sock?.end(undefined);
     }
     async setTyping(jid, isTyping) {
