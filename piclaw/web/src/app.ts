@@ -10,6 +10,23 @@ const HASHTAG_REGEX = /#(\w+)/g;
 const DEFAULT_AGENT_NAME = 'PiClaw';
 const AGENT_AVATAR_URL = '/static/icon-192.png';
 
+function readSilenceOverride(key, fallback) {
+    try {
+        if (typeof window === 'undefined') return fallback;
+        const overrides = window.__PICLAW_SILENCE || {};
+        const directKey = `__PICLAW_SILENCE_${key.toUpperCase()}_MS`;
+        const raw = overrides[key] ?? window[directKey];
+        const value = Number(raw);
+        return Number.isFinite(value) ? value : fallback;
+    } catch {
+        return fallback;
+    }
+}
+
+const SILENCE_WARNING_MS = readSilenceOverride('warning', 30_000);
+const SILENCE_FINALIZE_MS = readSilenceOverride('finalize', 120_000);
+const SILENCE_REFRESH_MS = readSilenceOverride('refresh', 30_000);
+
 // Configure marked for safe rendering
 if (window.marked) {
     marked.setOptions({
@@ -1063,7 +1080,7 @@ function Timeline({ posts, hasMore, onLoadMore, onPostClick, onHashtagClick, emp
 /**
  * Agent status indicator
  */
-function AgentStatus({ status, draft, plan, thought, pendingRequest }) {
+function AgentStatus({ status, draft, plan, thought, pendingRequest, turnId }) {
     const THOUGHT_MAX_LINES = 8;
     const DRAFT_MAX_LINES = 8;
 
@@ -1112,6 +1129,10 @@ function AgentStatus({ status, draft, plan, thought, pendingRequest }) {
     const hasDraft = Boolean(draftInfo.text) || draftInfo.totalLines > 0;
 
     if (!status && !hasDraft && !hasPlan && !hasThought && !pendingRequest) return null;
+
+    const activeTurn = status?.turn_id || turnId;
+    const turnLabel = activeTurn ? `Turn ${String(activeTurn).slice(-4)}` : '';
+    const panelTitle = (label) => (turnLabel ? `${label} (${turnLabel})` : label);
     
     let content = '';
     const title = status?.title;
@@ -1124,6 +1145,10 @@ function AgentStatus({ status, draft, plan, thought, pendingRequest }) {
         content = title ? `${title}: ${statusText || 'Working...'}` : (statusText || 'Working...');
     } else {
         content = title || statusText || 'Working...';
+    }
+
+    if (turnLabel && status) {
+        content = `${turnLabel} — ${content}`;
     }
 
     const renderThinkingPanel = ({ panelTitle, text, totalLines, maxLines, titleClass }) => {
@@ -1157,19 +1182,19 @@ function AgentStatus({ status, draft, plan, thought, pendingRequest }) {
                 </div>
             `}
             ${hasPlan && renderThinkingPanel({
-                panelTitle: 'Planning',
+                panelTitle: panelTitle('Planning'),
                 text: planInfo.text,
                 totalLines: planInfo.totalLines,
             })}
             ${hasThought && renderThinkingPanel({
-                panelTitle: 'Thoughts',
+                panelTitle: panelTitle('Thoughts'),
                 text: thoughtInfo.text,
                 totalLines: thoughtInfo.totalLines,
                 maxLines: THOUGHT_MAX_LINES,
                 titleClass: 'thought',
             })}
             ${hasDraft && renderThinkingPanel({
-                panelTitle: 'Draft',
+                panelTitle: panelTitle('Draft'),
                 text: draftInfo.text,
                 totalLines: draftInfo.totalLines,
                 maxLines: DRAFT_MAX_LINES,
@@ -1334,15 +1359,106 @@ function App() {
     const [agentPlan, setAgentPlan] = useState('');
     const [agentThought, setAgentThought] = useState({ text: '', totalLines: 0 });
     const [pendingRequest, setPendingRequest] = useState(null);
+    const [currentTurnId, setCurrentTurnId] = useState(null);
     const [agents, setAgents] = useState({});
     const hasConnectedOnceRef = useRef(false);
     const viewStateRef = useRef({ currentHashtag: null, searchQuery: null });
     const hasMoreRef = useRef(false);
     const loadMoreRef = useRef(null);
     const timelineRef = useRef(null);
+    const lastAgentEventRef = useRef(null);
+    const lastSilenceNoticeRef = useRef(0);
+    const isAgentRunningRef = useRef(false);
+    const draftBufferRef = useRef('');
+    const pendingRequestRef = useRef(null);
+    const stalledPostIdRef = useRef(null);
+    const currentTurnIdRef = useRef(null);
     
     // Refresh timestamps every 30 seconds
     useTimestampRefresh(30000);
+
+    const noteAgentActivity = useCallback((options = {}) => {
+        const now = Date.now();
+        lastAgentEventRef.current = now;
+        if (options.running) {
+            isAgentRunningRef.current = true;
+        }
+        if (options.clearSilence) {
+            lastSilenceNoticeRef.current = 0;
+        }
+    }, []);
+
+    const clearAgentRunState = useCallback(() => {
+        isAgentRunningRef.current = false;
+        lastAgentEventRef.current = null;
+        lastSilenceNoticeRef.current = 0;
+        draftBufferRef.current = '';
+        pendingRequestRef.current = null;
+        currentTurnIdRef.current = null;
+        setCurrentTurnId(null);
+    }, [setCurrentTurnId]);
+
+    const setActiveTurn = useCallback((turnId) => {
+        if (!turnId) return;
+        if (currentTurnIdRef.current === turnId) return;
+        currentTurnIdRef.current = turnId;
+        setCurrentTurnId(turnId);
+        draftBufferRef.current = '';
+        setAgentDraft({ text: '', totalLines: 0 });
+        setAgentPlan('');
+        setAgentThought({ text: '', totalLines: 0 });
+        setPendingRequest(null);
+        pendingRequestRef.current = null;
+    }, [setCurrentTurnId]);
+
+    const removeStalledPost = useCallback(() => {
+        const stalledId = stalledPostIdRef.current;
+        if (!stalledId) return;
+        setPosts((prev) => (prev ? prev.filter((post) => post.id !== stalledId) : prev));
+        stalledPostIdRef.current = null;
+    }, []);
+
+    const finalizeStalledResponse = useCallback(() => {
+        if (!isAgentRunningRef.current) return;
+        isAgentRunningRef.current = false;
+        lastSilenceNoticeRef.current = 0;
+        lastAgentEventRef.current = null;
+        currentTurnIdRef.current = null;
+        setCurrentTurnId(null);
+
+        const partial = (draftBufferRef.current || '').trim();
+        draftBufferRef.current = '';
+        setAgentDraft({ text: '', totalLines: 0 });
+        setAgentPlan('');
+        setAgentThought({ text: '', totalLines: 0 });
+        setPendingRequest(null);
+        pendingRequestRef.current = null;
+
+        if (!partial) {
+            setAgentStatus({ type: 'error', title: 'Response stalled — No content received' });
+            return;
+        }
+
+        const warning = '\n\n⚠️ Response may be incomplete — the model stopped responding';
+        const content = `${partial}${warning}`;
+        const id = Date.now();
+        const timestamp = new Date().toISOString();
+        const localPost = {
+            id,
+            timestamp,
+            data: {
+                type: 'agent_response',
+                content,
+                agent_id: 'default',
+                is_local_stall: true,
+            },
+        };
+
+        stalledPostIdRef.current = id;
+        setPosts((prev) => (prev ? dedupePosts([...prev, localPost]) : [localPost]));
+        scrollToBottom();
+        setAgentStatus(null);
+    }, [scrollToBottom, setCurrentTurnId]);
     
     useEffect(() => {
         viewStateRef.current = { currentHashtag, searchQuery };
@@ -1351,6 +1467,35 @@ function App() {
     useEffect(() => {
         hasMoreRef.current = hasMore;
     }, [hasMore]);
+
+    useEffect(() => {
+        const interval = setInterval(() => {
+            if (!isAgentRunningRef.current) return;
+            if (pendingRequestRef.current) return;
+            const lastEvent = lastAgentEventRef.current;
+            if (!lastEvent) return;
+            const now = Date.now();
+            const silenceMs = now - lastEvent;
+
+            if (silenceMs >= SILENCE_FINALIZE_MS) {
+                finalizeStalledResponse();
+                return;
+            }
+
+            if (silenceMs >= SILENCE_WARNING_MS) {
+                if (now - lastSilenceNoticeRef.current >= SILENCE_REFRESH_MS) {
+                    const seconds = Math.floor(silenceMs / 1000);
+                    setAgentStatus({
+                        type: 'waiting',
+                        title: `Waiting for model… No events for ${seconds}s`,
+                    });
+                    lastSilenceNoticeRef.current = now;
+                }
+            }
+        }, 1000);
+
+        return () => clearInterval(interval);
+    }, [finalizeStalledResponse]);
 
     // Scroll to bottom of timeline (column-reverse: bottom is scrollTop=0)
     const scrollToBottom = useCallback(() => {
@@ -1384,6 +1529,8 @@ function App() {
             setAgentPlan('');
             setAgentThought({ text: '', totalLines: 0 });
             setPendingRequest(null);
+            pendingRequestRef.current = null;
+            clearAgentRunState();
             return;
         }
         if (!hasConnectedOnceRef.current) {
@@ -1394,7 +1541,7 @@ function App() {
         if (!activeHashtag && !activeSearch) {
             loadPosts();
         }
-    }, [loadPosts]);
+    }, [clearAgentRunState, loadPosts]);
     
     // Load older messages (prepend)
     const loadMore = useCallback(async () => {
@@ -1540,108 +1687,191 @@ function App() {
             .catch((e) => console.warn('Failed to load agents:', e));
     }, []);
 
-    // Set up SSE connection
-    useEffect(() => {
-        loadPosts();
-        
-        const sse = new SSEClient(
-            (eventType, data) => {
-                // Handle agent status updates
-                if (eventType === 'connected') {
-                    setAgentStatus(null);
+    const handleSseEvent = useCallback((eventType, data) => {
+        const turnId = data?.turn_id;
+
+        // Handle agent status updates
+        if (eventType === 'connected') {
+            setAgentStatus(null);
+            setAgentDraft({ text: '', totalLines: 0 });
+            setAgentPlan('');
+            setAgentThought({ text: '', totalLines: 0 });
+            setPendingRequest(null);
+            pendingRequestRef.current = null;
+            clearAgentRunState();
+            return;
+        }
+
+        if (eventType === 'agent_status') {
+            console.log('Agent status:', data);
+            if (data.type === 'done' || data.type === 'error') {
+                if (turnId && currentTurnIdRef.current && turnId !== currentTurnIdRef.current) {
+                    return;
+                }
+                clearAgentRunState();
+                setAgentStatus(null);
+                setAgentDraft({ text: '', totalLines: 0 });
+                setAgentPlan('');
+                setAgentThought({ text: '', totalLines: 0 });
+                setPendingRequest(null);
+            } else {
+                if (turnId) setActiveTurn(turnId);
+                noteAgentActivity({ running: true, clearSilence: true });
+                if (data.type === 'thinking') {
+                    draftBufferRef.current = '';
                     setAgentDraft({ text: '', totalLines: 0 });
                     setAgentPlan('');
                     setAgentThought({ text: '', totalLines: 0 });
-                    setPendingRequest(null);
-                    return;
                 }
+                setAgentStatus(data);
+            }
+            return;
+        }
 
-                if (eventType === 'agent_status') {
-                    console.log('Agent status:', data);
-                    if (data.type === 'done' || data.type === 'error') {
-                        setAgentStatus(null);
-                        setAgentDraft({ text: '', totalLines: 0 });
-                        setAgentPlan('');
-                        setAgentThought({ text: '', totalLines: 0 });
-                    } else {
-                        if (data.type === 'thinking') {
-                            setAgentDraft({ text: '', totalLines: 0 });
-                            setAgentPlan('');
-                            setAgentThought({ text: '', totalLines: 0 });
-                        }
-                        setAgentStatus(data);
-                    }
-                    return;
-                }
+        if (eventType === 'agent_draft_delta') {
+            if (turnId && currentTurnIdRef.current && turnId !== currentTurnIdRef.current) {
+                return;
+            }
+            if (turnId && !currentTurnIdRef.current) {
+                setActiveTurn(turnId);
+            }
+            noteAgentActivity({ running: true, clearSilence: true });
+            if (data?.reset) {
+                draftBufferRef.current = '';
+            }
+            if (data?.delta) {
+                draftBufferRef.current += data.delta;
+            }
+            return;
+        }
 
-                if (eventType === 'agent_draft') {
-                    const text = data.text || '';
-                    const mode = data.mode || (data.kind === 'plan' ? 'replace' : 'append');
-                    const inferredTotal = Number.isFinite(data.total_lines)
-                        ? data.total_lines
-                        : (text ? text.replace(/\r\n/g, '\n').split('\n').length : 0);
+        if (eventType === 'agent_draft') {
+            if (turnId && currentTurnIdRef.current && turnId !== currentTurnIdRef.current) {
+                return;
+            }
+            if (turnId && !currentTurnIdRef.current) {
+                setActiveTurn(turnId);
+            }
+            noteAgentActivity({ running: true, clearSilence: true });
+            const text = data.text || '';
+            const mode = data.mode || (data.kind === 'plan' ? 'replace' : 'append');
+            const inferredTotal = Number.isFinite(data.total_lines)
+                ? data.total_lines
+                : (text ? text.replace(/\r\n/g, '\n').split('\n').length : 0);
 
-                    if (data.kind === 'plan') {
-                        if (mode === 'replace') setAgentPlan(text);
-                        else setAgentPlan((prev) => (prev || '') + text);
-                    } else {
-                        setAgentDraft({ text, totalLines: inferredTotal });
-                    }
-                    return;
-                }
-                
-                if (eventType === 'agent_thought') {
-                    const text = data.text || '';
-                    const inferredTotal = Number.isFinite(data.total_lines)
-                        ? data.total_lines
-                        : (text ? text.replace(/\r\n/g, '\n').split('\n').length : 0);
-                    setAgentThought({ text, totalLines: inferredTotal });
-                    return;
-                }
-                
-                // Handle agent requests (permission, choices)
-                if (eventType === 'agent_request') {
-                    console.log('Agent request:', data);
-                    setPendingRequest(data);
-                    return;
-                }
+            if (data.kind === 'plan') {
+                if (mode === 'replace') setAgentPlan(text);
+                else setAgentPlan((prev) => (prev || '') + text);
+            } else {
+                setAgentDraft({ text, totalLines: inferredTotal });
+            }
+            return;
+        }
 
-                if (eventType === 'agent_request_timeout') {
-                    console.log('Agent request timeout:', data);
-                    setPendingRequest(null);
-                    setAgentStatus({ type: 'error', title: 'Permission request timed out' });
-                    return;
-                }
-                
-                // Add new posts/replies to timeline (only when on main timeline) - append at end for chat style
+        if (eventType === 'agent_thought') {
+            if (turnId && currentTurnIdRef.current && turnId !== currentTurnIdRef.current) {
+                return;
+            }
+            if (turnId && !currentTurnIdRef.current) {
+                setActiveTurn(turnId);
+            }
+            noteAgentActivity({ running: true, clearSilence: true });
+            const text = data.text || '';
+            const inferredTotal = Number.isFinite(data.total_lines)
+                ? data.total_lines
+                : (text ? text.replace(/\r\n/g, '\n').split('\n').length : 0);
+            setAgentThought({ text, totalLines: inferredTotal });
+            return;
+        }
+
+        // Handle agent requests (permission, choices)
+        if (eventType === 'agent_request') {
+            console.log('Agent request:', data);
+            if (turnId && currentTurnIdRef.current && turnId !== currentTurnIdRef.current) {
+                return;
+            }
+            if (turnId) setActiveTurn(turnId);
+            noteAgentActivity({ running: true, clearSilence: true });
+            setPendingRequest(data);
+            pendingRequestRef.current = data;
+            return;
+        }
+
+        if (eventType === 'agent_request_timeout') {
+            console.log('Agent request timeout:', data);
+            if (turnId && currentTurnIdRef.current && turnId !== currentTurnIdRef.current) {
+                return;
+            }
+            setPendingRequest(null);
+            pendingRequestRef.current = null;
+            clearAgentRunState();
+            setAgentStatus({ type: 'error', title: 'Permission request timed out' });
+            return;
+        }
+
+        // Add new posts/replies to timeline (only when on main timeline) - append at end for chat style
+        const { currentHashtag: activeHashtag, searchQuery: activeSearch } = viewStateRef.current;
+        if (eventType === 'agent_response') {
+            removeStalledPost();
+            clearAgentRunState();
+            setAgentStatus(null);
+            setAgentDraft({ text: '', totalLines: 0 });
+            setAgentPlan('');
+            setAgentThought({ text: '', totalLines: 0 });
+            setPendingRequest(null);
+        }
+        if (!activeHashtag && !activeSearch && (eventType === 'new_post' || eventType === 'agent_response')) {
+            setPosts(prev => {
+                if (!prev) return [data];
+                if (prev.some((post) => post.id === data.id)) return prev;
+                return [...prev, data];
+            });
+            scrollToBottom();
+        }
+        // Update existing post (e.g., when link previews are fetched)
+        if (eventType === 'interaction_updated') {
+            setPosts(prev => prev ? prev.map(p => p.id === data.id ? data : p) : prev);
+        }
+        if (eventType === 'interaction_deleted') {
+            const ids = data?.ids || [];
+            if (ids.length) {
+                setPosts(prev => prev ? prev.filter(p => !ids.includes(p.id)) : prev);
                 const { currentHashtag: activeHashtag, searchQuery: activeSearch } = viewStateRef.current;
-                if (!activeHashtag && !activeSearch && (eventType === 'new_post' || eventType === 'agent_response')) {
-                    setPosts(prev => {
-                        if (!prev) return [data];
-                        if (prev.some((post) => post.id === data.id)) return prev;
-                        return [...prev, data];
-                    });
-                    scrollToBottom();
+                if (hasMoreRef.current && !activeHashtag && !activeSearch) {
+                    loadMoreRef.current?.();
                 }
-                // Update existing post (e.g., when link previews are fetched)
-                if (eventType === 'interaction_updated') {
-                    setPosts(prev => prev ? prev.map(p => p.id === data.id ? data : p) : prev);
-                }
-                if (eventType === 'interaction_deleted') {
-                    const ids = data?.ids || [];
-                    if (ids.length) {
-                        setPosts(prev => prev ? prev.filter(p => !ids.includes(p.id)) : prev);
-                        const { currentHashtag: activeHashtag, searchQuery: activeSearch } = viewStateRef.current;
-                        if (hasMoreRef.current && !activeHashtag && !activeSearch) {
-                            loadMoreRef.current?.();
-                        }
-                    }
-                }
-                
-            },
-            handleConnectionStatusChange
-        );
-        
+            }
+        }
+    }, [clearAgentRunState, noteAgentActivity, removeStalledPost, scrollToBottom, setActiveTurn]);
+
+    useEffect(() => {
+        if (typeof window === 'undefined') return;
+        const api = window.__PICLAW_TEST_API || {};
+        api.emit = handleSseEvent;
+        api.reset = () => {
+            removeStalledPost();
+            clearAgentRunState();
+            setAgentStatus(null);
+            setAgentDraft({ text: '', totalLines: 0 });
+            setAgentPlan('');
+            setAgentThought({ text: '', totalLines: 0 });
+            setPendingRequest(null);
+        };
+        api.finalize = () => finalizeStalledResponse();
+        window.__PICLAW_TEST_API = api;
+        return () => {
+            if (window.__PICLAW_TEST_API === api) {
+                window.__PICLAW_TEST_API = undefined;
+            }
+        };
+    }, [clearAgentRunState, finalizeStalledResponse, handleSseEvent, removeStalledPost]);
+
+    // Set up SSE connection
+    useEffect(() => {
+        loadPosts();
+
+        const sse = new SSEClient(handleSseEvent, handleConnectionStatusChange);
+
         sse.connect();
 
         const handleWindowFocus = () => {
@@ -1649,13 +1879,13 @@ function App() {
         };
         window.addEventListener('focus', handleWindowFocus);
         document.addEventListener('visibilitychange', handleWindowFocus);
-        
+
         return () => {
             window.removeEventListener('focus', handleWindowFocus);
             document.removeEventListener('visibilitychange', handleWindowFocus);
             sse.disconnect();
         };
-    }, [loadPosts]);
+    }, [handleConnectionStatusChange, handleSseEvent, loadPosts]);
     
     return html`
         <div class="container">
@@ -1686,6 +1916,7 @@ function App() {
                 plan=${agentPlan}
                 thought=${agentThought}
                 pendingRequest=${pendingRequest}
+                turnId=${currentTurnId}
             />
             <${ComposeBox} 
                 onPost=${() => { loadPosts(); scrollToBottom(); }}
@@ -1696,7 +1927,13 @@ function App() {
                 onExitSearch=${exitSearchMode}
             />
             <${ConnectionStatus} status=${connectionStatus} />
-            <${AgentRequestModal} request=${pendingRequest} onRespond=${() => setPendingRequest(null)} />
+            <${AgentRequestModal}
+                request=${pendingRequest}
+                onRespond=${() => {
+                    setPendingRequest(null);
+                    pendingRequestRef.current = null;
+                }}
+            />
         </div>
     `;
 }

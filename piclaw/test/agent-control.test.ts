@@ -76,6 +76,9 @@ test("parseControlCommand parses model and thinking commands", () => {
   const bashCmd = parseControlCommand("/bash ls");
   expect(bashCmd?.type).toBe("bash");
   expect(bashCmd && "command" in bashCmd ? bashCmd.command : null).toBe("ls");
+
+  const abortCmd = parseControlCommand("/abort");
+  expect(abortCmd?.type).toBe("abort");
 });
 
 test("applyControlCommand switches model and thinking level", async () => {
@@ -132,6 +135,19 @@ test("applyControlCommand restarts agent", async () => {
   expect(session.abortCalls).toBe(1);
   expect(session.reloadCalls).toBe(1);
   expect(result.message).toContain("Agent restarted");
+});
+
+test("applyControlCommand aborts agent", async () => {
+  const session = new StubSession();
+
+  const result = await applyControlCommand(session as any, registry, {
+    type: "abort",
+    raw: "/abort",
+  });
+
+  expect(result.status).toBe("success");
+  expect(session.abortCalls).toBe(1);
+  expect(result.message).toContain("Aborted");
 });
 
 test("applyControlCommand lists models when /model has no args", async () => {
