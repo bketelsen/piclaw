@@ -1,10 +1,118 @@
 import { getMessageByRowId, updateMessageLinkPreviews } from "../../db.js";
+import { lookup } from "dns/promises";
+import { isIP } from "net";
 const MAX_URLS = 3;
 const FETCH_TIMEOUT_MS = 8000;
 const MAX_HTML_CHARS = 200_000;
 const URL_REGEX = /https?:\/\/[\w\d#%/.:?@\[\]-]+/gi;
+const BLOCKED_HOSTNAMES = new Set([
+    "localhost",
+    "localhost.localdomain",
+    "ip6-localhost",
+    "ip6-loopback",
+    "0.0.0.0",
+    "::",
+    "::1",
+    "metadata.google.internal",
+]);
 function trimUrl(raw) {
     return raw.replace(/[),.;!?]+$/g, "");
+}
+function parseIPv4(ip) {
+    const parts = ip.split(".").map((part) => Number(part));
+    if (parts.length !== 4 || parts.some((part) => !Number.isFinite(part) || part < 0 || part > 255))
+        return null;
+    return parts;
+}
+function isPrivateIPv4(ip) {
+    const parts = parseIPv4(ip);
+    if (!parts)
+        return false;
+    const [a, b, c] = parts;
+    if (a === 0)
+        return true;
+    if (a === 10)
+        return true;
+    if (a === 127)
+        return true;
+    if (a === 100 && b >= 64 && b <= 127)
+        return true; // CGNAT
+    if (a === 169 && b === 254)
+        return true; // link-local
+    if (a === 172 && b >= 16 && b <= 31)
+        return true;
+    if (a === 192 && b === 0 && c === 0)
+        return true; // 192.0.0.0/24
+    if (a === 192 && b === 0 && c === 2)
+        return true; // TEST-NET-1
+    if (a === 192 && b === 168)
+        return true;
+    if (a === 198 && (b === 18 || b === 19))
+        return true; // benchmark
+    if (a === 198 && b === 51 && c === 100)
+        return true; // TEST-NET-2
+    if (a === 203 && b === 0 && c === 113)
+        return true; // TEST-NET-3
+    if (a >= 224)
+        return true; // multicast/reserved
+    return false;
+}
+function isPrivateIPv6(ip) {
+    const lower = ip.toLowerCase();
+    if (lower === "::" || lower === "::1")
+        return true;
+    if (lower.startsWith("fe80:") || lower.startsWith("fec0:"))
+        return true; // link-local/site-local
+    if (lower.startsWith("fc") || lower.startsWith("fd"))
+        return true; // ULA
+    if (lower.startsWith("2001:db8"))
+        return true; // documentation range
+    const mappedIndex = lower.lastIndexOf(":");
+    if (mappedIndex !== -1) {
+        const maybeIpv4 = lower.slice(mappedIndex + 1);
+        if (maybeIpv4.includes(".")) {
+            return isPrivateIPv4(maybeIpv4);
+        }
+    }
+    return false;
+}
+function isPrivateIp(ip) {
+    const kind = isIP(ip);
+    if (kind === 4)
+        return isPrivateIPv4(ip);
+    if (kind === 6)
+        return isPrivateIPv6(ip);
+    return true;
+}
+async function isSafeUrl(raw) {
+    let parsed;
+    try {
+        parsed = new URL(raw);
+    }
+    catch {
+        return false;
+    }
+    if (!parsed.protocol || !["http:", "https:"].includes(parsed.protocol))
+        return false;
+    const hostname = parsed.hostname.toLowerCase();
+    if (!hostname)
+        return false;
+    if (BLOCKED_HOSTNAMES.has(hostname))
+        return false;
+    if (hostname.endsWith(".local") || hostname.endsWith(".internal"))
+        return false;
+    if (isIP(hostname)) {
+        return !isPrivateIp(hostname);
+    }
+    try {
+        const results = await lookup(hostname, { all: true, verbatim: true });
+        if (!results.length)
+            return false;
+        return results.every((entry) => !isPrivateIp(entry.address));
+    }
+    catch {
+        return false;
+    }
 }
 export function extractUrls(text, limit = MAX_URLS) {
     if (!text)
@@ -42,6 +150,9 @@ function normalizeImage(url, baseUrl) {
     }
 }
 export async function fetchLinkPreview(url) {
+    const allowed = await isSafeUrl(url);
+    if (!allowed)
+        return null;
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
     try {
