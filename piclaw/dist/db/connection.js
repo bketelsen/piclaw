@@ -16,6 +16,8 @@ function createSchema(database) {
       sender TEXT,
       sender_name TEXT,
       content TEXT,
+      content_blocks TEXT,
+      link_previews TEXT,
       timestamp TEXT,
       is_from_me INTEGER,
       is_bot_message INTEGER DEFAULT 0,
@@ -120,6 +122,22 @@ function createSchema(database) {
     );
   `);
 }
+function ensureMessageColumns(database) {
+    const columns = database.prepare("PRAGMA table_info(messages)").all();
+    const existing = new Set(columns.map((col) => col.name));
+    const ensureColumn = (name) => {
+        if (existing.has(name))
+            return;
+        try {
+            database.exec(`ALTER TABLE messages ADD COLUMN ${name} TEXT`);
+        }
+        catch {
+            // ignore if column already exists or cannot be added
+        }
+    };
+    ensureColumn("content_blocks");
+    ensureColumn("link_previews");
+}
 function ensureFts(database) {
     const row = database.prepare("PRAGMA user_version").get();
     const version = typeof row?.user_version === "number" ? row.user_version : 0;
@@ -133,6 +151,7 @@ export function initDatabase() {
     fs.mkdirSync(path.dirname(dbPath), { recursive: true });
     db = new Database(dbPath);
     createSchema(db);
+    ensureMessageColumns(db);
     ensureFts(db);
 }
 export function getDb() {

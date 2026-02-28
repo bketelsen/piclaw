@@ -13,7 +13,12 @@ export async function handlePost(channel, req, isReply, chatJid) {
     const mediaIds = Array.isArray(data.media_ids)
         ? data.media_ids.map((id) => Number(id)).filter((id) => Number.isFinite(id))
         : [];
-    const interaction = channel.storeMessage(chatJid, data.content, false, mediaIds);
+    const contentBlocks = Array.isArray(data.content_blocks) ? data.content_blocks : undefined;
+    const linkPreviews = Array.isArray(data.link_previews) ? data.link_previews : undefined;
+    const interaction = channel.storeMessage(chatJid, data.content, false, mediaIds, {
+        contentBlocks,
+        linkPreviews,
+    });
     if (!interaction)
         return channel.json({ error: "Failed to store message" }, 500);
     if (isReply && data.thread_id)

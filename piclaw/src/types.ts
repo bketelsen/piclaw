@@ -13,6 +13,8 @@ export interface NewMessage {
   timestamp: string;
   is_from_me?: boolean;
   is_bot_message?: boolean;
+  content_blocks?: unknown[];
+  link_previews?: unknown[];
 }
 
 export interface ScheduledTask {

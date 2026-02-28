@@ -1,7 +1,13 @@
 import type { WebChannel } from "../../web.js";
 
 export async function handlePost(channel: WebChannel, req: Request, isReply: boolean, chatJid: string): Promise<Response> {
-  let data: { content?: string; thread_id?: number | null; media_ids?: number[] };
+  let data: {
+    content?: string;
+    thread_id?: number | null;
+    media_ids?: number[];
+    content_blocks?: unknown[];
+    link_previews?: unknown[];
+  };
   try {
     data = await req.json();
   } catch {
@@ -14,8 +20,13 @@ export async function handlePost(channel: WebChannel, req: Request, isReply: boo
   const mediaIds = Array.isArray(data.media_ids)
     ? data.media_ids.map((id) => Number(id)).filter((id) => Number.isFinite(id))
     : [];
+  const contentBlocks = Array.isArray(data.content_blocks) ? data.content_blocks : undefined;
+  const linkPreviews = Array.isArray(data.link_previews) ? data.link_previews : undefined;
 
-  const interaction = channel.storeMessage(chatJid, data.content, false, mediaIds);
+  const interaction = channel.storeMessage(chatJid, data.content, false, mediaIds, {
+    contentBlocks,
+    linkPreviews,
+  });
   if (!interaction) return channel.json({ error: "Failed to store message" }, 500);
 
   if (isReply && data.thread_id) interaction.data.thread_id = Number(data.thread_id);

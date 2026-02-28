@@ -15,7 +15,7 @@ export function escapeXml(s: string): string {
 
 function channelFormattingInstructions(channel: ChatChannel): string | null {
   if (channel === "web") {
-    return "Use Markdown formatting in responses. Tables, headings, and links are allowed.";
+    return "Use Markdown formatting in responses. Tables, headings, and links are allowed. To deliver files, use the attach_file tool on a workspace path and reference it as attachment:<filename> in your response so the UI renders a download link.";
   }
   if (channel === "whatsapp") {
     return "Use WhatsApp formatting only: *bold*, _italic_, • bullets, and ```code``` blocks. Avoid Markdown headings, tables, and links.";

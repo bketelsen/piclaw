@@ -4,6 +4,7 @@ import { ASSISTANT_AVATAR, ASSISTANT_NAME, TRIGGER_PATTERN } from "../../../conf
 import { parseControlCommand } from "../../../agent-control.js";
 import { getMessagesSince } from "../../../db.js";
 import { detectChannel, formatMessages, formatOutbound } from "../../../router.js";
+import { buildPreview, createToolTitleTracker } from "../agent-utils.js";
 
 export async function handleAgentMessage(
   channel: WebChannel,
@@ -13,7 +14,13 @@ export async function handleAgentMessage(
   defaultAgentId: string
 ): Promise<Response> {
   const agentId = pathname.split("/")[2] || defaultAgentId;
-  let data: { content?: string; thread_id?: number | null; media_ids?: number[] };
+  let data: {
+    content?: string;
+    thread_id?: number | null;
+    media_ids?: number[];
+    content_blocks?: unknown[];
+    link_previews?: unknown[];
+  };
   try {
     data = await req.json();
   } catch {
@@ -25,8 +32,13 @@ export async function handleAgentMessage(
   const mediaIds = Array.isArray(data.media_ids)
     ? data.media_ids.map((id) => Number(id)).filter((id) => Number.isFinite(id))
     : [];
+  const contentBlocks = Array.isArray(data.content_blocks) ? data.content_blocks : undefined;
+  const linkPreviews = Array.isArray(data.link_previews) ? data.link_previews : undefined;
 
-  const interaction = channel.storeMessage(chatJid, data.content, false, mediaIds);
+  const interaction = channel.storeMessage(chatJid, data.content, false, mediaIds, {
+    contentBlocks,
+    linkPreviews,
+  });
 
   if (!interaction) return channel.json({ error: "Failed to store message" }, 500);
 
@@ -106,95 +118,11 @@ export async function processChat(channel: WebChannel, chatJid: string, agentId:
   const threadId = messages[messages.length - 1].timestamp;
   let thoughtBuffer = "";
   let draftBuffer = "";
-  const toolTitles = new Map<string, string>();
+  const { remember, lookup, forget } = createToolTitleTracker();
 
   const THOUGHT_PREVIEW_LINES = 8;
   const DRAFT_PREVIEW_LINES = 8;
   const PREVIEW_MAX_CHARS_PER_LINE = 160;
-
-  const countSoftLines = (line: string, maxChars: number): number => {
-    if (!line) return 1;
-    return Math.max(1, Math.ceil(line.length / maxChars));
-  };
-
-  const buildPreview = (text: string, maxLines: number): { preview: string; totalLines: number } => {
-    const value = (text || "").replace(/\r\n/g, "\n").replace(/\r/g, "\n");
-    if (!value) return { preview: "", totalLines: 0 };
-    const rawLines = value.split("\n");
-    const totalLines = rawLines.reduce((acc, line) => acc + countSoftLines(line, PREVIEW_MAX_CHARS_PER_LINE), 0);
-    const previewLines = rawLines.slice(0, maxLines);
-    return { preview: previewLines.join("\n"), totalLines };
-  };
-
-  const extractToolArgs = (args: unknown): Record<string, unknown> | null => {
-    if (!args) return null;
-    if (typeof args === "string") {
-      try {
-        const parsed = JSON.parse(args);
-        if (parsed && typeof parsed === "object") return parsed as Record<string, unknown>;
-      } catch {
-        return null;
-      }
-    }
-    if (typeof args === "object") {
-      const record = args as Record<string, unknown>;
-      const nested =
-        (record.arguments as Record<string, unknown> | undefined) ||
-        (record.input as Record<string, unknown> | undefined) ||
-        (record.params as Record<string, unknown> | undefined) ||
-        (record.parameters as Record<string, unknown> | undefined) ||
-        (record.args as Record<string, unknown> | undefined) ||
-        (record.payload as Record<string, unknown> | undefined);
-      return nested ?? record;
-    }
-    return null;
-  };
-
-  const formatToolTitle = (toolName: string, args: unknown): string => {
-    const record = extractToolArgs(args);
-    if (!record) return toolName;
-    let detail: string | null = null;
-
-    const command = record.command;
-    if (typeof command === "string") detail = command;
-
-    if (!detail && Array.isArray(record.commands)) {
-      detail = record.commands.filter((item) => typeof item === "string").join(" && ");
-    }
-
-    const path = record.path || record.filePath || record.target;
-    if (!detail && typeof path === "string") detail = path;
-
-    if (!detail && Array.isArray(record.paths)) {
-      detail = record.paths.filter((item) => typeof item === "string").join(", ");
-    }
-
-    const filename = record.fileName || record.filename || record.file;
-    if (!detail && typeof filename === "string") detail = filename;
-
-    const url = record.url;
-    if (!detail && typeof url === "string") detail = url;
-
-    const query = record.query;
-    if (!detail && typeof query === "string") detail = query;
-
-    if (!detail) return toolName;
-
-    const normalized = detail.replace(/\s+/g, " ").trim();
-    const maxLen = 120;
-    const clipped = normalized.length > maxLen ? `${normalized.slice(0, maxLen)}…` : normalized;
-    return `${toolName}: ${clipped}`;
-  };
-
-  const rememberToolTitle = (toolCallId: string, toolName: string, args: unknown): string => {
-    const title = formatToolTitle(toolName, args);
-    toolTitles.set(toolCallId, title);
-    return title;
-  };
-
-  const lookupToolTitle = (toolCallId: string, toolName: string, args?: unknown): string => {
-    return toolTitles.get(toolCallId) ?? formatToolTitle(toolName, args);
-  };
 
   const turnId = `turn-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
   const withAgentProfile = (payload: Record<string, unknown>) => ({
@@ -220,7 +148,11 @@ export async function processChat(channel: WebChannel, chatJid: string, agentId:
         }
         if (messageEvent.type === "thinking_delta") {
           thoughtBuffer += messageEvent.delta;
-          const { preview, totalLines } = buildPreview(thoughtBuffer, THOUGHT_PREVIEW_LINES);
+          const { preview, totalLines } = buildPreview(
+            thoughtBuffer,
+            THOUGHT_PREVIEW_LINES,
+            PREVIEW_MAX_CHARS_PER_LINE
+          );
           channel.broadcastEvent("agent_thought", withAgentProfile({
             thread_id: threadId,
             agent_id: agentId,
@@ -231,7 +163,11 @@ export async function processChat(channel: WebChannel, chatJid: string, agentId:
         }
         if (messageEvent.type === "thinking_end") {
           thoughtBuffer = messageEvent.content || thoughtBuffer;
-          const { preview, totalLines } = buildPreview(thoughtBuffer, THOUGHT_PREVIEW_LINES);
+          const { preview, totalLines } = buildPreview(
+            thoughtBuffer,
+            THOUGHT_PREVIEW_LINES,
+            PREVIEW_MAX_CHARS_PER_LINE
+          );
           channel.broadcastEvent("agent_thought", withAgentProfile({
             thread_id: threadId,
             agent_id: agentId,
@@ -241,7 +177,7 @@ export async function processChat(channel: WebChannel, chatJid: string, agentId:
           }));
         }
         if (messageEvent.type === "toolcall_end") {
-          const title = rememberToolTitle(
+          const title = remember(
             messageEvent.toolCall.id,
             messageEvent.toolCall.name,
             messageEvent.toolCall.arguments
@@ -275,7 +211,11 @@ export async function processChat(channel: WebChannel, chatJid: string, agentId:
         }
         if (messageEvent.type === "text_delta") {
           draftBuffer += messageEvent.delta;
-          const { preview, totalLines } = buildPreview(draftBuffer, DRAFT_PREVIEW_LINES);
+          const { preview, totalLines } = buildPreview(
+            draftBuffer,
+            DRAFT_PREVIEW_LINES,
+            PREVIEW_MAX_CHARS_PER_LINE
+          );
           channel.broadcastEvent("agent_draft", withAgentProfile({
             thread_id: threadId,
             agent_id: agentId,
@@ -295,7 +235,7 @@ export async function processChat(channel: WebChannel, chatJid: string, agentId:
       }
 
       if (event.type === "tool_execution_start") {
-        const title = rememberToolTitle(event.toolCallId, event.toolName, event.args);
+        const title = remember(event.toolCallId, event.toolName, event.args);
         channel.broadcastEvent("agent_status", withAgentProfile({
           thread_id: threadId,
           agent_id: agentId,
@@ -306,7 +246,7 @@ export async function processChat(channel: WebChannel, chatJid: string, agentId:
       }
 
       if (event.type === "tool_execution_update") {
-        const title = lookupToolTitle(event.toolCallId, event.toolName, event.args);
+        const title = lookup(event.toolCallId, event.toolName, event.args);
         channel.broadcastEvent("agent_status", withAgentProfile({
           thread_id: threadId,
           agent_id: agentId,
@@ -318,8 +258,8 @@ export async function processChat(channel: WebChannel, chatJid: string, agentId:
       }
 
       if (event.type === "tool_execution_end") {
-        const title = lookupToolTitle(event.toolCallId, event.toolName);
-        toolTitles.delete(event.toolCallId);
+        const title = lookup(event.toolCallId, event.toolName);
+        forget(event.toolCallId);
         channel.broadcastEvent("agent_status", withAgentProfile({
           thread_id: threadId,
           agent_id: agentId,
@@ -345,17 +285,27 @@ export async function processChat(channel: WebChannel, chatJid: string, agentId:
     return;
   }
 
-  if (output.result) {
-    const text = formatOutbound(output.result, channelName);
-    if (text) {
-      const interaction = channel.storeMessage(chatJid, text, true, []);
-      if (interaction) {
-        channel.broadcastEvent("agent_response", {
-          ...interaction,
-          agent_name: ASSISTANT_NAME,
-          agent_avatar: ASSISTANT_AVATAR || null,
-        });
-      }
+  const attachments = output.attachments ?? [];
+  const mediaIds = attachments.map((attachment) => attachment.id);
+  const contentBlocks = attachments.map((attachment) => ({
+    type: attachment.kind === "image" ? "image" : "file",
+    name: attachment.name,
+    filename: attachment.name,
+    mime_type: attachment.contentType,
+    size: attachment.size,
+  }));
+
+  if (output.result || attachments.length > 0) {
+    const text = formatOutbound(output.result || "", channelName);
+    const interaction = channel.storeMessage(chatJid, text, true, mediaIds, {
+      contentBlocks: contentBlocks.length > 0 ? contentBlocks : undefined,
+    });
+    if (interaction) {
+      channel.broadcastEvent("agent_response", {
+        ...interaction,
+        agent_name: ASSISTANT_NAME,
+        agent_avatar: ASSISTANT_AVATAR || null,
+      });
     }
   }
 

@@ -10,22 +10,41 @@ interface StoredMessageRow {
   sender: string;
   sender_name: string;
   content: string;
+  content_blocks: string | null;
+  link_previews: string | null;
   timestamp: string;
   is_bot_message: number;
 }
 
+const MESSAGE_COLUMNS = "rowid, chat_jid, sender, sender_name, content, content_blocks, link_previews, timestamp, is_bot_message";
+
+function parseJsonArray(value: string | null | undefined): unknown[] | undefined {
+  if (!value) return undefined;
+  try {
+    const parsed = JSON.parse(value);
+    return Array.isArray(parsed) ? parsed : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 function buildInteraction(row: StoredMessageRow, mediaIds: number[] = []): InteractionRow {
   const { content, meta } = clampWebContent(row.content);
+  const contentBlocks = parseJsonArray(row.content_blocks);
+  const linkPreviews = parseJsonArray(row.link_previews);
+  const data: InteractionRow["data"] = {
+    type: row.is_bot_message ? "agent_response" : "user_message",
+    content,
+    content_meta: meta,
+    agent_id: "default",
+    media_ids: mediaIds,
+  };
+  if (contentBlocks?.length) data.content_blocks = contentBlocks;
+  if (linkPreviews?.length) data.link_previews = linkPreviews;
   return {
     id: row.rowid,
     timestamp: row.timestamp,
-    data: {
-      type: row.is_bot_message ? "agent_response" : "user_message",
-      content,
-      content_meta: meta,
-      agent_id: "default",
-      media_ids: mediaIds,
-    },
+    data,
   };
 }
 
@@ -49,15 +68,20 @@ export function storeChatMetadata(chatJid: string, timestamp: string, name?: str
 
 export function storeMessage(msg: NewMessage): number {
   const db = getDb();
+  const contentBlocks = msg.content_blocks ? JSON.stringify(msg.content_blocks) : null;
+  const linkPreviews = msg.link_previews ? JSON.stringify(msg.link_previews) : null;
+
   db.prepare(
-    `INSERT OR REPLACE INTO messages (id, chat_jid, sender, sender_name, content, timestamp, is_from_me, is_bot_message)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+    `INSERT OR REPLACE INTO messages (id, chat_jid, sender, sender_name, content, content_blocks, link_previews, timestamp, is_from_me, is_bot_message)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
   ).run(
     msg.id,
     msg.chat_jid,
     msg.sender,
     msg.sender_name,
     msg.content,
+    contentBlocks,
+    linkPreviews,
     msg.timestamp,
     msg.is_from_me ? 1 : 0,
     msg.is_bot_message ? 1 : 0
@@ -73,7 +97,7 @@ export function getMessageByRowId(chatJid: string, rowId: number): InteractionRo
   const db = getDb();
   const row = db
     .prepare(
-      "SELECT rowid, chat_jid, sender, sender_name, content, timestamp, is_bot_message FROM messages WHERE chat_jid = ? AND rowid = ?"
+      `SELECT ${MESSAGE_COLUMNS} FROM messages WHERE chat_jid = ? AND rowid = ?`
     )
     .get(chatJid, rowId) as StoredMessageRow | undefined;
   if (!row) return undefined;
@@ -93,12 +117,12 @@ export function getTimeline(chatJid: string, limit: number, beforeId?: number): 
   const rows = beforeId
     ? (db
         .prepare(
-          "SELECT rowid, chat_jid, sender, sender_name, content, timestamp, is_bot_message FROM messages WHERE chat_jid = ? AND rowid < ? ORDER BY rowid DESC LIMIT ?"
+          `SELECT ${MESSAGE_COLUMNS} FROM messages WHERE chat_jid = ? AND rowid < ? ORDER BY rowid DESC LIMIT ?`
         )
         .all(chatJid, beforeId, limit) as StoredMessageRow[])
     : (db
         .prepare(
-          "SELECT rowid, chat_jid, sender, sender_name, content, timestamp, is_bot_message FROM messages WHERE chat_jid = ? ORDER BY rowid DESC LIMIT ?"
+          `SELECT ${MESSAGE_COLUMNS} FROM messages WHERE chat_jid = ? ORDER BY rowid DESC LIMIT ?`
         )
         .all(chatJid, limit) as StoredMessageRow[]);
 
@@ -119,7 +143,7 @@ export function getMessagesByHashtag(chatJid: string, hashtag: string, limit: nu
   const pattern = `%#${hashtag}%`;
   const rows = db
     .prepare(
-      "SELECT rowid, chat_jid, sender, sender_name, content, timestamp, is_bot_message FROM messages WHERE chat_jid = ? AND content LIKE ? COLLATE NOCASE ORDER BY rowid DESC LIMIT ? OFFSET ?"
+      `SELECT ${MESSAGE_COLUMNS} FROM messages WHERE chat_jid = ? AND content LIKE ? COLLATE NOCASE ORDER BY rowid DESC LIMIT ? OFFSET ?`
     )
     .all(chatJid, pattern, limit, offset) as StoredMessageRow[];
 
@@ -134,7 +158,7 @@ export function searchMessages(chatJid: string, query: string, limit: number, of
     const pattern = `%#${tag}%`;
     const rows = db
       .prepare(
-        "SELECT rowid, chat_jid, sender, sender_name, content, timestamp, is_bot_message FROM messages WHERE chat_jid = ? AND content LIKE ? COLLATE NOCASE ORDER BY rowid DESC LIMIT ? OFFSET ?"
+        `SELECT ${MESSAGE_COLUMNS} FROM messages WHERE chat_jid = ? AND content LIKE ? COLLATE NOCASE ORDER BY rowid DESC LIMIT ? OFFSET ?`
       )
       .all(chatJid, pattern, limit, offset) as StoredMessageRow[];
     return rows.map((row) => buildInteraction(row, getMediaIdsForMessage(row.rowid)));
@@ -143,7 +167,7 @@ export function searchMessages(chatJid: string, query: string, limit: number, of
   try {
     const rows = db
       .prepare(
-        `SELECT messages.rowid, messages.chat_jid, messages.sender, messages.sender_name, messages.content, messages.timestamp, messages.is_bot_message
+        `SELECT messages.rowid, messages.chat_jid, messages.sender, messages.sender_name, messages.content, messages.content_blocks, messages.link_previews, messages.timestamp, messages.is_bot_message
          FROM messages
          JOIN messages_fts ON messages_fts.rowid = messages.rowid
          WHERE messages.chat_jid = ? AND messages_fts MATCH ?
@@ -155,7 +179,7 @@ export function searchMessages(chatJid: string, query: string, limit: number, of
   } catch {
     const rows = db
       .prepare(
-        "SELECT rowid, chat_jid, sender, sender_name, content, timestamp, is_bot_message FROM messages WHERE chat_jid = ? AND content LIKE ? COLLATE NOCASE ORDER BY rowid DESC LIMIT ? OFFSET ?"
+        `SELECT ${MESSAGE_COLUMNS} FROM messages WHERE chat_jid = ? AND content LIKE ? COLLATE NOCASE ORDER BY rowid DESC LIMIT ? OFFSET ?`
       )
       .all(chatJid, `%${query}%`, limit, offset) as StoredMessageRow[];
     return rows.map((row) => buildInteraction(row, getMediaIdsForMessage(row.rowid)));

@@ -1,10 +1,15 @@
-import { mkdirSync, writeFileSync } from "fs";
+import { mkdirSync } from "fs";
 import { join } from "path";
-import { AuthStorage, createAgentSession, createBashTool, createEditTool, createReadTool, createWriteTool, DefaultResourceLoader, getAgentDir, ModelRegistry, SessionManager, SettingsManager, } from "@mariozechner/pi-coding-agent";
+import { AuthStorage, ModelRegistry, SettingsManager, getAgentDir, } from "@mariozechner/pi-coding-agent";
 import { applyControlCommand } from "./agent-control.js";
 import { AGENT_TIMEOUT, SESSIONS_DIR, WORKSPACE_DIR } from "./config.js";
 import { detectChannel } from "./router.js";
 import { createTrackedBashOperations } from "./tools/tracked-bash.js";
+import { AttachmentRegistry } from "./agent-pool/attachments.js";
+import { writeAgentLog } from "./agent-pool/logging.js";
+import { createDefaultSession, ensureSessionDir } from "./agent-pool/session.js";
+import { executeSlashCommand } from "./agent-pool/slash-command.js";
+import { createSessionTools } from "./agent-pool/tools.js";
 /** How long (ms) an idle session stays cached before being disposed. */
 const IDLE_TTL = 10 * 60 * 1000; // 10 minutes
 const CLEANUP_INTERVAL = 60 * 1000; // check every minute
@@ -26,6 +31,7 @@ export class AgentPool {
     createSession;
     sessionBinder;
     bashOperations = createTrackedBashOperations();
+    attachments = new AttachmentRegistry();
     constructor(options = {}) {
         this.createSession = options.createSession;
         this.authStorage = AuthStorage.create();
@@ -50,10 +56,10 @@ export class AgentPool {
     /** Run a prompt against the persistent session for `chatJid`. */
     async runAgent(prompt, chatJid, options = {}) {
         const startTime = Date.now();
+        this.attachments.clear(chatJid);
         try {
             const session = await this.getOrCreate(chatJid);
             console.log(`[agent-pool] Prompting session ${chatJid} (${prompt.length} chars)`);
-            // Collect the assistant's final text from streaming events
             let result = "";
             const onEvent = options.onEvent;
             const unsub = session.subscribe((event) => {
@@ -65,19 +71,16 @@ export class AgentPool {
                         console.warn("[agent-pool] Event handler error:", err);
                     }
                 }
-                if (event.type === "message_update" &&
-                    event.assistantMessageEvent.type === "text_delta") {
+                if (event.type === "message_update" && event.assistantMessageEvent.type === "text_delta") {
                     result += event.assistantMessageEvent.delta;
                 }
             });
-            // Timeout handling
             let timedOut = false;
             const timeoutId = setTimeout(async () => {
                 timedOut = true;
                 console.error(`[agent-pool] Timeout after ${AGENT_TIMEOUT}ms for ${chatJid}`);
                 await session.abort();
             }, AGENT_TIMEOUT);
-            // Set chat context for IPC skills (skills read this env var)
             process.env.PICLAW_CHAT_JID = chatJid;
             process.env.PICLAW_CHANNEL = detectChannel(chatJid);
             try {
@@ -88,17 +91,23 @@ export class AgentPool {
                 unsub();
             }
             const duration = Date.now() - startTime;
-            this.writeLog(chatJid, duration, timedOut, result, null);
+            const attachments = this.attachments.take(chatJid);
+            writeAgentLog(this.logsDir, chatJid, duration, timedOut, result, null);
             if (timedOut) {
                 return { status: "error", result: null, error: `Timed out after ${AGENT_TIMEOUT}ms` };
             }
             console.log(`[agent-pool] Done in ${duration}ms (${result.length} chars, session ${chatJid})`);
-            return { status: "success", result: result.trim() || null };
+            return {
+                status: "success",
+                result: result.trim() || null,
+                attachments: attachments.length ? attachments : undefined,
+            };
         }
         catch (err) {
+            this.attachments.clear(chatJid);
             const duration = Date.now() - startTime;
             const errorMsg = err instanceof Error ? err.message : String(err);
-            this.writeLog(chatJid, duration, false, null, errorMsg);
+            writeAgentLog(this.logsDir, chatJid, duration, false, null, errorMsg);
             console.error(`[agent-pool] Error for ${chatJid}:`, errorMsg);
             return { status: "error", result: null, error: errorMsg };
         }
@@ -124,141 +133,13 @@ export class AgentPool {
             return { queued: false, error: message };
         }
     }
-    /** Execute a raw slash command in the AgentSession (extension commands).
-     * Returns an AgentControlResult-like object with status/message.
-     * This runs session.prompt(rawText) and collects emitted messages (assistant and custom)
-     * to produce a text result suitable for returning to the web UI.
-     */
+    /** Execute a raw slash command in the AgentSession (extension commands). */
     async applySlashCommand(chatJid, rawText) {
-        const startTime = Date.now();
-        try {
-            const session = await this.getOrCreate(chatJid);
-            console.log(`[agent-pool] Executing slash command for ${chatJid}: ${rawText}`);
-            const trimmed = rawText.trim();
-            if (!trimmed.startsWith("/")) {
-                return { status: "error", message: "Not a slash command." };
-            }
-            const rawCommand = trimmed.slice(1);
-            const spaceIndex = rawCommand.indexOf(" ");
-            const commandName = spaceIndex === -1 ? rawCommand : rawCommand.slice(0, spaceIndex);
-            const skills = session.resourceLoader.getSkills().skills;
-            const templates = session.promptTemplates;
-            const extensionRunner = session.extensionRunner;
-            let known = false;
-            if (rawCommand.startsWith("skill:")) {
-                const skillName = rawCommand.slice(6).split(/\s+/)[0];
-                known = skills.some((skill) => skill.name === skillName);
-                if (!known) {
-                    return {
-                        status: "error",
-                        message: `Unknown skill: /skill:${skillName}. Use /commands to list available commands.`,
-                    };
-                }
-            }
-            else if (templates.some((template) => template.name === commandName)) {
-                known = true;
-            }
-            else if (extensionRunner?.getCommand(commandName)) {
-                known = true;
-            }
-            if (!known) {
-                return {
-                    status: "error",
-                    message: `Unknown command: /${commandName}. Use /commands to list available commands.`,
-                };
-            }
-            // Collect textual output from events (both streaming deltas and final message_end)
-            let assistantBuffer = "";
-            const customBuffers = [];
-            const capturedMessages = [];
-            const extractTextFromContent = (content) => {
-                if (!content)
-                    return "";
-                if (typeof content === "string")
-                    return content;
-                if (Array.isArray(content)) {
-                    return content
-                        .filter((b) => b && b.type === "text")
-                        .map((b) => b.text)
-                        .join("") || "";
-                }
-                return "";
-            };
-            const onEvent = (event) => {
-                try {
-                    if (event.type === "message_update") {
-                        const me = event.assistantMessageEvent;
-                        if (me && me.type === "text_delta") {
-                            assistantBuffer += me.delta || "";
-                        }
-                    }
-                    if (event.type === "message_end") {
-                        const msg = event.message;
-                        const text = extractTextFromContent(msg.content);
-                        if (text) {
-                            capturedMessages.push({
-                                role: msg.role,
-                                text,
-                                customType: msg.customType,
-                            });
-                        }
-                        if (msg.role === "assistant") {
-                            // Prefer final assistant text when available
-                            assistantBuffer = text || assistantBuffer;
-                        }
-                        else if (msg.role === "custom" || msg.role === "toolResult" || msg.role === "user") {
-                            if (text)
-                                customBuffers.push(text);
-                        }
-                        else {
-                            if (text)
-                                customBuffers.push(text);
-                        }
-                    }
-                }
-                catch (err) {
-                    // ignore
-                }
-            };
-            const unsub = session.subscribe(onEvent);
-            // Timeout handling (mirror runAgent behaviour)
-            let timedOut = false;
-            const timeoutId = setTimeout(async () => {
-                timedOut = true;
-                console.error(`[agent-pool] Slash command timeout after ${AGENT_TIMEOUT}ms for ${chatJid}`);
-                try {
-                    await session.abort();
-                }
-                catch { }
-                ;
-            }, AGENT_TIMEOUT);
-            try {
-                // Set chat context env for skills
-                process.env.PICLAW_CHAT_JID = chatJid;
-                process.env.PICLAW_CHANNEL = detectChannel(chatJid);
-                // Execute the raw slash command via session.prompt so extension commands run
-                await session.prompt(rawText);
-            }
-            finally {
-                clearTimeout(timeoutId);
-                unsub();
-            }
-            if (timedOut) {
-                return { status: "error", message: `Timed out after ${AGENT_TIMEOUT}ms` };
-            }
-            // Prefer assistant buffer, otherwise custom buffers joined
-            const finalText = (assistantBuffer && assistantBuffer.trim())
-                ? assistantBuffer.trim()
-                : customBuffers.join("\n\n").trim();
-            const message = finalText || capturedMessages.map((m) => m.text).join("\n\n").trim();
-            console.log(`[agent-pool] Slash command completed in ${Date.now() - startTime}ms (${message.length} chars)`);
-            return { status: "success", message, messages: capturedMessages };
-        }
-        catch (err) {
-            const message = err instanceof Error ? err.message : String(err);
-            console.error(`[agent-pool] Slash command error for ${chatJid}:`, message);
-            return { status: "error", message };
-        }
+        this.attachments.clear(chatJid);
+        const session = await this.getOrCreate(chatJid);
+        const result = await executeSlashCommand(session, chatJid, rawText);
+        this.attachments.clear(chatJid);
+        return result;
     }
     /** Gracefully shut down all sessions. */
     async shutdown() {
@@ -285,56 +166,36 @@ export class AgentPool {
             return existing.session;
         }
         console.log(`[agent-pool] Creating new session for ${chatJid}`);
-        // Each chat gets its own session directory so history is per-conversation
-        const chatSessionDir = join(SESSIONS_DIR, sanitiseJid(chatJid));
-        mkdirSync(chatSessionDir, { recursive: true });
+        const chatSessionDir = ensureSessionDir(chatJid);
         if (this.createSession) {
             const session = await this.createSession(chatJid, chatSessionDir);
             this.pool.set(chatJid, { session, lastUsed: Date.now() });
-            if (this.sessionBinder) {
-                try {
-                    await this.sessionBinder(session, chatJid);
-                }
-                catch (err) {
-                    console.error(`[agent-pool] Failed to bind session ${chatJid}:`, err);
-                }
-            }
+            await this.bindSession(session, chatJid);
             console.log(`[agent-pool] Session ready for ${chatJid} (pool size: ${this.pool.size})`);
             return session;
         }
-        // Use DefaultResourceLoader for full discovery (skills, extensions, context)
-        const resourceLoader = new DefaultResourceLoader({
-            cwd: WORKSPACE_DIR,
-            agentDir: getAgentDir(),
-            settingsManager: this.settingsManager,
-        });
-        await resourceLoader.reload();
-        const { session } = await createAgentSession({
-            cwd: WORKSPACE_DIR,
-            agentDir: getAgentDir(),
+        const { tools, customTools } = createSessionTools(WORKSPACE_DIR, this.bashOperations, chatJid, this.attachments);
+        const session = await createDefaultSession(chatJid, {
             authStorage: this.authStorage,
             modelRegistry: this.modelRegistry,
             settingsManager: this.settingsManager,
-            resourceLoader,
-            sessionManager: SessionManager.continueRecent(WORKSPACE_DIR, chatSessionDir),
-            tools: [
-                createReadTool(WORKSPACE_DIR),
-                createBashTool(WORKSPACE_DIR, { operations: this.bashOperations }),
-                createEditTool(WORKSPACE_DIR),
-                createWriteTool(WORKSPACE_DIR),
-            ],
+            tools,
+            customTools,
         });
         this.pool.set(chatJid, { session, lastUsed: Date.now() });
-        if (this.sessionBinder) {
-            try {
-                await this.sessionBinder(session, chatJid);
-            }
-            catch (err) {
-                console.error(`[agent-pool] Failed to bind session ${chatJid}:`, err);
-            }
-        }
+        await this.bindSession(session, chatJid);
         console.log(`[agent-pool] Session ready for ${chatJid} (pool size: ${this.pool.size})`);
         return session;
+    }
+    async bindSession(session, chatJid) {
+        if (!this.sessionBinder)
+            return;
+        try {
+            await this.sessionBinder(session, chatJid);
+        }
+        catch (err) {
+            console.error(`[agent-pool] Failed to bind session ${chatJid}:`, err);
+        }
     }
     evictIdle() {
         const now = Date.now();
@@ -349,26 +210,4 @@ export class AgentPool {
             }
         }
     }
-    writeLog(chatJid, duration, timedOut, result, error) {
-        try {
-            const ts = new Date().toISOString().replace(/[:.]/g, "-");
-            const content = [
-                `Chat: ${chatJid}`,
-                `Duration: ${duration}ms`,
-                `TimedOut: ${timedOut}`,
-                error ? `Error: ${error}` : null,
-                "",
-                "=== result ===",
-                result?.slice(0, 50000) ?? "(none)",
-            ]
-                .filter((l) => l !== null)
-                .join("\n");
-            writeFileSync(join(this.logsDir, `agent-${ts}.log`), content);
-        }
-        catch { }
-    }
-}
-/** Turn a JID into a safe directory name. */
-function sanitiseJid(jid) {
-    return jid.replace(/[^a-zA-Z0-9._-]/g, "_");
 }

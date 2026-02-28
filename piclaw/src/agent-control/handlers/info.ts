@@ -1,6 +1,7 @@
 import type { AgentSession } from "@mariozechner/pi-coding-agent";
 import type { AgentControlCommand, AgentControlResult } from "../../agent-control-types.js";
 import { formatCompactNumber, formatCurrency } from "../../agent-control-helpers.js";
+import { CONTROL_COMMAND_DEFINITIONS } from "../command-registry.js";
 
 type StateCommand = Extract<AgentControlCommand, { type: "state" }>;
 type StatsCommand = Extract<AgentControlCommand, { type: "stats" }>;
@@ -76,39 +77,9 @@ export async function handleCommands(session: AgentSession, _command: CommandsCo
     lines.push(`• ${name}${suffix}`);
   };
 
-  addLine("/model", "Select model or list available models");
-  addLine("/cycle-model", "Cycle to the next available model");
-  addLine("/thinking", "Show or set thinking level");
-  addLine("/cycle-thinking", "Cycle thinking level");
-  addLine("/state", "Show current session state");
-  addLine("/stats", "Show session token and cost stats");
-  addLine("/context", "Show context window usage");
-  addLine("/last", "Show last assistant response");
-  addLine("/compact", "Manually compact the session");
-  addLine("/auto-compact", "Toggle auto-compaction");
-  addLine("/auto-retry", "Toggle auto-retry");
-  addLine("/abort", "Abort the current response");
-  addLine("/abort-retry", "Abort retry backoff");
-  addLine("/abort-bash", "Abort running bash command");
-  addLine("/shell", "Run a shell command and return output");
-  addLine("/bash", "Run a shell command and add output to context");
-  addLine("/queue", "Queue a follow-up message (one-at-a-time)");
-  addLine("/queue-all", "Queue a follow-up message (batch all)");
-  addLine("/steering-mode", "Set steering mode (all|one)");
-  addLine("/followup-mode", "Set follow-up mode (all|one)");
-  addLine("/session-name", "Set or show the session name");
-  addLine("/new-session", "Start a new session");
-  addLine("/switch-session", "Switch to a session file");
-  addLine("/fork", "Fork from a previous message");
-  addLine("/forks", "List forkable messages");
-  addLine("/tree", "List the session tree (default tail 10) and navigate branches");
-  addLine("/label", "Set or clear a label on a tree entry");
-  addLine("/labels", "List labeled entries");
-  addLine("/agent-name", "Set or show the agent display name");
-  addLine("/agent-avatar", "Set or show the agent avatar URL");
-  addLine("/export-html", "Export session to HTML");
-  addLine("/restart", "Restart the agent and stop subprocesses");
-  addLine("/commands", "List available commands");
+  for (const command of CONTROL_COMMAND_DEFINITIONS) {
+    addLine(command.name, command.description);
+  }
 
   const extensionRunner = session.extensionRunner;
   if (extensionRunner) {
