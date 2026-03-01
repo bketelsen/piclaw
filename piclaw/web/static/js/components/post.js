@@ -223,7 +223,7 @@ export function Post({ post, onClick, onHashtagClick, agentName, agentAvatarUrl,
             return { content, usedIds };
         }
 
-        const replaced = content.replace(/attachment:([^\s)"']+)/g, (match, rawRef) => {
+        const replaced = content.replace(/attachment:([^\s)"']+)/g, (match, rawRef, offset, source) => {
             const ref = rawRef.replace(/^\/+/, '');
             const byName = attachments.find(
                 (entry) => entry.name && entry.name.toLowerCase() === ref.toLowerCase() && !usedIds.has(entry.id)
@@ -231,7 +231,11 @@ export function Post({ post, onClick, onHashtagClick, agentName, agentAvatarUrl,
             const entry = byName || attachments.find((item) => !usedIds.has(item.id));
             if (!entry) return match;
             usedIds.add(entry.id);
-            return `/media/${entry.id}`;
+            const prefix = source.slice(Math.max(0, offset - 2), offset);
+            if (prefix === '](') {
+                return `/media/${entry.id}`;
+            }
+            return entry.name || 'attachment';
         });
 
         return { content: replaced, usedIds };

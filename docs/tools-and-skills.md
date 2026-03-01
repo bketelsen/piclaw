@@ -13,7 +13,7 @@ Core tools (from `pi`):
 
 `piclaw` extensions:
 
-- `attach_file` — attach a workspace file for download in the web UI (use `attachment:<filename>` in replies)
+- `attach_file` — attach a workspace file for download in the web UI (cards appear automatically; use `attachment:<filename>` only for inline embeds)
 - `search_messages` — full‑text search across stored messages (FTS + hashtags + row lookup)
 - `get_model_state` — show current model, thinking level, and context usage
 - `list_models` — list available models/providers

@@ -116,7 +116,7 @@ test("web processChat stores attachment content blocks", async () => {
     agentPool: {
       runAgent: async () => ({
         status: "success",
-        result: "Here is the report: attachment:report.txt",
+        result: "Here is the report.",
         attachments: [
           {
             id: mediaId,
