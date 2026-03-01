@@ -232,6 +232,8 @@ export class SSEClient {
         this.reconnectTimeout = null;
         this.reconnectDelay = 1000;
         this.status = 'disconnected';
+        this.reconnectAttempts = 0;
+        this.cooldownUntil = 0;
     }
     
     connect() {
@@ -243,6 +245,8 @@ export class SSEClient {
         
         this.eventSource.onopen = () => {
             this.reconnectDelay = 1000;
+            this.reconnectAttempts = 0;
+            this.cooldownUntil = 0;
             this.status = 'connected';
             this.onStatusChange('connected');
         };
@@ -250,6 +254,7 @@ export class SSEClient {
         this.eventSource.onerror = () => {
             this.status = 'disconnected';
             this.onStatusChange('disconnected');
+            this.reconnectAttempts += 1;
             this.scheduleReconnect();
         };
         
@@ -308,11 +313,22 @@ export class SSEClient {
         if (this.reconnectTimeout) {
             clearTimeout(this.reconnectTimeout);
         }
+
+        const MAX_ATTEMPTS = 10;
+        const COOLDOWN_MS = 60000;
+        const now = Date.now();
+        if (this.reconnectAttempts >= MAX_ATTEMPTS) {
+            this.cooldownUntil = Math.max(this.cooldownUntil, now + COOLDOWN_MS);
+            this.reconnectAttempts = 0;
+        }
+
+        const cooldownDelay = Math.max(this.cooldownUntil - now, 0);
+        const delay = Math.max(this.reconnectDelay, cooldownDelay);
         
         this.reconnectTimeout = setTimeout(() => {
             console.log('Reconnecting SSE...');
             this.connect();
-        }, this.reconnectDelay);
+        }, delay);
         
         // Exponential backoff, max 30 seconds
         this.reconnectDelay = Math.min(this.reconnectDelay * 2, 30000);
@@ -320,6 +336,8 @@ export class SSEClient {
 
     reconnectIfNeeded() {
         if (this.status === 'connected') return;
+        const now = Date.now();
+        if (this.cooldownUntil && now < this.cooldownUntil) return;
         if (this.reconnectTimeout) {
             clearTimeout(this.reconnectTimeout);
             this.reconnectTimeout = null;

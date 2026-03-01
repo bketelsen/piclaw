@@ -10,6 +10,8 @@ import { isHiddenPath, resolveWorkspacePath, shouldIgnorePath, toRelativePath } 
 import { buildTree, compressPaths } from "./tree.js";
 
 export class WorkspaceService {
+  private treeCache = new Map<string, { timestamp: number; result: { status: number; body: unknown } }>();
+
   getTree(
     pathParam: string | null,
     depthParam?: string | null,
@@ -21,10 +23,18 @@ export class WorkspaceService {
     const depthRaw = parseInt(depthParam || "2", 10);
     const depth = Number.isFinite(depthRaw) ? Math.min(Math.max(depthRaw, 1), 8) : 2;
 
+    const cacheKey = `${targetPath}|${depth}|${includeHidden ? "1" : "0"}`;
+    const cached = this.treeCache.get(cacheKey);
+    if (cached && Date.now() - cached.timestamp < 1000) {
+      return cached.result;
+    }
+
     try {
       const state = { count: 0, truncated: false };
       const tree = buildTree(targetPath, depth, state, { includeHidden });
-      return { status: 200, body: { root: tree, truncated: state.truncated } };
+      const result = { status: 200, body: { root: tree, truncated: state.truncated } };
+      this.treeCache.set(cacheKey, { timestamp: Date.now(), result });
+      return result;
     } catch {
       return { status: 500, body: { error: "Failed to read workspace" } };
     }
@@ -164,6 +174,36 @@ export class WorkspaceService {
   ): { close: () => Promise<void> } {
     const pending = new Set<string>();
     let flushTimer: ReturnType<typeof setTimeout> | null = null;
+    const throttleMs = 1000;
+    let lastEmit = 0;
+    let throttleTimer: ReturnType<typeof setTimeout> | null = null;
+    let pendingUpdates: Map<string, { path: string; root: unknown; truncated: boolean }> | null = null;
+
+    const emitUpdates = (updates: Array<{ path: string; root: unknown; truncated: boolean }>) => {
+      if (!updates.length) return;
+      lastEmit = Date.now();
+      onUpdate(updates);
+    };
+
+    const scheduleEmit = (updates: Array<{ path: string; root: unknown; truncated: boolean }>) => {
+      const now = Date.now();
+      const elapsed = now - lastEmit;
+      if (elapsed >= throttleMs) {
+        emitUpdates(updates);
+        return;
+      }
+      if (!pendingUpdates) pendingUpdates = new Map();
+      for (const update of updates) {
+        pendingUpdates.set(update.path, update);
+      }
+      if (throttleTimer) return;
+      throttleTimer = setTimeout(() => {
+        throttleTimer = null;
+        const merged = pendingUpdates ? Array.from(pendingUpdates.values()) : [];
+        pendingUpdates = null;
+        emitUpdates(merged);
+      }, Math.max(throttleMs - elapsed, 0));
+    };
 
     const queuePath = (absPath: string) => {
       if (shouldIgnorePath(absPath)) return;
@@ -190,7 +230,7 @@ export class WorkspaceService {
             // ignore
           }
         }
-        if (updates.length) onUpdate(updates);
+        scheduleEmit(updates);
       }, 300);
     };
 
@@ -209,6 +249,16 @@ export class WorkspaceService {
 
     return {
       close: async () => {
+        if (flushTimer) {
+          clearTimeout(flushTimer);
+          flushTimer = null;
+        }
+        if (throttleTimer) {
+          clearTimeout(throttleTimer);
+          throttleTimer = null;
+        }
+        pending.clear();
+        pendingUpdates = null;
         try { await watcher.close(); } catch {}
       },
     };

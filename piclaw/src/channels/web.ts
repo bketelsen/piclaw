@@ -5,9 +5,8 @@ import { ASSISTANT_AVATAR, ASSISTANT_NAME, WEB_HOST, WEB_IDLE_TIMEOUT, WEB_PORT 
 import { handleMedia, handleMediaInfo, handleMediaUpload } from "./web/handlers/media.js";
 import { handleWorkspaceAttach, handleWorkspaceFile, handleWorkspaceRaw, handleWorkspaceTree, startWorkspaceWatcher } from "./web/handlers/workspace.js";
 import { SseHub } from "./web/sse-hub.js";
-import { serveDocsStatic, serveStatic } from "./web/static.js";
-import { clampInt, jsonResponse, parseOptionalInt } from "./web/http-utils.js";
 import { UiBridge } from "./web/ui-bridge.js";
+import { ResponseService } from "./web/response-service.js";
 import {
   getMessageRowIdById,
   replaceMessageContent,
@@ -41,6 +40,7 @@ export class WebChannel {
   state = new WebChannelState(STATE_KEY);
   sse = new SseHub();
   uiBridge: UiBridge;
+  responses = new ResponseService();
   pendingLinkPreviews = new Set<number>();
   workspaceWatcher: { close: () => Promise<void> } | null = null;
   workspaceVisible = false;
@@ -292,22 +292,22 @@ export class WebChannel {
   }
 
   async serveStatic(relPath: string): Promise<Response> {
-    return serveStatic(relPath, () => this.json({ error: "Not found" }, 404));
+    return this.responses.serveStatic(relPath);
   }
 
   async serveDocsStatic(relPath: string): Promise<Response> {
-    return serveDocsStatic(relPath, () => this.json({ error: "Not found" }, 404));
+    return this.responses.serveDocsStatic(relPath);
   }
 
   json(data: unknown, status = 200): Response {
-    return jsonResponse(data, status);
+    return this.responses.json(data, status);
   }
 
   clampInt(value: string | null, fallback: number, min: number, max: number): number {
-    return clampInt(value, fallback, min, max);
+    return this.responses.clampInt(value, fallback, min, max);
   }
 
   parseOptionalInt(value: string | null): number | null {
-    return parseOptionalInt(value);
+    return this.responses.parseOptionalInt(value);
   }
 }

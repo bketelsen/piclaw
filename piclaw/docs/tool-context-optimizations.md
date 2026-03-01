@@ -13,7 +13,7 @@ This document describes the tool-output context reduction system used by PiClaw 
 
 ### 1) Intercept large tool outputs
 
-The context-mode extension listens for `bash` tool results. When output exceeds a configured threshold (bytes or line count), it:
+PiClaw includes optional context-aware tool helpers. When output exceeds a configured threshold (bytes or line count), they:
 
 1. Reads the full tool output (including from `fullOutputPath` when the base tool truncates).
 2. Stores the full output to disk and indexes it in SQLite FTS.
@@ -49,15 +49,14 @@ tool_output_search
 
 A second tool, `batch_exec`, runs multiple shell commands and returns concise summaries for each. It uses the same context-aware bash wrapper for output handling.
 
-## Extension entry point
+## Enabling the helpers
 
-The behavior is enabled by a project-local extension:
+These helpers are not wired into the default tool list. To enable them, register the context-aware bash tool and search tool when constructing your tool list:
 
-- `/workspace/.pi/extensions/context-mode.ts`
+- `createContextBashTool()`
+- `createToolOutputSearchTool()`
 
-A template copy is also available for new projects:
-
-- `/workspace/piclaw/skel/.pi/extensions/context-mode.ts`
+Both are defined in `src/tools/context-tools.ts`.
 
 ## Data model
 
@@ -89,7 +88,7 @@ The cleanup removes:
 - Database records from `tool_outputs` and `tool_outputs_fts`
 - Corresponding files under `DATA_DIR/tool-output`
 
-The cleanup loop is started in `src/index.ts` via:
+The cleanup loop is started in `src/runtime.ts` via:
 
 ```ts
 startToolOutputCleanup(TOOL_OUTPUT_RETENTION_DAYS, TOOL_OUTPUT_CLEANUP_INTERVAL_MS);

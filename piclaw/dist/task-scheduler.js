@@ -54,7 +54,10 @@ async function switchTaskModel(task, deps) {
 async function restoreOriginalModel(task, deps, savedModel) {
     if (!task.model || !savedModel || savedModel === task.model)
         return;
-    await applyModelLabel(deps.agentPool, task.chat_jid, savedModel);
+    const control = await applyModelLabel(deps.agentPool, task.chat_jid, savedModel);
+    if (control.status === "error") {
+        console.error(`[scheduler] Failed to restore model ${savedModel}: ${control.message}`);
+    }
 }
 export async function runScheduledTask(task, deps) {
     // Re-check task status (may have been paused/cancelled while queued)
@@ -72,7 +75,9 @@ export async function runScheduledTask(task, deps) {
     try {
         // Switch model if task specifies one
         if (task.model) {
-            error = await switchTaskModel(task, deps);
+            if (!savedModel || savedModel !== task.model) {
+                error = await switchTaskModel(task, deps);
+            }
         }
         if (!error) {
             const out = await deps.agentPool.runAgent(task.prompt, task.chat_jid);

@@ -69,7 +69,10 @@ async function restoreOriginalModel(
   savedModel: string | null
 ): Promise<void> {
   if (!task.model || !savedModel || savedModel === task.model) return;
-  await applyModelLabel(deps.agentPool, task.chat_jid, savedModel);
+  const control = await applyModelLabel(deps.agentPool, task.chat_jid, savedModel);
+  if (control.status === "error") {
+    console.error(`[scheduler] Failed to restore model ${savedModel}: ${control.message}`);
+  }
 }
 
 export async function runScheduledTask(task: ScheduledTask, deps: SchedulerDeps): Promise<void> {
@@ -90,7 +93,9 @@ export async function runScheduledTask(task: ScheduledTask, deps: SchedulerDeps)
   try {
     // Switch model if task specifies one
     if (task.model) {
-      error = await switchTaskModel(task, deps);
+      if (!savedModel || savedModel !== task.model) {
+        error = await switchTaskModel(task, deps);
+      }
     }
 
     if (!error) {

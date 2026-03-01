@@ -1,7 +1,7 @@
 import { existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from "fs";
 import { join } from "path";
-import { randomBytes } from "crypto";
 import { DATA_DIR } from "./config.js";
+import { createUuid } from "./utils/ids.js";
 import { storeToolOutput, insertToolOutputChunk, getToolOutputById, deleteToolOutputsBefore, searchToolOutputSnippets, } from "./db.js";
 import { buildPreviewLines } from "./utils/preview.js";
 const TOOL_OUTPUT_DIR = join(DATA_DIR, "tool-output");
@@ -33,7 +33,7 @@ function chunkText(text, chunkSize = DEFAULT_CHUNK_SIZE) {
 }
 export function saveToolOutput(text, options = {}) {
     mkdirSync(TOOL_OUTPUT_DIR, { recursive: true });
-    const id = options.id ?? `out_${Date.now()}_${randomBytes(4).toString("hex")}`;
+    const id = options.id ?? createUuid("out");
     const createdAt = options.createdAt ?? new Date().toISOString();
     const path = join(TOOL_OUTPUT_DIR, `${id}.log`);
     writeFileSync(path, text ?? "", "utf8");
