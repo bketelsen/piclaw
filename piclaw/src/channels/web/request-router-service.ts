@@ -11,18 +11,15 @@ const STATIC_MIME_TYPES: Record<string, string> = {
 export class RequestRouterService {
   constructor(private channel: WebChannel) {}
 
-  private async serveStaticAsset(req: Request, relPath: string, label: string): Promise<Response> {
+  private async serveStaticAsset(req: Request, relPath: string): Promise<Response> {
     const filePath = resolve(STATIC_DIR, relPath);
-    const userAgent = req.headers.get("user-agent") || "unknown";
 
     if (!filePath.startsWith(STATIC_DIR)) {
-      console.log(`[web] ${label} ${req.method} ${req.url} status=404 ua=${userAgent}`);
       return this.channel.json({ error: "Not found" }, 404);
     }
 
     const file = Bun.file(filePath);
     if (!(await file.exists())) {
-      console.log(`[web] ${label} ${req.method} ${req.url} status=404 ua=${userAgent}`);
       return this.channel.json({ error: "Not found" }, 404);
     }
 
@@ -33,8 +30,6 @@ export class RequestRouterService {
       "Content-Length": String(size),
       "Cache-Control": "no-store",
     };
-
-    console.log(`[web] ${label} ${req.method} ${req.url} status=200 size=${size} ua=${userAgent}`);
 
     if (req.method === "HEAD") {
       return new Response(null, { status: 200, headers });
@@ -54,11 +49,11 @@ export class RequestRouterService {
     }
 
     if (isGetOrHead && pathname === "/manifest.json") {
-      return this.serveStaticAsset(req, "manifest.json", "manifest");
+      return this.serveStaticAsset(req, "manifest.json");
     }
 
     if (isGetOrHead && pathname === "/favicon.ico") {
-      return this.serveStaticAsset(req, "favicon.ico", "icon");
+      return this.serveStaticAsset(req, "favicon.ico");
     }
 
     if (isGetOrHead && (
@@ -68,7 +63,7 @@ export class RequestRouterService {
       || pathname === "/apple-touch-icon-167x167.png"
       || pathname === "/apple-touch-icon-152x152.png"
     )) {
-      return this.serveStaticAsset(req, pathname.slice(1), "icon");
+      return this.serveStaticAsset(req, pathname.slice(1));
     }
 
     if (pathname.startsWith("/static/")) {

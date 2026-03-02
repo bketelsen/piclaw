@@ -1,7 +1,35 @@
+import { extname, resolve } from "path";
+const STATIC_DIR = resolve(import.meta.dir, "..", "..", "..", "..", "web", "static");
+const STATIC_MIME_TYPES = {
+    ".png": "image/png",
+    ".ico": "image/x-icon",
+    ".json": "application/manifest+json; charset=utf-8",
+};
 export class RequestRouterService {
     channel;
     constructor(channel) {
         this.channel = channel;
+    }
+    async serveStaticAsset(req, relPath) {
+        const filePath = resolve(STATIC_DIR, relPath);
+        if (!filePath.startsWith(STATIC_DIR)) {
+            return this.channel.json({ error: "Not found" }, 404);
+        }
+        const file = Bun.file(filePath);
+        if (!(await file.exists())) {
+            return this.channel.json({ error: "Not found" }, 404);
+        }
+        const size = file.size ?? 0;
+        const contentType = STATIC_MIME_TYPES[extname(filePath)] || "application/octet-stream";
+        const headers = {
+            "Content-Type": contentType,
+            "Content-Length": String(size),
+            "Cache-Control": "no-store",
+        };
+        if (req.method === "HEAD") {
+            return new Response(null, { status: 200, headers });
+        }
+        return new Response(file, { status: 200, headers });
     }
     async handle(req) {
         const url = new URL(req.url);
@@ -11,23 +39,17 @@ export class RequestRouterService {
             return this.channel.serveStatic("index.html");
         }
         if (isGetOrHead && pathname === "/manifest.json") {
-            const userAgent = req.headers.get("user-agent") || "unknown";
-            console.log(`[web] manifest request ${req.url} ua=${userAgent}`);
-            return this.channel.serveStatic("manifest.json");
+            return this.serveStaticAsset(req, "manifest.json");
         }
         if (isGetOrHead && pathname === "/favicon.ico") {
-            const userAgent = req.headers.get("user-agent") || "unknown";
-            console.log(`[web] icon request ${req.url} ua=${userAgent}`);
-            return this.channel.serveStatic("favicon.ico");
+            return this.serveStaticAsset(req, "favicon.ico");
         }
         if (isGetOrHead && (pathname === "/apple-touch-icon.png"
             || pathname === "/apple-touch-icon-precomposed.png"
             || pathname === "/apple-touch-icon-180x180.png"
             || pathname === "/apple-touch-icon-167x167.png"
             || pathname === "/apple-touch-icon-152x152.png")) {
-            const userAgent = req.headers.get("user-agent") || "unknown";
-            console.log(`[web] icon request ${req.url} ua=${userAgent}`);
-            return this.channel.serveStatic(pathname.slice(1));
+            return this.serveStaticAsset(req, pathname.slice(1));
         }
         if (pathname.startsWith("/static/")) {
             const rel = pathname.replace("/static/", "");
