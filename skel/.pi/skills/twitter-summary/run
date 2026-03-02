@@ -8,16 +8,44 @@ HANDLE=${1:-example_user}
 HOURS=${2:-16}
 OUT=${3:-/tmp/twitter_fetch.json}
 LOG=${LOG:-/tmp/twitter-summary.log}
+INSTALL_LOG=${INSTALL_LOG:-/tmp/twitter-playwright-install.log}
 
 SKILL_DIR="$(cd "$(dirname "$0")" && pwd)"
 SCRIPT="$SKILL_DIR/playwright-twitter-summary.ts"
 
-echo "Running twitter-summary: handle=$HANDLE hours=$HOURS -> $OUT (log: $LOG)" >&2
-
 cd /workspace
+
+ensure_playwright() {
+  if [ -d /workspace/node_modules/playwright ]; then
+    return 0
+  fi
+  bun add -d playwright >"$INSTALL_LOG" 2>&1 || {
+    echo "Playwright install failed. See $INSTALL_LOG" >&2
+    return 1
+  }
+  bunx playwright install --with-deps >>"$INSTALL_LOG" 2>&1 || {
+    echo "Playwright browser install failed. See $INSTALL_LOG" >&2
+    return 1
+  }
+}
+
+ensure_browsers() {
+  local cache_dir="$HOME/.cache/ms-playwright"
+  if [ -d "$cache_dir" ]; then
+    if ls "$cache_dir" | grep -qE '(chromium|firefox|webkit)'; then
+      return 0
+    fi
+  fi
+  bunx playwright install --with-deps >>"$INSTALL_LOG" 2>&1 || {
+    echo "Playwright browser install failed. See $INSTALL_LOG" >&2
+    return 1
+  }
+}
+
+ensure_playwright
+ensure_browsers
+
 bun "$SCRIPT" --handle="$HANDLE" --hours="$HOURS" > "$OUT" 2>"$LOG" || {
   echo "Scraper failed. See $LOG" >&2
   exit 1
 }
-
-echo "Saved $OUT (log: $LOG)" >&2

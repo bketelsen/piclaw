@@ -13,12 +13,7 @@ Two scrapers are included:
 
 ## Prerequisites
 
-For the Playwright scraper:
-
-```bash
-cd /workspace && bun add playwright
-bunx playwright install --with-deps
-```
+The wrapper auto-installs Playwright if missing (logs to `/tmp/twitter-playwright-install.log`).
 
 For the quick scraper:
 
