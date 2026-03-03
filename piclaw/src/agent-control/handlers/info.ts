@@ -71,14 +71,24 @@ export async function handleLast(session: AgentSession, _command: LastCommand): 
 }
 
 export async function handleCommands(session: AgentSession, _command: CommandsCommand): Promise<AgentControlResult> {
-  const lines: string[] = ["Available commands:"];
-  const addLine = (name: string, description?: string) => {
-    const suffix = description ? ` - ${description}` : "";
-    lines.push(`• ${name}${suffix}`);
+  type CommandEntry = { name: string; description?: string };
+  const entries = new Map<string, CommandEntry>();
+  const addEntry = (name: string, description?: string) => {
+    const trimmed = name.trim();
+    if (!trimmed) return;
+    const key = trimmed.toLowerCase();
+    const existing = entries.get(key);
+    if (existing) {
+      if (!existing.description && description) {
+        existing.description = description;
+      }
+      return;
+    }
+    entries.set(key, { name: trimmed, description });
   };
 
   for (const command of CONTROL_COMMAND_DEFINITIONS) {
-    addLine(command.name, command.description);
+    addEntry(command.name, command.description);
   }
 
   const extensionRunner = session.extensionRunner;
@@ -88,19 +98,26 @@ export async function handleCommands(session: AgentSession, _command: CommandsCo
       const name = entry.command?.name;
       if (!name) continue;
       const description = entry.command.description || `extension (${entry.extensionPath})`;
-      addLine(`/${name}`, description);
+      addEntry(`/${name}`, description);
     }
   }
 
   for (const template of session.promptTemplates) {
     const description = template.description || "prompt template";
-    addLine(`/${template.name}`, description);
+    addEntry(`/${template.name}`, description);
   }
 
   const skills = session.resourceLoader.getSkills().skills;
   for (const skill of skills) {
     const description = skill.description || "skill";
-    addLine(`/skill:${skill.name}`, description);
+    addEntry(`/skill:${skill.name}`, description);
+  }
+
+  const sorted = Array.from(entries.values()).sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: "base" }));
+  const lines: string[] = ["Available commands:"];
+  for (const entry of sorted) {
+    const suffix = entry.description ? ` - ${entry.description}` : "";
+    lines.push(`• ${entry.name}${suffix}`);
   }
 
   return {

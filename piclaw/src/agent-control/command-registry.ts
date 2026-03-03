@@ -5,13 +5,13 @@ export interface ControlCommandDefinition {
 }
 
 export const CONTROL_COMMAND_DEFINITIONS: ControlCommandDefinition[] = [
-  { name: "/model", description: "Select model or list available models" },
+  { name: "/model", description: "Select model or list available models", aliases: ["/models"] },
   { name: "/cycle-model", description: "Cycle to the next available model" },
   { name: "/thinking", description: "Show or set thinking level" },
   { name: "/cycle-thinking", description: "Cycle thinking level" },
   { name: "/state", description: "Show current session state" },
   { name: "/stats", description: "Show session token and cost stats" },
-  { name: "/context", description: "Show context window usage" },
+  { name: "/context", description: "Show context window usage", aliases: ["/ctx"] },
   { name: "/last", description: "Show last assistant response" },
   { name: "/compact", description: "Manually compact the session" },
   { name: "/auto-compact", description: "Toggle auto-compaction" },
