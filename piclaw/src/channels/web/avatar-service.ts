@@ -41,6 +41,17 @@ function normalizeContentType(value: string | null | undefined): string {
   return (value || "").split(";")[0].trim().toLowerCase();
 }
 
+function sanitizeAvatarSource(source: string): string {
+  let cleaned = (source || "").trim();
+  if (!cleaned) return "";
+  cleaned = cleaned.replace(/\r\n/g, "\n");
+  const blockIndex = cleaned.indexOf("\nFiles:");
+  if (blockIndex !== -1) cleaned = cleaned.slice(0, blockIndex);
+  const inlineIndex = cleaned.indexOf(" Files:");
+  if (inlineIndex !== -1) cleaned = cleaned.slice(0, inlineIndex);
+  return cleaned.trim();
+}
+
 function guessContentTypeFromExtension(ext: string): string {
   return EXT_TO_TYPE[ext.toLowerCase()] || "application/octet-stream";
 }
@@ -130,17 +141,18 @@ async function loadAvatarSource(source: string): Promise<{ data: Uint8Array; con
 }
 
 export async function ensureAvatarCache(kind: AvatarKind, source: string): Promise<AvatarMeta | null> {
-  if (!source) return null;
+  const sanitized = sanitizeAvatarSource(source);
+  if (!sanitized) return null;
 
   const existing = readMeta(kind);
-  if (existing && existing.source === source && existsSync(existing.file)) {
+  if (existing && existing.source === sanitized && existsSync(existing.file)) {
     return existing;
   }
 
-  const loaded = await loadAvatarSource(source);
+  const loaded = await loadAvatarSource(sanitized);
   if (!loaded) return null;
 
-  const extension = guessExtension(loaded.contentType, source);
+  const extension = guessExtension(loaded.contentType, sanitized);
   const filePath = resolve(AVATAR_DIR, `${kind}${extension}`);
   mkdirSync(AVATAR_DIR, { recursive: true });
   writeFileSync(filePath, Buffer.from(loaded.data));
@@ -151,7 +163,7 @@ export async function ensureAvatarCache(kind: AvatarKind, source: string): Promi
 
   const contentType = normalizeContentType(loaded.contentType) || guessContentTypeFromExtension(extension);
   const meta: AvatarMeta = {
-    source,
+    source: sanitized,
     file: filePath,
     contentType,
     updatedAt: new Date().toISOString(),
@@ -161,12 +173,13 @@ export async function ensureAvatarCache(kind: AvatarKind, source: string): Promi
 }
 
 export async function buildAvatarResponse(kind: AvatarKind, source: string, req: Request): Promise<Response | null> {
-  if (!source) return null;
+  const sanitized = sanitizeAvatarSource(source);
+  if (!sanitized) return null;
 
-  const meta = await ensureAvatarCache(kind, source);
+  const meta = await ensureAvatarCache(kind, sanitized);
   if (!meta) {
-    if (source.startsWith("http://") || source.startsWith("https://")) {
-      return Response.redirect(source, 302);
+    if (sanitized.startsWith("http://") || sanitized.startsWith("https://")) {
+      return Response.redirect(sanitized, 302);
     }
     return null;
   }
@@ -189,5 +202,7 @@ export async function buildAvatarResponse(kind: AvatarKind, source: string, req:
 
 export function resolveAvatarUrl(kind: AvatarKind, source?: string | null): string | null {
   if (!source) return null;
+  const sanitized = sanitizeAvatarSource(source);
+  if (!sanitized) return null;
   return `/avatar/${kind}`;
 }

@@ -1,6 +1,13 @@
 import type { AgentSession } from "@mariozechner/pi-coding-agent";
 import type { AgentControlCommand, AgentControlResult } from "../agent-control-types.js";
-import { USER_AVATAR, USER_NAME, setUserAvatar, setUserName } from "../../core/config.js";
+import {
+  USER_AVATAR,
+  USER_AVATAR_BACKGROUND,
+  USER_NAME,
+  setUserAvatar,
+  setUserAvatarBackground,
+  setUserName,
+} from "../../core/config.js";
 import { updateUserConfig } from "../agent-control-helpers.js";
 
 const CLEAR_VALUES = ["clear", "none", "off", "default"];
@@ -37,9 +44,16 @@ export async function handleUserAvatar(_session: AgentSession, command: UserAvat
   const trimmed = command.avatar.trim();
   const normalized = trimmed.toLowerCase();
   const nextAvatar = CLEAR_VALUES.includes(normalized) ? null : trimmed;
-  const updated = updateUserConfig({ avatar: nextAvatar });
+  const updated = updateUserConfig({
+    avatar: nextAvatar,
+    avatarBackground: nextAvatar === null ? null : undefined,
+  });
   const effective = updated.avatar || USER_AVATAR || "";
   setUserAvatar(effective);
+
+  if (nextAvatar === null) {
+    setUserAvatarBackground("");
+  }
 
   return {
     status: "success",
@@ -105,9 +119,14 @@ export async function handleUserGithub(_session: AgentSession, command: UserGith
     };
   }
 
-  const updated = updateUserConfig({ name: resolvedName, avatar: resolvedAvatar });
+  const updated = updateUserConfig({
+    name: resolvedName,
+    avatar: resolvedAvatar,
+    avatarBackground: "clear",
+  });
   setUserName(updated.name || resolvedName);
   setUserAvatar(updated.avatar || resolvedAvatar);
+  setUserAvatarBackground(updated.avatarBackground || "clear");
 
   return {
     status: "success",

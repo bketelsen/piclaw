@@ -213,7 +213,7 @@ function extractFileRefs(content) {
 /**
  * Single post component
  */
-export function Post({ post, onClick, onHashtagClick, agentName, agentAvatarUrl, userName, userAvatarUrl, onDelete, isThreadReply }) {
+export function Post({ post, onClick, onHashtagClick, agentName, agentAvatarUrl, userName, userAvatarUrl, userAvatarBackground, onDelete, isThreadReply }) {
     const [zoomedImage, setZoomedImage] = useState(null);
     const contentRef = useRef(null);
 
@@ -226,6 +226,12 @@ export function Post({ post, onClick, onHashtagClick, agentName, agentAvatarUrl,
     const avatarInfo = isAgent
         ? getAvatarInfo(agentName, agentAvatarUrl)
         : getAvatarInfo(resolvedUserName, userAvatarUrl);
+    const normalizedUserBackground = typeof userAvatarBackground === 'string'
+        ? userAvatarBackground.trim().toLowerCase()
+        : '';
+    const clearUserBackground = !isAgent && avatarInfo.image
+        && (normalizedUserBackground === 'clear' || normalizedUserBackground === 'transparent');
+    const avatarStyle = `background-color: ${clearUserBackground ? 'transparent' : avatarInfo.color}`;
 
     const contentMeta = data.content_meta;
     const isTruncated = Boolean(contentMeta?.truncated);
@@ -335,7 +341,7 @@ export function Post({ post, onClick, onHashtagClick, agentName, agentAvatarUrl,
 
     return html`
         <div id=${`post-${post.id}`} class="post ${isAgent ? 'agent-post' : ''} ${isThreadReply ? 'thread-reply' : ''}" onClick=${onClick}>
-            <div class="post-avatar ${isAgent ? 'agent-avatar' : ''} ${avatarInfo.image ? 'has-image' : ''}" style="background-color: ${avatarInfo.color}">
+            <div class="post-avatar ${isAgent ? 'agent-avatar' : ''} ${avatarInfo.image ? 'has-image' : ''}" style=${avatarStyle}>
                 ${avatarInfo.image ? html`<img src=${avatarInfo.image} alt=${displayName} />` : avatarInfo.letter}
             </div>
             <div class="post-body">

@@ -1,7 +1,18 @@
 import { AgentQueue } from "../queue.js";
 import type { AgentPool } from "../agent-pool.js";
 import { initTheme, type AgentSession } from "@mariozechner/pi-coding-agent";
-import { ASSISTANT_AVATAR, ASSISTANT_NAME, WEB_HOST, WEB_IDLE_TIMEOUT, WEB_PORT, WEB_TLS_CERT, WEB_TLS_KEY } from "../core/config.js";
+import {
+  ASSISTANT_AVATAR,
+  ASSISTANT_NAME,
+  USER_AVATAR,
+  USER_AVATAR_BACKGROUND,
+  USER_NAME,
+  WEB_HOST,
+  WEB_IDLE_TIMEOUT,
+  WEB_PORT,
+  WEB_TLS_CERT,
+  WEB_TLS_KEY,
+} from "../core/config.js";
 import { handleMedia, handleMediaInfo, handleMediaUpload } from "./web/handlers/media.js";
 import { handleWorkspaceAttach, handleWorkspaceFile, handleWorkspaceRaw, handleWorkspaceTree, startWorkspaceWatcher } from "./web/handlers/workspace.js";
 import { SseHub } from "./web/sse-hub.js";
@@ -23,6 +34,7 @@ import {
   getTimelineResponse,
 } from "./web/timeline-service.js";
 import { getAgentsResponse } from "./web/agents-service.js";
+import { buildAvatarResponse, resolveAvatarUrl } from "./web/avatar-service.js";
 import { broadcastAgentResponse, broadcastInteractionUpdated } from "./web/interaction-service.js";
 
 const DEFAULT_CHAT_JID = "web:default";
@@ -93,7 +105,15 @@ export class WebChannel {
   async sendMessage(chatJid: string, text: string, threadId?: number | null): Promise<void> {
     const interaction = this.storeMessage(chatJid, text, true, [], threadId ? { threadId } : undefined);
     if (interaction) {
-      broadcastAgentResponse(this, interaction, ASSISTANT_NAME, ASSISTANT_AVATAR || null);
+      broadcastAgentResponse(
+        this,
+        interaction,
+        ASSISTANT_NAME,
+        resolveAvatarUrl("agent", ASSISTANT_AVATAR),
+        USER_NAME || null,
+        resolveAvatarUrl("user", USER_AVATAR),
+        USER_AVATAR_BACKGROUND || null
+      );
     }
   }
 
@@ -103,7 +123,15 @@ export class WebChannel {
 
     this.state.enqueueFollowupPlaceholder(chatJid, interaction.id);
 
-    broadcastAgentResponse(this, interaction, ASSISTANT_NAME, ASSISTANT_AVATAR || null);
+    broadcastAgentResponse(
+      this,
+      interaction,
+      ASSISTANT_NAME,
+      resolveAvatarUrl("agent", ASSISTANT_AVATAR),
+      USER_NAME || null,
+      resolveAvatarUrl("user", USER_AVATAR),
+      USER_AVATAR_BACKGROUND || null
+    );
 
     return interaction;
   }
@@ -157,7 +185,15 @@ export class WebChannel {
     updated.data.agent_id = DEFAULT_AGENT_ID;
     if (threadId) updated.data.thread_id = threadId;
 
-    broadcastInteractionUpdated(this, updated, ASSISTANT_NAME, ASSISTANT_AVATAR || null);
+    broadcastInteractionUpdated(
+      this,
+      updated,
+      ASSISTANT_NAME,
+      resolveAvatarUrl("agent", ASSISTANT_AVATAR),
+      USER_NAME || null,
+      resolveAvatarUrl("user", USER_AVATAR),
+      USER_AVATAR_BACKGROUND || null
+    );
 
     return updated;
   }
@@ -268,9 +304,20 @@ export class WebChannel {
       chatJid: DEFAULT_CHAT_JID,
       agentId: DEFAULT_AGENT_ID,
       agentName: ASSISTANT_NAME,
-      agentAvatar: ASSISTANT_AVATAR || null,
+      agentAvatar: resolveAvatarUrl("agent", ASSISTANT_AVATAR),
+      userName: USER_NAME || null,
+      userAvatar: resolveAvatarUrl("user", USER_AVATAR),
+      userAvatarBackground: USER_AVATAR_BACKGROUND || null,
     });
     return this.json(result.body, result.status);
+  }
+
+  async handleAvatar(kind: "agent" | "user", req: Request): Promise<Response> {
+    const source = kind === "agent" ? ASSISTANT_AVATAR : USER_AVATAR;
+    if (!source) return this.json({ error: "Avatar not found" }, 404);
+    const response = await buildAvatarResponse(kind, source, req);
+    if (response) return response;
+    return this.json({ error: "Avatar not found" }, 404);
   }
 
   async handleWorkspaceVisibility(req: Request): Promise<Response> {

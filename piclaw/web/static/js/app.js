@@ -116,7 +116,7 @@ function App() {
     const [activeModel, setActiveModel] = useState(null);
     const [notificationsEnabled, setNotificationsEnabled] = useState(false);
     const [notificationPermission, setNotificationPermission] = useState('default');
-    const [userProfile, setUserProfile] = useState({ name: 'You', avatar_url: null });
+    const [userProfile, setUserProfile] = useState({ name: 'You', avatar_url: null, avatar_background: null });
     const hasConnectedOnceRef = useRef(false);
     const agentsRef = useRef({});
     const userProfileRef = useRef({ name: null, avatar_url: null });
@@ -181,7 +181,7 @@ function App() {
     }, [agents]);
 
     useEffect(() => {
-        userProfileRef.current = userProfile || { name: 'You', avatar_url: null };
+        userProfileRef.current = userProfile || { name: 'You', avatar_url: null, avatar_background: null };
     }, [userProfile]);
 
     const applyBranding = useCallback((name, avatarUrl, avatarVersion = null) => {
@@ -662,8 +662,11 @@ function App() {
             setUserProfile((prev) => {
                 const nextName = typeof nextUser.name === 'string' && nextUser.name.trim() ? nextUser.name.trim() : 'You';
                 const nextAvatar = typeof nextUser.avatar_url === 'string' ? nextUser.avatar_url.trim() : null;
-                if (prev.name === nextName && prev.avatar_url === nextAvatar) return prev;
-                return { name: nextName, avatar_url: nextAvatar };
+                const nextBg = typeof nextUser.avatar_background === 'string' && nextUser.avatar_background.trim()
+                    ? nextUser.avatar_background.trim()
+                    : null;
+                if (prev.name === nextName && prev.avatar_url === nextAvatar && prev.avatar_background === nextBg) return prev;
+                return { name: nextName, avatar_url: nextAvatar, avatar_background: nextBg };
             });
             // Pick up the current model from the default agent entry
             const defaultAgent = (data?.agents || []).find((a) => a.id === 'default');
@@ -734,7 +737,8 @@ function App() {
         if (!payload || typeof payload !== 'object') return;
         const nextName = payload.user_name ?? payload.userName;
         const nextAvatar = payload.user_avatar ?? payload.userAvatar;
-        if (nextName === undefined && nextAvatar === undefined) return;
+        const nextBg = payload.user_avatar_background ?? payload.userAvatarBackground;
+        if (nextName === undefined && nextAvatar === undefined && nextBg === undefined) return;
 
         setUserProfile((prev) => {
             const resolvedName = typeof nextName === 'string' && nextName.trim()
@@ -743,8 +747,15 @@ function App() {
             const resolvedAvatar = nextAvatar === undefined
                 ? prev.avatar_url
                 : (typeof nextAvatar === 'string' && nextAvatar.trim() ? nextAvatar.trim() : null);
-            if (prev.name === resolvedName && prev.avatar_url === resolvedAvatar) return prev;
-            return { name: resolvedName, avatar_url: resolvedAvatar };
+            const resolvedBg = nextBg === undefined
+                ? prev.avatar_background
+                : (typeof nextBg === 'string' && nextBg.trim() ? nextBg.trim() : null);
+            if (
+                prev.name === resolvedName
+                && prev.avatar_url === resolvedAvatar
+                && prev.avatar_background === resolvedBg
+            ) return prev;
+            return { name: resolvedName, avatar_url: resolvedAvatar, avatar_background: resolvedBg };
         });
     }, []);
 

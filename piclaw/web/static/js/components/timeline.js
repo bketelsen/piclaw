@@ -112,6 +112,7 @@ export function Timeline({ posts, hasMore, onLoadMore, onPostClick, onHashtagCli
                         agentAvatarUrl=${getAgentAvatarUrl(post.data?.agent_id, agents || {})}
                         userName=${user?.name || user?.user_name}
                         userAvatarUrl=${user?.avatar_url || user?.avatarUrl || user?.avatar}
+                        userAvatarBackground=${user?.avatar_background || user?.avatarBackground}
                         onClick=${() => onPostClick?.(post)}
                         onHashtagClick=${onHashtagClick}
                         onDelete=${onDeletePost}

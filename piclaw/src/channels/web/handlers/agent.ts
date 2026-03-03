@@ -5,6 +5,7 @@ import {
   BACKGROUND_AGENT_TIMEOUT,
   TRIGGER_PATTERN,
   USER_AVATAR,
+  USER_AVATAR_BACKGROUND,
   USER_NAME,
 } from "../../../core/config.js";
 import { parseControlCommand } from "../../../agent-control/index.js";
@@ -153,7 +154,8 @@ export async function processChat(
     ASSISTANT_NAME,
     resolveAvatarUrl("agent", ASSISTANT_AVATAR),
     USER_NAME || null,
-    resolveAvatarUrl("user", USER_AVATAR)
+    resolveAvatarUrl("user", USER_AVATAR),
+    USER_AVATAR_BACKGROUND || null
   );
   const emitter = createAgentEventEmitter(channel, withAgentProfile);
   const trackedEmitter = {

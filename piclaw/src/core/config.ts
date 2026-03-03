@@ -8,6 +8,7 @@ const envConfig = readEnvFile([
   "PICLAW_ASSISTANT_AVATAR",
   "PICLAW_USER_NAME",
   "PICLAW_USER_AVATAR",
+  "PICLAW_USER_AVATAR_BACKGROUND",
   "ASSISTANT_NAME",
   "ASSISTANT_AVATAR",
   "PICLAW_AGENT_TIMEOUT",
@@ -106,6 +107,15 @@ const configUserAvatar = pickString(userConfig, [
   "avatar",
   "PICLAW_USER_AVATAR",
 ]);
+const configUserAvatarBackground = pickString(userConfig, [
+  "userAvatarBackground",
+  "user_avatar_background",
+  "userAvatarBg",
+  "user_avatar_bg",
+  "avatarBackground",
+  "avatar_background",
+  "PICLAW_USER_AVATAR_BACKGROUND",
+]);
 
 function warnDeprecatedEnv(oldName: string, newName: string): void {
   const oldValue = process.env[oldName] ?? envConfig[oldName];
@@ -143,6 +153,11 @@ export let USER_AVATAR =
   process.env.PICLAW_USER_AVATAR ||
   envConfig.PICLAW_USER_AVATAR ||
   configUserAvatar ||
+  "";
+export let USER_AVATAR_BACKGROUND =
+  process.env.PICLAW_USER_AVATAR_BACKGROUND ||
+  envConfig.PICLAW_USER_AVATAR_BACKGROUND ||
+  configUserAvatarBackground ||
   "";
 
 export const AGENT_TIMEOUT = parseInt(
@@ -233,6 +248,10 @@ export function setUserName(name: string): void {
 
 export function setUserAvatar(avatar: string): void {
   USER_AVATAR = avatar.trim();
+}
+
+export function setUserAvatarBackground(background: string): void {
+  USER_AVATAR_BACKGROUND = background.trim();
 }
 
 export const TOOL_OUTPUT_RETENTION_DAYS = parseInt(process.env.PICLAW_TOOL_OUTPUT_RETENTION_DAYS || "30", 10);

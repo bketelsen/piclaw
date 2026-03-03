@@ -6,12 +6,14 @@ export function withAgentProfile(
   agentName: string,
   agentAvatar?: string | null,
   userName?: string | null,
-  userAvatar?: string | null
+  userAvatar?: string | null,
+  userAvatarBackground?: string | null
 ): InteractionRow & {
   agent_name: string;
   agent_avatar: string | null;
   user_name: string | null;
   user_avatar: string | null;
+  user_avatar_background: string | null;
 } {
   return {
     ...interaction,
@@ -19,6 +21,7 @@ export function withAgentProfile(
     agent_avatar: agentAvatar ?? null,
     user_name: userName ?? null,
     user_avatar: userAvatar ?? null,
+    user_avatar_background: userAvatarBackground ?? null,
   };
 }
 
@@ -28,11 +31,12 @@ export function broadcastAgentResponse(
   agentName: string,
   agentAvatar?: string | null,
   userName?: string | null,
-  userAvatar?: string | null
+  userAvatar?: string | null,
+  userAvatarBackground?: string | null
 ): void {
   channel.broadcastEvent(
     "agent_response",
-    withAgentProfile(interaction, agentName, agentAvatar, userName, userAvatar)
+    withAgentProfile(interaction, agentName, agentAvatar, userName, userAvatar, userAvatarBackground)
   );
 }
 
@@ -42,10 +46,11 @@ export function broadcastInteractionUpdated(
   agentName: string,
   agentAvatar?: string | null,
   userName?: string | null,
-  userAvatar?: string | null
+  userAvatar?: string | null,
+  userAvatarBackground?: string | null
 ): void {
   channel.broadcastEvent(
     "interaction_updated",
-    withAgentProfile(interaction, agentName, agentAvatar, userName, userAvatar)
+    withAgentProfile(interaction, agentName, agentAvatar, userName, userAvatar, userAvatarBackground)
   );
 }

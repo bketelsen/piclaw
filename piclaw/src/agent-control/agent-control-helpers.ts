@@ -117,9 +117,14 @@ export function updateAssistantConfig(patch: { name?: string | null; avatar?: st
   };
 }
 
-export function updateUserConfig(patch: { name?: string | null; avatar?: string | null }): {
+export function updateUserConfig(patch: {
+  name?: string | null;
+  avatar?: string | null;
+  avatarBackground?: string | null;
+}): {
   name?: string;
   avatar?: string;
+  avatarBackground?: string;
 } {
   const config = readJsonConfig(PICLAW_CONFIG_PATH);
   const user =
@@ -128,6 +133,15 @@ export function updateUserConfig(patch: { name?: string | null; avatar?: string 
       : {};
   const nameKeys = ["userName", "user_name", "name", "PICLAW_USER_NAME"];
   const avatarKeys = ["userAvatar", "user_avatar", "avatar", "PICLAW_USER_AVATAR"];
+  const backgroundKeys = [
+    "userAvatarBackground",
+    "user_avatar_background",
+    "userAvatarBg",
+    "user_avatar_bg",
+    "avatarBackground",
+    "avatar_background",
+    "PICLAW_USER_AVATAR_BACKGROUND",
+  ];
 
   const clearKeys = (keys: string[]) => {
     for (const key of keys) {
@@ -149,6 +163,13 @@ export function updateUserConfig(patch: { name?: string | null; avatar?: string 
     }
   }
 
+  if (patch.avatarBackground !== undefined) {
+    clearKeys(backgroundKeys);
+    if (patch.avatarBackground !== null) {
+      user.userAvatarBackground = patch.avatarBackground;
+    }
+  }
+
   if (Object.keys(user).length > 0) {
     config.user = user;
   } else {
@@ -160,6 +181,8 @@ export function updateUserConfig(patch: { name?: string | null; avatar?: string 
   return {
     name: typeof user.userName === "string" ? user.userName : undefined,
     avatar: typeof user.userAvatar === "string" ? user.userAvatar : undefined,
+    avatarBackground:
+      typeof user.userAvatarBackground === "string" ? user.userAvatarBackground : undefined,
   };
 }
 

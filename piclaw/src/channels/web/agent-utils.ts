@@ -5,13 +5,15 @@ export type AgentProfileBuilder = <T extends object>(payload: T) => T & {
   agent_avatar: string | null;
   user_name: string | null;
   user_avatar: string | null;
+  user_avatar_background: string | null;
 };
 
 export function createAgentProfileBuilder(
   agentName: string,
   agentAvatar?: string | null,
   userName?: string | null,
-  userAvatar?: string | null
+  userAvatar?: string | null,
+  userAvatarBackground?: string | null
 ): AgentProfileBuilder {
   return (payload) => ({
     ...payload,
@@ -19,6 +21,7 @@ export function createAgentProfileBuilder(
     agent_avatar: agentAvatar ?? null,
     user_name: userName ?? null,
     user_avatar: userAvatar ?? null,
+    user_avatar_background: userAvatarBackground ?? null,
   });
 }
 
