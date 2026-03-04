@@ -256,6 +256,8 @@ function App() {
         lastActivityTokenRef.current = 0;
     }, []);
 
+    // Cleanup: cancel any pending last-activity timer on unmount.
+    // Placed after clearLastActivityTimer definition to avoid TDZ errors.
     useEffect(() => () => {
         clearLastActivityTimer();
     }, [clearLastActivityTimer]);
