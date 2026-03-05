@@ -92,6 +92,10 @@ import { broadcastAgentResponse, broadcastInteractionUpdated } from "./web/inter
 const DEFAULT_CHAT_JID = "web:default";
 const DEFAULT_AGENT_ID = "default";
 const STATE_KEY = "last_agent_timestamp_web";
+const TOTP_FAILURE_WINDOW_MS = 5 * 60 * 1000;
+const TOTP_FAILURE_LIMIT = 5;
+const TOTP_LOCKOUT_MS = 5 * 60 * 1000;
+const TOTP_PRUNE_INTERVAL_MS = 10 * 60 * 1000;
 
 /** Construction options for WebChannel: queue and agentPool references. */
 export interface WebChannelOpts {
@@ -123,6 +127,8 @@ export class WebChannel {
     string,
     { challenge: string; rpId: string; userId: string; createdAt: number }
   >();
+  totpFailures = new Map<string, { failures: number[]; lockedUntil: number }>();
+  lastTotpPrune = Date.now();
   thoughtBuffers = new Map<string, { text: string; totalLines: number; updatedAt: number }>();
   draftBuffers = new Map<string, { text: string; totalLines: number; updatedAt: number }>();
   expandedPanels = new Map<string, { thought: boolean; draft: boolean }>();
@@ -412,6 +418,37 @@ export class WebChannel {
     }, {} as Record<string, string>);
   }
 
+  private getClientKey(req: Request): string {
+    const forwarded = req.headers.get("x-forwarded-for");
+    if (forwarded) {
+      const first = forwarded.split(",")[0]?.trim();
+      if (first) return first;
+    }
+    const realIp = req.headers.get("x-real-ip");
+    if (realIp) return realIp.trim();
+    return "unknown";
+  }
+
+  private pruneTotpFailures(now = Date.now()): void {
+    if (now - this.lastTotpPrune < TOTP_PRUNE_INTERVAL_MS) return;
+    this.lastTotpPrune = now;
+    const cutoff = now - Math.max(TOTP_FAILURE_WINDOW_MS, TOTP_LOCKOUT_MS);
+    for (const [key, entry] of this.totpFailures.entries()) {
+      const failures = entry.failures.filter((ts) => ts > cutoff);
+      const lockedUntil = entry.lockedUntil;
+      if (failures.length === 0 && lockedUntil <= now) {
+        this.totpFailures.delete(key);
+      } else {
+        this.totpFailures.set(key, { failures, lockedUntil });
+      }
+    }
+  }
+
+  private logAuthEvent(req: Request, event: string): void {
+    const ip = this.getClientKey(req);
+    console.warn(`[auth] ${event} (ip=${ip})`);
+  }
+
   verifyInternalSecret(req: Request): boolean {
     const secret = (WEB_INTERNAL_SECRET || "").trim();
     if (!secret) return false;
@@ -512,9 +549,32 @@ export class WebChannel {
     const code = (body.code || "").trim();
     const windowSteps = Number.isFinite(WEB_TOTP_WINDOW) ? Math.max(0, WEB_TOTP_WINDOW) : 1;
     if (!code) return this.json({ error: "Missing code" }, 400);
+
+    const now = Date.now();
+    this.pruneTotpFailures(now);
+    const clientKey = this.getClientKey(req);
+    const entry = this.totpFailures.get(clientKey);
+    if (entry && entry.lockedUntil > now) {
+      this.logAuthEvent(req, "TOTP lockout active");
+      return this.json({ error: "Too many failed attempts. Try again later." }, 429);
+    }
+
     if (!verifyTotp(WEB_TOTP_SECRET, code, windowSteps)) {
+      const cutoff = now - TOTP_FAILURE_WINDOW_MS;
+      const failures = (entry?.failures || []).filter((ts) => ts > cutoff);
+      failures.push(now);
+      if (failures.length >= TOTP_FAILURE_LIMIT) {
+        const lockedUntil = now + TOTP_LOCKOUT_MS;
+        this.totpFailures.set(clientKey, { failures, lockedUntil });
+        this.logAuthEvent(req, `TOTP lockout triggered (${failures.length} failures)`);
+        return this.json({ error: "Too many failed attempts. Try again later." }, 429);
+      }
+      this.totpFailures.set(clientKey, { failures, lockedUntil: entry?.lockedUntil || 0 });
+      this.logAuthEvent(req, `TOTP failed (${failures.length}/${TOTP_FAILURE_LIMIT})`);
       return this.json({ error: "Invalid code" }, 401);
     }
+
+    this.totpFailures.delete(clientKey);
 
     const rawTtl = Number.isFinite(WEB_SESSION_TTL) ? WEB_SESSION_TTL : 0;
     const ttlSeconds = Math.max(60, rawTtl || 0);
@@ -537,6 +597,7 @@ export class WebChannel {
     const { rpId } = this.getWebauthnRpInfo(req);
     const credentials = getWebauthnCredentialsForRpId(DEFAULT_WEB_USER_ID, rpId);
     if (credentials.length === 0) {
+      this.logAuthEvent(req, "WebAuthn login requested but no passkeys registered");
       return this.json({ error: "No passkeys registered" }, 404);
     }
 
@@ -577,15 +638,22 @@ export class WebChannel {
     }
     const token = body.token || "";
     const credential = body.credential;
-    if (!token || !credential) return this.json({ error: "Missing credential" }, 400);
+    if (!token || !credential) {
+      this.logAuthEvent(req, "WebAuthn login missing credential payload");
+      return this.json({ error: "Missing credential" }, 400);
+    }
 
     this.cleanupWebauthnChallenges();
     const pending = this.pendingWebauthnLogins.get(token);
-    if (!pending) return this.json({ error: "Login expired" }, 400);
+    if (!pending) {
+      this.logAuthEvent(req, "WebAuthn login expired or unknown token");
+      return this.json({ error: "Login expired" }, 400);
+    }
     this.pendingWebauthnLogins.delete(token);
 
     const stored = getWebauthnCredentialById(credential.id);
     if (!stored || stored.rp_id !== pending.rpId) {
+      this.logAuthEvent(req, "WebAuthn login unknown credential");
       return this.json({ error: "Unknown credential" }, 400);
     }
 
@@ -609,11 +677,12 @@ export class WebChannel {
       });
     } catch (err) {
       const message = err instanceof Error ? err.message : "Passkey verification failed";
-      console.warn("[webauthn] Login verification error:", err);
+      console.warn(`[webauthn] Login verification error (ip=${this.getClientKey(req)}):`, err);
       return this.json({ error: message }, 401);
     }
 
     if (!result.verified) {
+      this.logAuthEvent(req, "WebAuthn login verification failed");
       return this.json({ error: "Passkey verification failed" }, 401);
     }
 
@@ -642,10 +711,16 @@ export class WebChannel {
       return this.json({ error: "Invalid JSON" }, 400);
     }
     const token = (body.token || "").trim();
-    if (!token) return this.json({ error: "Missing enrol token" }, 400);
+    if (!token) {
+      this.logAuthEvent(req, "WebAuthn registration missing enrol token");
+      return this.json({ error: "Missing enrol token" }, 400);
+    }
 
     const enrollment = getWebauthnEnrollment(token);
-    if (!enrollment) return this.json({ error: "Invalid or expired enrol token" }, 400);
+    if (!enrollment) {
+      this.logAuthEvent(req, "WebAuthn registration invalid or expired enrol token");
+      return this.json({ error: "Invalid or expired enrol token" }, 400);
+    }
 
     const { rpId } = this.getWebauthnRpInfo(req);
     const existing = getWebauthnCredentialsForRpId(enrollment.user_id, rpId);
@@ -685,16 +760,26 @@ export class WebChannel {
     }
     const token = (body.token || "").trim();
     const credential = body.credential;
-    if (!token || !credential) return this.json({ error: "Missing credential" }, 400);
+    if (!token || !credential) {
+      this.logAuthEvent(req, "WebAuthn registration missing credential payload");
+      return this.json({ error: "Missing credential" }, 400);
+    }
 
     this.cleanupWebauthnChallenges();
     const pending = this.pendingWebauthnRegistrations.get(token);
-    if (!pending) return this.json({ error: "Registration expired" }, 400);
+    if (!pending) {
+      this.logAuthEvent(req, "WebAuthn registration expired or unknown token");
+      return this.json({ error: "Registration expired" }, 400);
+    }
     this.pendingWebauthnRegistrations.delete(token);
 
     const enrollment = consumeWebauthnEnrollment(token);
-    if (!enrollment) return this.json({ error: "Invalid or expired enrol token" }, 400);
+    if (!enrollment) {
+      this.logAuthEvent(req, "WebAuthn registration invalid or expired enrol token");
+      return this.json({ error: "Invalid or expired enrol token" }, 400);
+    }
     if (enrollment.user_id !== pending.userId) {
+      this.logAuthEvent(req, "WebAuthn registration enrollment mismatch");
       return this.json({ error: "Enrollment mismatch" }, 400);
     }
 
@@ -709,11 +794,12 @@ export class WebChannel {
       });
     } catch (err) {
       const message = err instanceof Error ? err.message : "Passkey verification failed";
-      console.warn("[webauthn] Registration verification error:", err);
+      console.warn(`[webauthn] Registration verification error (ip=${this.getClientKey(req)}):`, err);
       return this.json({ error: message }, 401);
     }
 
     if (!result.verified || !result.registrationInfo) {
+      this.logAuthEvent(req, "WebAuthn registration verification failed");
       return this.json({ error: "Passkey verification failed" }, 401);
     }
 
