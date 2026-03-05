@@ -10,7 +10,7 @@ import { WEB_PASSKEY_MODE, WEB_TOTP_SECRET } from "../../core/config.js";
 import { getChatChannel, getChatJid } from "../../core/chat-context.js";
 import { getWebOrigin } from "../../channels/web/request-origin.js";
 import { createWebauthnEnrollment, listWebauthnCredentials, findWebauthnCredentialsByPrefix, deleteWebauthnCredential, DEFAULT_WEB_USER_ID, } from "../../db.js";
-const MAX_LINK_MINUTES = 15;
+const MAX_LINK_MINUTES = 5;
 const isPasskeysEnabled = () => (WEB_PASSKEY_MODE || "").toLowerCase() !== "totp-only";
 const maskCredential = (id) => {
     if (!id)

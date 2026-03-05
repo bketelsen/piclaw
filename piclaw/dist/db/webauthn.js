@@ -8,7 +8,7 @@
 import { randomBytes } from "node:crypto";
 import { getDb } from "./connection.js";
 export const DEFAULT_PASSKEY_USER_ID = "default";
-export function createWebauthnEnrollment(userId = DEFAULT_PASSKEY_USER_ID, ttlSeconds = 15 * 60) {
+export function createWebauthnEnrollment(userId = DEFAULT_PASSKEY_USER_ID, ttlSeconds = 5 * 60) {
     const db = getDb();
     const token = randomBytes(24).toString("base64url");
     const createdAt = new Date().toISOString();

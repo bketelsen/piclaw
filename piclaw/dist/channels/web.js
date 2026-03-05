@@ -261,6 +261,18 @@ export class WebChannel {
     isTotpEnabled() {
         return Boolean(WEB_TOTP_SECRET && WEB_TOTP_SECRET.trim());
     }
+    isTotpSession(req) {
+        if (!this.isTotpEnabled())
+            return false;
+        this.cleanupAuthSessions();
+        const token = this.getSessionToken(req);
+        if (!token)
+            return false;
+        const session = getWebSession(token);
+        if (!session)
+            return false;
+        return session.auth_method === "totp";
+    }
     cleanupAuthSessions() {
         deleteExpiredWebSessions();
     }
@@ -386,7 +398,7 @@ export class WebChannel {
         const rawTtl = Number.isFinite(WEB_SESSION_TTL) ? WEB_SESSION_TTL : 0;
         const ttlSeconds = Math.max(60, rawTtl || 0);
         const token = randomSessionToken();
-        createWebSession(token, DEFAULT_WEB_USER_ID, ttlSeconds);
+        createWebSession(token, DEFAULT_WEB_USER_ID, ttlSeconds, "totp");
         const payload = JSON.stringify({ ok: true });
         return new Response(payload, {
             status: 200,
@@ -480,7 +492,7 @@ export class WebChannel {
         const rawTtl = Number.isFinite(WEB_SESSION_TTL) ? WEB_SESSION_TTL : 0;
         const ttlSeconds = Math.max(60, rawTtl || 0);
         const sessionToken = randomSessionToken();
-        createWebSession(sessionToken, DEFAULT_WEB_USER_ID, ttlSeconds);
+        createWebSession(sessionToken, DEFAULT_WEB_USER_ID, ttlSeconds, "passkey");
         return new Response(JSON.stringify({ ok: true }), {
             status: 200,
             headers: {

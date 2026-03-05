@@ -7,17 +7,17 @@
  */
 import { getDb } from "./connection.js";
 export const DEFAULT_WEB_USER_ID = "default";
-export function createWebSession(token, userId, ttlSeconds) {
+export function createWebSession(token, userId, ttlSeconds, authMethod) {
     const db = getDb();
     const createdAt = new Date().toISOString();
     const expiresAt = new Date(Date.now() + ttlSeconds * 1000).toISOString();
-    db.prepare("INSERT OR REPLACE INTO web_sessions (token, user_id, created_at, expires_at) VALUES (?, ?, ?, ?)").run(token, userId, createdAt, expiresAt);
-    return { token, user_id: userId, created_at: createdAt, expires_at: expiresAt };
+    db.prepare("INSERT OR REPLACE INTO web_sessions (token, user_id, auth_method, created_at, expires_at) VALUES (?, ?, ?, ?, ?)").run(token, userId, authMethod, createdAt, expiresAt);
+    return { token, user_id: userId, auth_method: authMethod, created_at: createdAt, expires_at: expiresAt };
 }
 export function getWebSession(token) {
     const db = getDb();
     const row = db
-        .prepare("SELECT token, user_id, created_at, expires_at FROM web_sessions WHERE token = ?")
+        .prepare("SELECT token, user_id, auth_method, created_at, expires_at FROM web_sessions WHERE token = ?")
         .get(token);
     if (!row)
         return null;

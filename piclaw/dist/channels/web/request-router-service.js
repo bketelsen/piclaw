@@ -22,6 +22,31 @@ const APPLE_ICON_PATHS = new Set([
     "/apple-touch-icon-167x167.png",
     "/apple-touch-icon-152x152.png",
 ]);
+const ENROLL_RATE_WINDOW_MS = 5 * 60 * 1000;
+const ENROLL_RATE_LIMIT = 20;
+const enrollRateBuckets = new Map();
+function getClientKey(req) {
+    const forwarded = req.headers.get("x-forwarded-for");
+    if (forwarded) {
+        const first = forwarded.split(",")[0]?.trim();
+        if (first)
+            return first;
+    }
+    const realIp = req.headers.get("x-real-ip");
+    if (realIp)
+        return realIp.trim();
+    return "unknown";
+}
+function isEnrollRateLimited(req, bucket) {
+    const key = `${getClientKey(req)}:${bucket}`;
+    const now = Date.now();
+    const cutoff = now - ENROLL_RATE_WINDOW_MS;
+    const entries = enrollRateBuckets.get(key) || [];
+    const trimmed = entries.filter((ts) => ts > cutoff);
+    trimmed.push(now);
+    enrollRateBuckets.set(key, trimmed);
+    return trimmed.length > ENROLL_RATE_LIMIT;
+}
 /** Business logic for handling compose-box submissions and agent runs. */
 export class RequestRouterService {
     channel;
@@ -89,6 +114,11 @@ export class RequestRouterService {
         if (!authEnabled && isAuthVerify) {
             return this.channel.json({ error: "Auth disabled" }, 404);
         }
+        if (isWebauthnEnrollPage || isWebauthnRegisterStart || isWebauthnRegisterFinish) {
+            if (isEnrollRateLimited(req, pathname)) {
+                return this.channel.json({ error: "Too many enrol attempts. Try again later." }, 429);
+            }
+        }
         const skipAuthCheck = hasInternalAccess ||
             isLoginPage ||
             isAuthVerify ||
@@ -96,7 +126,6 @@ export class RequestRouterService {
             isWebauthnLoginFinish ||
             isWebauthnRegisterStart ||
             isWebauthnRegisterFinish ||
-            isWebauthnEnrollPage ||
             isManifest ||
             isFavicon ||
             isAppleIcon ||
@@ -123,6 +152,12 @@ export class RequestRouterService {
             return this.channel.json({ error: "Not found" }, 404);
         }
         if (isWebauthnEnrollPage) {
+            if (!this.channel.isTotpSession(req)) {
+                if (isGetOrHead) {
+                    return this.channel.redirectToLogin();
+                }
+                return this.channel.json({ error: "TOTP session required" }, 401);
+            }
             return this.channel.handleWebauthnEnrollPage(req);
         }
         if (isWebauthnLoginStart) {
