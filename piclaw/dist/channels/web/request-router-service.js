@@ -8,6 +8,7 @@
  * Consumers: web/request-router.ts delegates to functions defined here.
  */
 import { extname, resolve } from "path";
+import { rememberWebOrigin } from "./request-origin.js";
 const STATIC_DIR = resolve(import.meta.dir, "..", "..", "..", "..", "web", "static");
 const STATIC_MIME_TYPES = {
     ".png": "image/png",
@@ -51,6 +52,8 @@ export class RequestRouterService {
     async handle(req) {
         const url = new URL(req.url);
         const pathname = url.pathname;
+        // Track the last seen origin so slash commands can build absolute links.
+        rememberWebOrigin("web:default", req);
         const isGetOrHead = req.method === "GET" || req.method === "HEAD";
         const authEnabled = this.channel.isAuthEnabled();
         const internalSecretEnabled = this.channel.isInternalSecretEnabled();

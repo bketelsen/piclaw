@@ -7,7 +7,8 @@
  *   /passkey delete <id>   – delete a passkey by ID prefix
  */
 import { WEB_PASSKEY_MODE, WEB_TOTP_SECRET } from "../../core/config.js";
-import { getChatChannel } from "../../core/chat-context.js";
+import { getChatChannel, getChatJid } from "../../core/chat-context.js";
+import { getWebOrigin } from "../../channels/web/request-origin.js";
 import { createWebauthnEnrollment, listWebauthnCredentials, findWebauthnCredentialsByPrefix, deleteWebauthnCredential, DEFAULT_WEB_USER_ID, } from "../../db.js";
 const MAX_LINK_MINUTES = 15;
 const isPasskeysEnabled = () => (WEB_PASSKEY_MODE || "").toLowerCase() !== "totp-only";
@@ -41,10 +42,12 @@ export async function handlePasskey(_session, command) {
             return { status: "error", message: "Passkey enrolment must be started from the web UI." };
         }
         const enrollment = createWebauthnEnrollment(DEFAULT_WEB_USER_ID, MAX_LINK_MINUTES * 60);
-        const link = `/auth/webauthn/enrol?token=${enrollment.token}`;
+        const relative = `/auth/webauthn/enrol?token=${enrollment.token}`;
+        const origin = getWebOrigin(getChatJid()) || "";
+        const absolute = origin ? `${origin}${relative}` : relative;
         const message = [
             "Open this link in the same browser to register a passkey:",
-            link,
+            absolute.startsWith("http") ? absolute : `<${absolute}>`,
             `This link expires in ${MAX_LINK_MINUTES} minutes.`,
         ].join("\n");
         return { status: "success", message };
