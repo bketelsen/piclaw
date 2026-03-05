@@ -143,6 +143,12 @@ export type AgentControlCommand =
       raw: string;
     }
   | {
+      type: "passkey";
+      action?: "enrol" | "enroll" | "list" | "delete" | "remove";
+      target?: string;
+      raw: string;
+    }
+  | {
       type: "search_workspace";
       query?: string;
       scope?: "notes" | "skills" | "all";

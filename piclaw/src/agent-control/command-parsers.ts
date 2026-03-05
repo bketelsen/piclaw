@@ -194,6 +194,19 @@ export function parseExportHtml(args: string, raw: string): AgentControlCommand 
   };
 }
 
+/** Parse /passkey arguments: action + optional target. */
+export function parsePasskey(args: string, raw: string): AgentControlCommand {
+  const tokens = splitArgs(args);
+  const action = tokens[0] ? tokens[0].toLowerCase() : undefined;
+  const target = tokens.slice(1).join(" ").trim() || undefined;
+  return {
+    type: "passkey",
+    action: action as any,
+    target,
+    raw,
+  };
+}
+
 /** Parse /bash arguments: optional command string. */
 export function parseBash(args: string, raw: string): AgentControlCommand {
   return {
@@ -405,6 +418,7 @@ export const COMMAND_PARSERS: Record<string, CommandParser> = {
   "/fork": parseFork,
   "/forks": simple("forks"),
   "/export-html": parseExportHtml,
+  "/passkey": parsePasskey,
   "/search": parseSearch,
   "/bash": parseBash,
   "/tree": parseTree,

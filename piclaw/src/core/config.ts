@@ -53,6 +53,7 @@ const envConfig = readEnvFile([
   "PICLAW_WEB_TOTP_WINDOW",
   "PICLAW_WEB_SESSION_TTL",
   "PICLAW_WEB_INTERNAL_SECRET",
+  "PICLAW_WEB_PASSKEY_MODE",
   "PICLAW_INTERNAL_SECRET",
 ]);
 
@@ -211,6 +212,13 @@ const configWebInternalSecret = pickString(webConfig, [
   "web_internal_secret",
   "PICLAW_WEB_INTERNAL_SECRET",
   "PICLAW_INTERNAL_SECRET",
+]);
+const configWebPasskeyMode = pickString(webConfig, [
+  "passkeyMode",
+  "passkey_mode",
+  "webPasskeyMode",
+  "web_passkey_mode",
+  "PICLAW_WEB_PASSKEY_MODE",
 ]);
 
 // ---------------------------------------------------------------------------
@@ -391,6 +399,14 @@ export const WEB_INTERNAL_SECRET =
   envConfig.PICLAW_WEB_INTERNAL_SECRET ||
   configWebInternalSecret ||
   "";
+
+/** Passkey mode: "totp-fallback" (default), "passkey-only", or "totp-only". */
+export const WEB_PASSKEY_MODE = (
+  process.env.PICLAW_WEB_PASSKEY_MODE ||
+  envConfig.PICLAW_WEB_PASSKEY_MODE ||
+  configWebPasskeyMode ||
+  "totp-fallback"
+).toLowerCase();
 
 /** Directory for WhatsApp session auth files. */
 export const SESSIONS_DIR = resolve(DATA_DIR, "sessions");

@@ -16,6 +16,18 @@
 import { AgentQueue } from "../queue.js";
 import type { AgentPool } from "../agent-pool.js";
 import { initTheme, type AgentSession } from "@mariozechner/pi-coding-agent";
+import {
+  generateAuthenticationOptions,
+  generateRegistrationOptions,
+  verifyAuthenticationResponse,
+  verifyRegistrationResponse,
+} from "@simplewebauthn/server";
+import type {
+  AuthenticationResponseJSON,
+  PublicKeyCredentialDescriptorFuture,
+  RegistrationResponseJSON,
+  AuthenticatorDevice,
+} from "@simplewebauthn/types";
 import { randomSessionToken, verifyTotp } from "./web/auth.js";
 import {
   ASSISTANT_AVATAR,
@@ -32,6 +44,7 @@ import {
   WEB_TOTP_SECRET,
   WEB_TOTP_WINDOW,
   WEB_INTERNAL_SECRET,
+  WEB_PASSKEY_MODE,
 } from "../core/config.js";
 import { handleMedia, handleMediaInfo, handleMediaUpload } from "./web/handlers/media.js";
 import {
@@ -51,6 +64,16 @@ import {
   getMessageRowIdById,
   getMessagesSince,
   replaceMessageContent,
+  createWebSession,
+  getWebSession,
+  deleteExpiredWebSessions,
+  DEFAULT_WEB_USER_ID,
+  getWebauthnEnrollment,
+  consumeWebauthnEnrollment,
+  getWebauthnCredentialsForRpId,
+  getWebauthnCredentialById,
+  storeWebauthnCredential,
+  updateWebauthnCredentialCounter,
 } from "../db.js";
 import type { InteractionRow } from "../db.js";
 import { WebChannelState } from "./web/channel-state.js";
@@ -92,7 +115,14 @@ export class WebChannel {
   pendingSteering = new Map<string, string[]>();
   activeAgentStatuses = new Map<string, Record<string, unknown>>();
   lastCommandInteractionId: number | null = null;
-  authSessions = new Map<string, number>();
+  pendingWebauthnRegistrations = new Map<
+    string,
+    { challenge: string; rpId: string; userId: string; createdAt: number }
+  >();
+  pendingWebauthnLogins = new Map<
+    string,
+    { challenge: string; rpId: string; userId: string; createdAt: number }
+  >();
   thoughtBuffers = new Map<string, { text: string; totalLines: number; updatedAt: number }>();
   draftBuffers = new Map<string, { text: string; totalLines: number; updatedAt: number }>();
   expandedPanels = new Map<string, { thought: boolean; draft: boolean }>();
@@ -335,17 +365,30 @@ export class WebChannel {
   }
 
   isAuthEnabled(): boolean {
-    return Boolean(WEB_TOTP_SECRET && WEB_TOTP_SECRET.trim());
+    return this.isTotpEnabled() || this.isPasskeyEnabled();
   }
 
   isInternalSecretEnabled(): boolean {
     return Boolean(WEB_INTERNAL_SECRET && WEB_INTERNAL_SECRET.trim());
   }
 
-  private cleanupAuthSessions(now = Date.now()): void {
-    for (const [token, expiresAt] of this.authSessions.entries()) {
-      if (expiresAt <= now) this.authSessions.delete(token);
-    }
+  isPasskeyEnabled(): boolean {
+    const mode = (WEB_PASSKEY_MODE || "").toLowerCase();
+    if (mode === "totp-only") return false;
+    if (mode === "passkey-only") return true;
+    return this.isTotpEnabled();
+  }
+
+  isPasskeyOnly(): boolean {
+    return (WEB_PASSKEY_MODE || "").toLowerCase() === "passkey-only";
+  }
+
+  isTotpEnabled(): boolean {
+    return Boolean(WEB_TOTP_SECRET && WEB_TOTP_SECRET.trim());
+  }
+
+  private cleanupAuthSessions(): void {
+    deleteExpiredWebSessions();
   }
 
   private parseCookies(req: Request): Record<string, string> {
@@ -382,11 +425,8 @@ export class WebChannel {
     this.cleanupAuthSessions();
     const token = this.getSessionToken(req);
     if (!token) return false;
-    const expiresAt = this.authSessions.get(token);
-    if (!expiresAt || expiresAt <= Date.now()) {
-      this.authSessions.delete(token);
-      return false;
-    }
+    const session = getWebSession(token);
+    if (!session) return false;
     return true;
   }
 
@@ -405,8 +445,32 @@ export class WebChannel {
     return parts.join("; ");
   }
 
+  private cleanupWebauthnChallenges(now = Date.now()): void {
+    const cutoff = now - 10 * 60 * 1000;
+    for (const [token, entry] of this.pendingWebauthnRegistrations.entries()) {
+      if (entry.createdAt < cutoff) this.pendingWebauthnRegistrations.delete(token);
+    }
+    for (const [token, entry] of this.pendingWebauthnLogins.entries()) {
+      if (entry.createdAt < cutoff) this.pendingWebauthnLogins.delete(token);
+    }
+  }
+
+  private getWebauthnRpInfo(req: Request): { rpId: string; origin: string } {
+    const url = new URL(req.url);
+    const rpId = url.hostname;
+    return { rpId, origin: url.origin };
+  }
+
+  private bufferToBase64Url(value: Uint8Array): string {
+    return Buffer.from(value).toString("base64url");
+  }
+
+  private base64UrlToBuffer(value: string): Uint8Array {
+    return Buffer.from(value, "base64url");
+  }
+
   async handleAuthVerify(req: Request): Promise<Response> {
-    if (!this.isAuthEnabled()) return this.json({ error: "Auth disabled" }, 404);
+    if (!this.isAuthEnabled() || !this.isTotpEnabled()) return this.json({ error: "Auth disabled" }, 404);
     let body: { code?: string };
     try {
       body = await req.json();
@@ -423,7 +487,7 @@ export class WebChannel {
     const rawTtl = Number.isFinite(WEB_SESSION_TTL) ? WEB_SESSION_TTL : 0;
     const ttlSeconds = Math.max(60, rawTtl || 0);
     const token = randomSessionToken();
-    this.authSessions.set(token, Date.now() + ttlSeconds * 1000);
+    createWebSession(token, DEFAULT_WEB_USER_ID, ttlSeconds);
 
     const payload = JSON.stringify({ ok: true });
     return new Response(payload, {
@@ -431,6 +495,316 @@ export class WebChannel {
       headers: {
         "Content-Type": "application/json",
         "Set-Cookie": this.buildSessionCookie(token, req),
+      },
+    });
+  }
+
+  async handleWebauthnLoginStart(req: Request): Promise<Response> {
+    if (!this.isPasskeyEnabled()) return this.json({ error: "Passkeys disabled" }, 404);
+
+    const { rpId } = this.getWebauthnRpInfo(req);
+    const credentials = getWebauthnCredentialsForRpId(DEFAULT_WEB_USER_ID, rpId);
+    if (credentials.length === 0) {
+      return this.json({ error: "No passkeys registered" }, 404);
+    }
+
+    const allowCredentials: PublicKeyCredentialDescriptorFuture[] = credentials.map((cred) => {
+      const transports = cred.transports ? JSON.parse(cred.transports) : undefined;
+      return {
+        id: cred.credential_id,
+        type: "public-key",
+        transports: Array.isArray(transports) ? transports : undefined,
+      };
+    });
+
+    const options = await generateAuthenticationOptions({
+      rpID: rpId,
+      allowCredentials,
+      userVerification: "preferred",
+    });
+
+    const challengeToken = randomSessionToken();
+    this.cleanupWebauthnChallenges();
+    this.pendingWebauthnLogins.set(challengeToken, {
+      challenge: options.challenge,
+      rpId,
+      userId: DEFAULT_WEB_USER_ID,
+      createdAt: Date.now(),
+    });
+
+    return this.json({ token: challengeToken, options });
+  }
+
+  async handleWebauthnLoginFinish(req: Request): Promise<Response> {
+    if (!this.isPasskeyEnabled()) return this.json({ error: "Passkeys disabled" }, 404);
+    let body: { token?: string; credential?: AuthenticationResponseJSON };
+    try {
+      body = await req.json();
+    } catch {
+      return this.json({ error: "Invalid JSON" }, 400);
+    }
+    const token = body.token || "";
+    const credential = body.credential;
+    if (!token || !credential) return this.json({ error: "Missing credential" }, 400);
+
+    this.cleanupWebauthnChallenges();
+    const pending = this.pendingWebauthnLogins.get(token);
+    if (!pending) return this.json({ error: "Login expired" }, 400);
+    this.pendingWebauthnLogins.delete(token);
+
+    const stored = getWebauthnCredentialById(credential.id);
+    if (!stored || stored.rp_id !== pending.rpId) {
+      return this.json({ error: "Unknown credential" }, 400);
+    }
+
+    const authenticator: AuthenticatorDevice = {
+      credentialID: this.base64UrlToBuffer(stored.credential_id),
+      credentialPublicKey: this.base64UrlToBuffer(stored.public_key),
+      counter: stored.sign_count || 0,
+      transports: stored.transports ? JSON.parse(stored.transports) : undefined,
+    };
+
+    const { origin } = this.getWebauthnRpInfo(req);
+    const result = await verifyAuthenticationResponse({
+      response: credential,
+      expectedChallenge: pending.challenge,
+      expectedOrigin: origin,
+      expectedRPID: pending.rpId,
+      authenticator,
+      requireUserVerification: false,
+    });
+
+    if (!result.verified) {
+      return this.json({ error: "Passkey verification failed" }, 401);
+    }
+
+    updateWebauthnCredentialCounter(stored.credential_id, result.authenticationInfo.newCounter);
+
+    const rawTtl = Number.isFinite(WEB_SESSION_TTL) ? WEB_SESSION_TTL : 0;
+    const ttlSeconds = Math.max(60, rawTtl || 0);
+    const sessionToken = randomSessionToken();
+    createWebSession(sessionToken, DEFAULT_WEB_USER_ID, ttlSeconds);
+
+    return new Response(JSON.stringify({ ok: true }), {
+      status: 200,
+      headers: {
+        "Content-Type": "application/json",
+        "Set-Cookie": this.buildSessionCookie(sessionToken, req),
+      },
+    });
+  }
+
+  async handleWebauthnRegisterStart(req: Request): Promise<Response> {
+    if (!this.isPasskeyEnabled()) return this.json({ error: "Passkeys disabled" }, 404);
+    let body: { token?: string };
+    try {
+      body = await req.json();
+    } catch {
+      return this.json({ error: "Invalid JSON" }, 400);
+    }
+    const token = (body.token || "").trim();
+    if (!token) return this.json({ error: "Missing enrol token" }, 400);
+
+    const enrollment = getWebauthnEnrollment(token);
+    if (!enrollment) return this.json({ error: "Invalid or expired enrol token" }, 400);
+
+    const { rpId } = this.getWebauthnRpInfo(req);
+    const existing = getWebauthnCredentialsForRpId(enrollment.user_id, rpId);
+    const excludeCredentials: PublicKeyCredentialDescriptorFuture[] = existing.map((cred) => ({
+      id: cred.credential_id,
+      type: "public-key",
+    }));
+
+    const options = await generateRegistrationOptions({
+      rpName: ASSISTANT_NAME || "PiClaw",
+      rpID: rpId,
+      userID: enrollment.user_id,
+      userName: USER_NAME || enrollment.user_id,
+      userDisplayName: USER_NAME || "User",
+      attestationType: "none",
+      excludeCredentials,
+    });
+
+    this.cleanupWebauthnChallenges();
+    this.pendingWebauthnRegistrations.set(token, {
+      challenge: options.challenge,
+      rpId,
+      userId: enrollment.user_id,
+      createdAt: Date.now(),
+    });
+
+    return this.json({ token, options });
+  }
+
+  async handleWebauthnRegisterFinish(req: Request): Promise<Response> {
+    if (!this.isPasskeyEnabled()) return this.json({ error: "Passkeys disabled" }, 404);
+    let body: { token?: string; credential?: RegistrationResponseJSON };
+    try {
+      body = await req.json();
+    } catch {
+      return this.json({ error: "Invalid JSON" }, 400);
+    }
+    const token = (body.token || "").trim();
+    const credential = body.credential;
+    if (!token || !credential) return this.json({ error: "Missing credential" }, 400);
+
+    this.cleanupWebauthnChallenges();
+    const pending = this.pendingWebauthnRegistrations.get(token);
+    if (!pending) return this.json({ error: "Registration expired" }, 400);
+    this.pendingWebauthnRegistrations.delete(token);
+
+    const enrollment = consumeWebauthnEnrollment(token);
+    if (!enrollment) return this.json({ error: "Invalid or expired enrol token" }, 400);
+    if (enrollment.user_id !== pending.userId) {
+      return this.json({ error: "Enrollment mismatch" }, 400);
+    }
+
+    const { origin } = this.getWebauthnRpInfo(req);
+    const result = await verifyRegistrationResponse({
+      response: credential,
+      expectedChallenge: pending.challenge,
+      expectedOrigin: origin,
+      expectedRPID: pending.rpId,
+    });
+
+    if (!result.verified || !result.registrationInfo) {
+      return this.json({ error: "Passkey verification failed" }, 401);
+    }
+
+    const info = result.registrationInfo;
+    const transports = Array.isArray(credential.response.transports)
+      ? JSON.stringify(credential.response.transports)
+      : null;
+
+    storeWebauthnCredential({
+      user_id: pending.userId,
+      rp_id: pending.rpId,
+      credential_id: this.bufferToBase64Url(info.credentialID),
+      public_key: this.bufferToBase64Url(info.credentialPublicKey),
+      sign_count: info.counter || 0,
+      transports,
+    });
+
+    return this.json({ ok: true });
+  }
+
+  async handleWebauthnEnrollPage(_req: Request): Promise<Response> {
+    if (!this.isPasskeyEnabled()) return this.json({ error: "Passkeys disabled" }, 404);
+    const html = `<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Passkey enrolment</title>
+    <style>
+      :root { color-scheme: light dark; --bg:#0b0f14; --card:#111827; --text:#e5e7eb; --muted:#94a3b8; --border:#1f2937; --accent:#38bdf8; }
+      @media (prefers-color-scheme: light) { :root { --bg:#f8fafc; --card:#fff; --text:#0f172a; --muted:#64748b; --border:#e2e8f0; --accent:#2563eb; } }
+      body { margin:0; font-family:"Segoe UI", system-ui, -apple-system, sans-serif; background:var(--bg); color:var(--text); min-height:100vh; display:flex; align-items:center; justify-content:center; }
+      .card { width:min(92vw, 520px); background:var(--card); border:1px solid var(--border); border-radius:16px; padding:28px; box-shadow:0 24px 48px rgba(0,0,0,0.2); }
+      h1 { font-size:22px; margin:0 0 8px; }
+      p { margin:0 0 16px; color:var(--muted); }
+      .status { margin-top:12px; font-size:14px; }
+      button { padding:12px 16px; border-radius:10px; border:none; background:var(--accent); color:white; font-size:16px; cursor:pointer; }
+      button[disabled] { opacity:0.6; cursor:not-allowed; }
+    </style>
+  </head>
+  <body>
+    <div class="card">
+      <h1>Register a passkey</h1>
+      <p>This link expires in a few minutes. Keep this tab open.</p>
+      <button id="start">Create passkey</button>
+      <div class="status" id="status"></div>
+    </div>
+    <script>
+      const statusEl = document.getElementById('status');
+      const startBtn = document.getElementById('start');
+
+      const base64UrlToBuffer = (value) => {
+        const pad = '='.repeat((4 - (value.length % 4)) % 4);
+        const base64 = (value + pad).replace(/-/g, '+').replace(/_/g, '/');
+        const raw = atob(base64);
+        const buffer = new Uint8Array(raw.length);
+        for (let i = 0; i < raw.length; i++) buffer[i] = raw.charCodeAt(i);
+        return buffer;
+      };
+
+      const bufferToBase64Url = (buffer) => {
+        const bytes = new Uint8Array(buffer);
+        let binary = '';
+        for (const b of bytes) binary += String.fromCharCode(b);
+        return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, '');
+      };
+
+      const credentialToJSON = (cred) => ({
+        id: cred.id,
+        rawId: bufferToBase64Url(cred.rawId),
+        type: cred.type,
+        response: {
+          clientDataJSON: bufferToBase64Url(cred.response.clientDataJSON),
+          attestationObject: bufferToBase64Url(cred.response.attestationObject),
+          transports: cred.response.getTransports ? cred.response.getTransports() : undefined
+        }
+      });
+
+      const parseOptions = (options) => {
+        return {
+          ...options,
+          challenge: base64UrlToBuffer(options.challenge),
+          user: {
+            ...options.user,
+            id: base64UrlToBuffer(options.user.id)
+          },
+          excludeCredentials: (options.excludeCredentials || []).map((cred) => ({
+            ...cred,
+            id: base64UrlToBuffer(cred.id)
+          }))
+        };
+      };
+
+      const token = new URLSearchParams(window.location.search).get('token');
+      if (!token) {
+        statusEl.textContent = 'Missing enrol token.';
+        startBtn.disabled = true;
+      }
+
+      const startEnrollment = async () => {
+        if (!token) return;
+        startBtn.disabled = true;
+        statusEl.textContent = 'Requesting passkey options…';
+        try {
+          const res = await fetch('/auth/webauthn/register/start', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ token })
+          });
+          if (!res.ok) throw new Error('Failed to start registration');
+          const payload = await res.json();
+          const publicKey = parseOptions(payload.options);
+          statusEl.textContent = 'Waiting for your passkey…';
+          const cred = await navigator.credentials.create({ publicKey });
+          if (!cred) throw new Error('Passkey creation cancelled');
+          const finish = await fetch('/auth/webauthn/register/finish', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ token, credential: credentialToJSON(cred) })
+          });
+          if (!finish.ok) throw new Error('Registration failed');
+          statusEl.textContent = 'Passkey registered. You can close this tab.';
+        } catch (err) {
+          statusEl.textContent = err && err.message ? err.message : 'Passkey registration failed.';
+          startBtn.disabled = false;
+        }
+      };
+
+      startBtn.addEventListener('click', startEnrollment);
+    </script>
+  </body>
+</html>`;
+
+    return new Response(html, {
+      headers: {
+        "Content-Type": "text/html; charset=utf-8",
+        "Cache-Control": "no-store",
       },
     });
   }
