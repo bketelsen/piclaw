@@ -712,11 +712,14 @@ function streamAzureOpenAIResponses(model: any, context: any, options: any) {
 
       if (reasoningEnabled) {
         if (options?.reasoningEffort || options?.reasoningSummary) {
+          // Azure OpenAI only supports a minimal reasoning payload.
+          // Unsupported fields like `summary` and `include` cause silent
+          // failures (response.failed with error: null). Some models
+          // (e.g. gpt-5.3-chat) also restrict effort to "medium" only.
+          // We send effort but omit summary and include for Azure.
           params.reasoning = {
             effort: options?.reasoningEffort || "medium",
-            summary: options?.reasoningSummary || "auto",
           };
-          params.include = ["reasoning.encrypted_content"];
         } else if (String(model.name).toLowerCase().startsWith("gpt-5")) {
           messages.push({
             role: "developer",
@@ -739,6 +742,11 @@ function streamAzureOpenAIResponses(model: any, context: any, options: any) {
 
       await getAccessToken();
 
+      // Track the best error message extracted from stream events so we can
+      // override pi-ai's generic "Unknown error" with something actionable.
+      // Declared here (before createStream) so it's accessible in the catch block.
+      let streamErrorDetail = "";
+
       let openaiStream;
       try {
         openaiStream = await createStream();
@@ -752,9 +760,6 @@ function streamAzureOpenAIResponses(model: any, context: any, options: any) {
       // Capture `phase` for assistant output items so we can persist it on stored messages.
       // This uses the Responses stream events to avoid any SDK version mismatches.
       const outputPhases = new Map<string, string>();
-      // Track the best error message extracted from stream events so we can
-      // override pi-ai's generic "Unknown error" with something actionable.
-      let streamErrorDetail = "";
 
       const loggingStream = (async function* () {
         for await (const event of openaiStream) {

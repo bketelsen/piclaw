@@ -287,10 +287,15 @@ export async function processChat(channel, chatJid, agentId, threadRootId) {
     }
     channel.state.clearPendingResume(chatJid);
     channel.saveState();
+    // Include context usage in the done event so the UI can update its indicator.
+    const contextUsage = await channel.agentPool.getContextUsageForChat(chatJid);
     trackedEmitter.status({
         thread_id: threadId,
         agent_id: agentId,
         type: "done",
         turn_id: turnId,
+        context_usage: contextUsage
+            ? { tokens: contextUsage.tokens, contextWindow: contextUsage.contextWindow, percent: contextUsage.percent }
+            : null,
     });
 }

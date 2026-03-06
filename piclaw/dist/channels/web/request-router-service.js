@@ -333,6 +333,9 @@ export class RequestRouterService {
         if (req.method === "GET" && pathname === "/agent/status") {
             return this.channel.handleAgentStatus(req);
         }
+        if (req.method === "GET" && pathname === "/agent/context") {
+            return this.channel.handleAgentContext(req);
+        }
         if (req.method === "POST" && pathname === "/agent/respond") {
             return this.channel.handleAgentRespond(req);
         }

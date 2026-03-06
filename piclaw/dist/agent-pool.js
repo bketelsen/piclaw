@@ -154,6 +154,13 @@ export class AgentPool {
         const model = session.model;
         return model ? `${model.provider}/${model.id}` : null;
     }
+    /** Return the current context token usage for a chat session, or null if unknown. */
+    async getContextUsageForChat(chatJid) {
+        const entry = this.pool.get(chatJid);
+        if (!entry)
+            return null;
+        return entry.session.getContextUsage() ?? null;
+    }
     /**
      * Save the current session tree position so it can be restored later.
      * Used by the scheduler to isolate task execution in a side branch.
