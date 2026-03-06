@@ -674,36 +674,21 @@ function streamAzureOpenAIResponses(model: any, context: any, options: any) {
 
       // Post-conversion sanitization for Azure OpenAI compatibility.
       // Azure requires: id/call_id max 64 chars, only [a-zA-Z0-9_-].
-      // Upstream normalization misses some edge cases (cross-provider IDs without "|",
-      // stale encrypted signatures, etc.). We sanitize ALL items here.
-      //
-      // Additionally, Azure enforces that every function_call item whose id starts
-      // with "fc_" must have its paired reasoning item (rs_xxx) in the input.
-      // If reasoning items were stripped (compaction, empty thinking blocks, model
-      // switch), keeping the fc_ id causes a 400 error. Setting id to undefined
-      // bypasses the pairing validation (same approach as cross-provider replay).
-      const reasoningIds = new Set<string>();
-      for (const item of messages) {
-        if ((item as any).type === "reasoning" && (item as any).id) {
-          reasoningIds.add((item as any).id);
-        }
-      }
+      // Additionally, Azure pairs fc_ IDs with rs_ reasoning items and rejects
+      // function_calls whose reasoning partner is missing. Stripping all fc_ IDs
+      // bypasses this validation entirely (same as cross-provider replay).
       for (const item of messages) {
         if (item.id && typeof item.id === "string") {
-          const nextId = sanitizeOpenAIId(item.id);
-          if (nextId) item.id = nextId;
+          if ((item as any).type === "function_call" && (item.id as string).startsWith("fc_")) {
+            (item as any).id = undefined;
+          } else {
+            const nextId = sanitizeOpenAIId(item.id);
+            if (nextId) item.id = nextId;
+          }
         }
         if (item.call_id && typeof item.call_id === "string") {
           const nextCallId = sanitizeOpenAIId(item.call_id);
           if (nextCallId) item.call_id = nextCallId;
-        }
-        // Strip function_call ids when no reasoning items are present.
-        // If there ARE reasoning items, we keep function_call ids and trust
-        // the upstream converter paired them correctly.
-        if ((item as any).type === "function_call" && item.id &&
-            typeof item.id === "string" && (item.id as string).startsWith("fc_") &&
-            reasoningIds.size === 0) {
-          (item as any).id = undefined;
         }
       }
       const params: Record<string, any> = {
