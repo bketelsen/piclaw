@@ -578,6 +578,15 @@ function App() {
 
     
 
+    const refreshContextUsage = useCallback(async () => {
+        try {
+            const ctx = await getAgentContext();
+            if (ctx) setContextUsage(ctx);
+        } catch (err) {
+            console.warn('Failed to fetch agent context:', err);
+        }
+    }, []);
+
     const refreshAgentStatus = useCallback(async () => {
         try {
             const res = await getAgentStatus('web:default');
@@ -1191,16 +1200,18 @@ function App() {
             if (isAgentActive) {
                 // Active: only refresh status; avoid noisy timeline fetches.
                 refreshAgentStatus();
+                refreshContextUsage();
             } else {
                 const { currentHashtag: activeHashtag, searchQuery: activeSearch } = viewStateRef.current || {};
                 if (!activeHashtag && !activeSearch) {
                     refreshTimeline();
                 }
                 refreshAgentStatus();
+                refreshContextUsage();
             }
         }, intervalMs);
         return () => clearInterval(interval);
-    }, [connectionStatus, isAgentActive, refreshAgentStatus, refreshTimeline]);
+    }, [connectionStatus, isAgentActive, refreshAgentStatus, refreshContextUsage, refreshTimeline]);
 
     const toggleWorkspace = useCallback(() => {
         setWorkspaceOpen((prev) => !prev);
