@@ -46,6 +46,11 @@ describe("AgentQueue", () => {
 
     await Bun.sleep(200);
     expect(count).toBe(1);
+
+    const metrics = queue.getMetrics();
+    expect(metrics.enqueued).toBe(1);
+    expect(metrics.deduplicated).toBe(1);
+
     await queue.shutdown(100);
   });
 
@@ -118,6 +123,11 @@ describe("AgentQueue", () => {
       await new Promise((resolve) => originalSetTimeout(resolve, 80));
       expect(order.slice(0, 2)).toEqual(["first", "second"]);
       expect(order).toContain("retry");
+
+      const metrics = queue.getMetrics();
+      expect(metrics.retriesScheduled).toBeGreaterThanOrEqual(1);
+      expect(metrics.failed).toBeGreaterThanOrEqual(1);
+      expect(metrics.succeeded).toBeGreaterThanOrEqual(2);
     } finally {
       globalThis.setTimeout = originalSetTimeout;
       await queue.shutdown(100);

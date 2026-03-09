@@ -9,7 +9,7 @@ import { afterAll, afterEach, beforeAll, expect, test } from "bun:test";
 import { createHmac } from "node:crypto";
 
 import { randomSessionToken, safeEqual, verifyTotp } from "../../../src/channels/web/auth.js";
-import { createWebSession, deleteExpiredWebSessions, getWebSession, initDatabase } from "../../../src/db.js";
+import { createWebSession, deleteExpiredWebSessions, getDb, getWebSession, initDatabase } from "../../../src/db.js";
 import { getTestWorkspace, setEnv } from "../../helpers.js";
 
 let restoreEnv: (() => void) | null = null;
@@ -125,6 +125,23 @@ test("getWebSession returns null for invalid or expired tokens", () => {
   createWebSession(token, "default", -10, "totp");
   const expired = getWebSession(token);
   expect(expired).toBeNull();
+});
+
+test("createWebSession stores token hash while preserving token lookup", () => {
+  const token = "hashed-session-token";
+  createWebSession(token, "default", 60, "totp");
+
+  const row = getDb()
+    .prepare("SELECT token FROM web_sessions WHERE user_id = ? ORDER BY created_at DESC LIMIT 1")
+    .get("default") as { token: string } | undefined;
+
+  expect(row).toBeDefined();
+  expect(row?.token).not.toBe(token);
+  expect(row?.token).toHaveLength(64);
+
+  const session = getWebSession(token);
+  expect(session).not.toBeNull();
+  expect(session?.token).toBe(token);
 });
 
 test("deleteExpiredWebSessions removes expired sessions", () => {

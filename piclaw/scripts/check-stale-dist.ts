@@ -3,25 +3,7 @@
 import { existsSync, readdirSync, statSync } from "fs";
 import { join, relative } from "path";
 
-const ALLOWED_STALE_DIST_FILES = new Set([
-  "dist/agent-control-handlers.js",
-  "dist/agent-control-helpers.js",
-  "dist/agent-control-parser.js",
-  "dist/agent-control-types.js",
-  "dist/agent-control.js",
-  "dist/agent-runner.js",
-  "dist/channels/web/http-utils.js",
-  "dist/channels/web/request-router.js",
-  "dist/channels/web/response-service.js",
-  "dist/channels/web/static.js",
-  "dist/chat-context.js",
-  "dist/config-store.js",
-  "dist/config.js",
-  "dist/env.js",
-  "dist/extensions/azure-openai.js",
-  "dist/model-utils.js",
-  "dist/process-tracker.js",
-]);
+const ALLOWED_STALE_DIST_FILES = new Set<string>();
 
 function walkFiles(baseDir: string, suffix: string): string[] {
   if (!existsSync(baseDir)) return [];

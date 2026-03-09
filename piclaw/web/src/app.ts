@@ -29,6 +29,16 @@ import { dedupePosts } from './ui/timeline-utils.js';
 import { useAgentState } from './ui/use-agent-state.js';
 import { useSplitters } from './ui/use-splitters.js';
 import { initTheme, applyThemeFromEvent } from './ui/theme.js';
+import {
+    LAST_ACTIVITY_TTL_MS,
+    SILENCE_FINALIZE_MS,
+    SILENCE_REFRESH_MS,
+    SILENCE_WARNING_MS,
+    buildAgentsMap,
+    estimatePreviewLines,
+    isIOSDevice,
+    useTimestampRefresh,
+} from './ui/app-helpers.js';
 
 function missingApi(name, fallback) {
     if (typeof window !== 'undefined') {
@@ -52,24 +62,6 @@ const getAgentModels = typeof api.getAgentModels === 'function'
     ? api.getAgentModels
     : missingApi('getAgentModels', { current: null, models: [] });
 
-function readSilenceOverride(key, fallback) {
-    try {
-        if (typeof window === 'undefined') return fallback;
-        const overrides = window.__PICLAW_SILENCE || {};
-        const directKey = `__PICLAW_SILENCE_${key.toUpperCase()}_MS`;
-        const raw = overrides[key] ?? window[directKey];
-        const value = Number(raw);
-        return Number.isFinite(value) ? value : fallback;
-    } catch {
-        return fallback;
-    }
-}
-
-const SILENCE_WARNING_MS = readSilenceOverride('warning', 30_000);
-const SILENCE_FINALIZE_MS = readSilenceOverride('finalize', 120_000);
-const SILENCE_REFRESH_MS = readSilenceOverride('refresh', 30_000);
-const LAST_ACTIVITY_TTL_MS = 30_000;
-
 // Configure marked for safe rendering
 if (window.marked) {
     marked.setOptions({
@@ -77,45 +69,6 @@ if (window.marked) {
         gfm: true,     // GitHub Flavored Markdown
     });
 }
-
-function buildAgentsMap(data) {
-    const map = {};
-    (data?.agents || []).forEach((agent) => {
-        map[agent.id] = agent;
-    });
-    return map;
-}
-
-/**
- * Detect iOS devices for layout adjustments.
- */
-function isIOSDevice() {
-    if (/iPad|iPhone/.test(navigator.userAgent)) {
-        return true;
-    }
-    // iPadOS Safari (desktop mode) reports as MacIntel with touch points.
-    return navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1;
-}
-
-/**
- * Hook to force re-render for updating timestamps
- */
-function useTimestampRefresh(intervalMs = 30000) {
-    const [, setTick] = useState(0);
-    
-    useEffect(() => {
-        const timer = setInterval(() => setTick(t => t + 1), intervalMs);
-        return () => clearInterval(timer);
-    }, [intervalMs]);
-}
-
-const estimatePreviewLines = (text, maxCharsPerLine = 160) => {
-    const value = String(text || '').replace(/\r\n/g, '\n');
-    if (!value) return 0;
-    return value
-        .split('\n')
-        .reduce((acc, line) => acc + Math.max(1, Math.ceil(line.length / maxCharsPerLine)), 0);
-};
 
 /**
  * Main App component

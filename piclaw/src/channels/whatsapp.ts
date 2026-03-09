@@ -33,8 +33,19 @@ import { ASSISTANT_NAME, STORE_DIR, WHATSAPP_PHONE } from "../core/config.js";
 import type { OnChatMetadata, OnInboundMessage } from "../types.js";
 import { createUuid } from "../utils/ids.js";
 
+interface BaileysLogger {
+  level: string;
+  child: (_obj: Record<string, unknown>) => BaileysLogger;
+  trace: (_obj: unknown, _msg?: string) => void;
+  debug: (_obj: unknown, _msg?: string) => void;
+  info: (_obj: unknown, _msg?: string) => void;
+  warn: (_obj: unknown, _msg?: string) => void;
+  error: (_obj: unknown, _msg?: string) => void;
+  fatal: (_obj: unknown, _msg?: string) => void;
+}
+
 // Minimal pino-compatible logger for baileys (it requires one)
-const silentLogger = {
+const silentLogger: BaileysLogger = {
   level: "silent",
   child: () => silentLogger,
   trace: () => {},
@@ -43,7 +54,15 @@ const silentLogger = {
   warn: () => {},
   error: () => {},
   fatal: () => {},
-} as any;
+};
+
+function readStatusCode(value: unknown): number | undefined {
+  if (!value || typeof value !== "object") return undefined;
+  const output = (value as { output?: unknown }).output;
+  if (!output || typeof output !== "object") return undefined;
+  const statusCode = (output as { statusCode?: unknown }).statusCode;
+  return typeof statusCode === "number" ? statusCode : undefined;
+}
 
 /** Configuration for the WhatsApp channel: phone, callbacks. */
 export interface WhatsAppChannelOpts {
@@ -111,7 +130,7 @@ export class WhatsAppChannel {
       if (connection === "close") {
         this.connected = false;
         this.pairingRequested = false;
-        const reason = (lastDisconnect?.error as any)?.output?.statusCode;
+        const reason = readStatusCode(lastDisconnect?.error);
         const shouldReconnect = reason !== DisconnectReason.loggedOut;
         if (shouldReconnect) {
           this.reconnectAttempts++;

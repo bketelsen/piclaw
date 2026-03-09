@@ -61,6 +61,7 @@ test("runScheduledTask logs run and updates task", async () => {
   db.initDatabase();
 
   const scheduler = await import("../../src/task-scheduler.js");
+  scheduler.resetSchedulerMetricsForTests();
 
   const taskId = `task-${Date.now()}`;
   db.createTask({
@@ -100,6 +101,11 @@ test("runScheduledTask logs run and updates task", async () => {
   const logs = db.getTaskRunLogs(taskId);
   expect(logs.length).toBe(1);
   expect(logs[0].status).toBe("success");
+
+  const metrics = scheduler.getSchedulerMetrics();
+  expect(metrics.taskRunsStarted).toBe(1);
+  expect(metrics.taskRunsSucceeded).toBe(1);
+  expect(metrics.taskRunsFailed).toBe(0);
 });
 
 test("runScheduledTask switches and restores models", async () => {
@@ -156,6 +162,7 @@ test("runScheduledTask stops when model switch fails", async () => {
   db.initDatabase();
 
   const scheduler = await import("../../src/task-scheduler.js");
+  scheduler.resetSchedulerMetricsForTests();
 
   const taskId = `task-model-error-${Date.now()}`;
   db.createTask({
@@ -199,6 +206,11 @@ test("runScheduledTask stops when model switch fails", async () => {
   expect(runCount).toBe(0);
   expect(modelCalls.length).toBe(2);
   expect(modelCalls[1].raw).toBe("/model openai/gpt-3.5");
+
+  const metrics = scheduler.getSchedulerMetrics();
+  expect(metrics.taskRunsStarted).toBe(1);
+  expect(metrics.taskRunsSucceeded).toBe(0);
+  expect(metrics.taskRunsFailed).toBe(1);
 });
 
 test("runScheduledTask logs restore-model failures", async () => {
@@ -269,6 +281,18 @@ test("startSchedulerLoop returns stop function and stop is idempotent", async ()
   db.initDatabase();
 
   const scheduler = await importFresh<typeof import("../src/task-scheduler.js")>("../src/task-scheduler.js");
+  scheduler.resetSchedulerMetricsForTests();
+
+  db.createTask({
+    id: `task-loop-${Date.now()}`,
+    chat_jid: "web:default",
+    prompt: "loop",
+    schedule_type: "interval",
+    schedule_value: "60000",
+    next_run: new Date(Date.now() - 1000).toISOString(),
+    status: "active",
+    created_at: new Date().toISOString(),
+  });
 
   const deps = {
     queue: { enqueueTask: async () => {} },
@@ -281,6 +305,11 @@ test("startSchedulerLoop returns stop function and stop is idempotent", async ()
 
   const stopAgain = scheduler.startSchedulerLoop(deps as any);
   expect(typeof stopAgain).toBe("function");
+
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  const metrics = scheduler.getSchedulerMetrics();
+  expect(metrics.polls).toBeGreaterThanOrEqual(1);
+  expect(metrics.tasksEnqueued).toBeGreaterThanOrEqual(1);
 
   stop();
   scheduler.stopSchedulerLoop();

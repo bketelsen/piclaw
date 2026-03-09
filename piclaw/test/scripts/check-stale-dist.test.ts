@@ -46,8 +46,9 @@ describe("check-stale-dist", () => {
     }
   });
 
-  test("filterUnexpectedStaleDistFiles ignores allowlisted stale entries", () => {
+  test("filterUnexpectedStaleDistFiles returns all entries when allowlist is empty", () => {
     expect(filterUnexpectedStaleDistFiles(["dist/config.js", "dist/new-stale.js"])).toEqual([
+      "dist/config.js",
       "dist/new-stale.js",
     ]);
   });

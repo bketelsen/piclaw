@@ -26,6 +26,16 @@ interface QueueItem {
   retries: number;
 }
 
+/** In-memory counters for queue behavior/health visibility. */
+export interface QueueMetrics {
+  enqueued: number;
+  deduplicated: number;
+  started: number;
+  succeeded: number;
+  failed: number;
+  retriesScheduled: number;
+}
+
 /**
  * A serial execution queue: items run one at a time, in FIFO order.
  * If an item fails, it is re-enqueued after an exponential delay.
@@ -36,6 +46,14 @@ export class AgentQueue {
   private current: QueueItem | null = null;
   private shuttingDown = false;
   private runningPromise: Promise<void> | null = null;
+  private metrics: QueueMetrics = {
+    enqueued: 0,
+    deduplicated: 0,
+    started: 0,
+    succeeded: 0,
+    failed: 0,
+    retriesScheduled: 0,
+  };
 
   /**
    * Add a work item to the queue. If the queue is idle, execution starts
@@ -46,10 +64,17 @@ export class AgentQueue {
     if (this.shuttingDown) return;
     // Deduplicate by id if provided
     if (id) {
-      if (this.current?.id === id) return;
-      if (this.pending.some((p) => p.id === id)) return;
+      if (this.current?.id === id) {
+        this.metrics.deduplicated += 1;
+        return;
+      }
+      if (this.pending.some((p) => p.id === id)) {
+        this.metrics.deduplicated += 1;
+        return;
+      }
     }
     const item: QueueItem = { id, fn, retries: 0 };
+    this.metrics.enqueued += 1;
     if (this.running) {
       this.pending.push(item);
       return;
@@ -66,6 +91,7 @@ export class AgentQueue {
   private runItem(item: QueueItem): void {
     this.running = true;
     this.current = item;
+    this.metrics.started += 1;
     this.runningPromise = this.executeItem(item);
   }
 
@@ -73,7 +99,9 @@ export class AgentQueue {
   private async executeItem(item: QueueItem): Promise<void> {
     try {
       await item.fn();
+      this.metrics.succeeded += 1;
     } catch (err) {
+      this.metrics.failed += 1;
       console.error("[queue] Error:", err);
       this.scheduleRetry(item);
     } finally {
@@ -92,6 +120,7 @@ export class AgentQueue {
   private scheduleRetry(item: QueueItem): void {
     if (!shouldRetry(item.retries, DEFAULT_MAX_RETRIES, this.shuttingDown)) return;
     item.retries++;
+    this.metrics.retriesScheduled += 1;
     const delay = getRetryDelay(item.retries, DEFAULT_BASE_RETRY_MS);
     console.log(
       `[queue] Retry ${item.retries}/${DEFAULT_MAX_RETRIES} in ${delay}ms${item.id ? ` (${item.id})` : ""}`
@@ -116,5 +145,10 @@ export class AgentQueue {
     if (this.runningPromise) {
       await Promise.race([this.runningPromise, Bun.sleep(ms)]);
     }
+  }
+
+  /** Snapshot queue counters for diagnostics and tests. */
+  getMetrics(): QueueMetrics {
+    return { ...this.metrics };
   }
 }

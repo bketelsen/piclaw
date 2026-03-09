@@ -75,6 +75,26 @@ test("resolves keychain env references", async () => {
   expect(resolved.USERNAME).toBe("env-user");
 });
 
+test("supports custom key material provider abstraction", async () => {
+  await keychain.setKeychainEntry({
+    name: "test-disabled-entry",
+    type: "password",
+    secret: "disabled-secret",
+    username: "disabled-user",
+  });
+
+  const restore = setEnv({ PICLAW_KEYCHAIN_KEY: undefined, PICLAW_KEYCHAIN_KEY_FILE: undefined });
+  keychain.setKeyMaterialProviderForTests({
+    getKeyMaterial: () => new TextEncoder().encode("test-key"),
+  });
+
+  const entry = await keychain.getKeychainEntry("test-disabled-entry");
+  expect(entry.secret).toBe("disabled-secret");
+
+  keychain.setKeyMaterialProviderForTests(null);
+  restore();
+});
+
 test("throws when keychain is disabled", async () => {
   await keychain.setKeychainEntry({
     name: "test-disabled-entry",

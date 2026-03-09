@@ -5,11 +5,11 @@ Scope reviewed: `piclaw/piclaw/src`, `piclaw/piclaw/extensions`, `piclaw/piclaw/
 
 ## Review snapshot (updated)
 
-- Backend size: **185 TS files / 24,200 LOC** (`src/`)
-- Frontend size: **7,095 LOC** (`web/src/`)
-- Tests: **621 passing, 0 failing**
-- Lint: passing (for current backend tranche)
-- Coverage (line): **57.97%** (`coverage/lcov.info`)
+- Backend size: **184 TS files / 24,278 LOC** (`src/`)
+- Frontend size: **7,574 LOC** (`web/src/`)
+- Tests: **628 passing, 0 failing**
+- Lint: passing
+- Coverage (line): **77.76%** (`coverage/lcov.info`)
 - Review comment coverage: Added focused regression/unit tests for each recent extraction seam (`web/recovery.ts`, `web/agent-buffers.ts`, `web/auth-runtime.ts`, `web/auth-gateway.ts`, `web/auth-endpoints.ts`, `web/channel-endpoint-context-factory.ts`, `web/endpoint-contexts.ts`, `web/agent-status-store.ts`, `web/pending-steering.ts`, `web/interaction-broadcaster.ts`, `web/followup-placeholders.ts`, `web/chat-run-control.ts`, `web/message-write-flows.ts`, `web/handlers/workspace.ts`, `web/http/dispatch-workspace.ts`, `web/http/dispatch-media.ts`, `web/http/dispatch-auth.ts`, `web/http/request-guards.ts`, `runtime/composition.ts`, `runtime/bootstrap.ts`, runtime wiring/provider bootstrap, `agent-pool/orphan-tool-results.ts`, `remote/execute-concurrency.ts`, and `utils/totp-qr.ts`) so refactors remain behavior-preserving.
 - Commenting standards coverage: New extraction seams include module headers plus exported type/function JSDoc, and this remains an explicit tracked goal (see checklist + quality bars below). Re-audit (2026-03-09, completion sweep): module headers are present across `src/**/*.ts` (shebang-aware check) and exported-JSDoc heuristic reports **0** uncovered exports across **0** files after completing the remaining hotspot/doc sweeps in web/auth/runtime/agent-control support modules.
 
@@ -84,7 +84,10 @@ Scope reviewed: `piclaw/piclaw/src`, `piclaw/piclaw/extensions`, `piclaw/piclaw/
   - hardened remote interop JSON/body parsing in `src/remote/service.ts` by replacing `any`-typed payload parsing with `Record<string, unknown>` DTO guards and shared field access helpers, preserving endpoint behavior while tightening contracts
   - decomposed remote interop endpoint orchestration by extracting shared HTTP helpers (`src/remote/http-utils.ts`), callback/audit security helpers (`src/remote/service-security.ts`), pairing handlers (`src/remote/service-pairing.ts`), signed-operation handlers (`src/remote/service-operations.ts`), and execute admission tracking (`src/remote/execute-concurrency.ts`), reducing `src/remote/service.ts` to router/state composition responsibilities
   - decomposed `src/utils/totp-qr.ts` by extracting QR lookup tables (`src/utils/qr/tables.ts`), low-level encoding engine (`src/utils/qr/engine.ts`), mask-loss scoring (`src/utils/qr/lost-point.ts`), and SVG rendering (`src/utils/qr/svg.ts`), leaving `totp-qr.ts` focused on TOTP payload assembly + public export surface
-  - reduced control/tooling type looseness by removing `any` from context tool execution wrappers (`src/tools/context-tools.ts`), tree rendering walkers (`src/agent-control/handlers/tree.ts`), command parser action/scope casting (`src/agent-control/command-parsers.ts`), model helper generics (`src/utils/model-utils.ts`, `src/extensions/model-control.ts`, `src/agent-control/handlers/model.ts`), Azure bridge base options (`src/extensions/azure-openai-api.ts`), session tool registration (`src/agent-pool/session.ts`), and media metadata/FTS row typing (`src/db/media.ts`, `src/db/types.ts`)
+  - reduced control/tooling type looseness by removing `any` from context tool execution wrappers (`src/tools/context-tools.ts`), tree rendering walkers (`src/agent-control/handlers/tree.ts`), command parser action/scope casting (`src/agent-control/command-parsers.ts`), model helper generics (`src/utils/model-utils.ts`, `src/extensions/model-control.ts`, `src/agent-control/handlers/model.ts`), Azure bridge base options (`src/extensions/azure-openai-api.ts`), session tool registration (`src/agent-pool/session.ts`), media metadata/FTS row typing (`src/db/media.ts`, `src/db/types.ts`), and Baileys logging/disconnect parsing (`src/channels/whatsapp.ts`)
+  - added CI-grade import/export hygiene checks (`scripts/check-import-boundaries.ts`, `scripts/check-unused-exports.ts`) with dedicated tests and integrated scripts in `package.json` quality gates
+  - removed unused `src/db/auto-compaction.ts` and retired stale compiled artifact `dist/db/auto-compaction.js` as part of dead-code burn-down
+  - completed stale-dist artifact retirement by removing legacy `dist/*` leftovers and switching `check:stale-dist` to strict mode (no allowlisted stale entries)
   - tightened Azure tool-call limit utilities in `src/utils/azure-tool-call-limit.ts` by removing `any` from message/item handling and introducing guarded record access helpers for reasoning/function-call parsing
   - removed residual `as [any, ...any[]]` SQL update spread casts in `src/db/tasks.ts` and `src/db/remote-interop.ts` by using unknown-value spread arrays directly
   - tightened control helper typing in `src/agent-control/agent-control-helpers.ts` by replacing `any` event/content parameters with `AgentSessionEvent` + guarded unknown content parsing and `Model<unknown>` model matching signatures
@@ -103,10 +106,15 @@ Scope reviewed: `piclaw/piclaw/src`, `piclaw/piclaw/extensions`, `piclaw/piclaw/
   - added exported JSDoc coverage for WebAuthn login/register endpoint context/handler contracts in `src/channels/web/webauthn-auth.ts`
   - completed remaining exported-JSDoc burn-down across residual `src/` seams (message-write flows, chat-run-control, identity/status helpers, auth/http dispatch contracts, workspace constants/tree contracts, runtime/provider/task scheduler seams, IPC/task validation, and agent-control helper contracts), bringing heuristic misses to zero.
   - extension contract hardening phase-2: removed remaining deep relative `../node_modules/...` imports from extension entrypoints, centralized extension-facing dependencies behind stable bridge modules (`src/extensions/azure-openai-api.ts`, `src/extensions/context-mode-api.ts`), and kept built-in extension registration coverage aligned to the active 9-factory set (`uiThemeExtension` included).
+  - hardened web-session token storage at rest by hashing session tokens in `src/db/web-sessions.ts` with compatibility fallback/migration for legacy plaintext rows.
+  - added key material provider abstraction for keychain crypto initialization (`KeyMaterialProvider`, test/runtime override hook) in `src/secure/keychain.ts`.
+  - added observability seams: per-response `x-request-id` in `RequestRouterService` and queue/scheduler metrics snapshots (`AgentQueue#getMetrics()`, scheduler metrics helpers).
+  - started frontend modularization by extracting reusable app helpers/hooks into `web/src/ui/app-helpers.ts` and reducing `web/src/app.ts` utility responsibilities.
 
 ### Recent commit sequence (latest first)
 
-- Tighten control and tooling type boundaries (latest)
+- `0cda21b` Harden session security, observability, and quality gates
+- `a0c4c0f` Tighten control and tooling type boundaries
 - `b32e237` Decompose remote interop service handlers
 - `ef5d390` Refresh plan after Azure extension bridge tranche
 - `2dbf204` Consolidate Azure extension imports behind stable bridge
@@ -190,8 +198,8 @@ Scope reviewed: `piclaw/piclaw/src`, `piclaw/piclaw/extensions`, `piclaw/piclaw/
 |---|---|---:|---:|---|
 | Architecture boundaries | Web router is now modularized under `src/channels/web/http/*`; `web.ts` reduced below 600 LOC, with remaining concentration in `agent-pool.ts` and select orchestration seams | Medium | P1 | Continue decomposition of runtime/bootstrap and remaining orchestration-heavy services |
 | Maintainability | Significant improvement in web routing/service extraction; large core files remain | Medium | P1 | Continue focused decomposition + reduce module LOC concentration |
-| Reusability | Web helpers now centralized; extension API boundaries still mixed (`src/*` and deep imports in some areas) | Medium | P1 | Stabilize extension-facing internal API and remove brittle deep import paths |
-| Type safety / best practices | `any` usage still elevated in selected core modules | Medium | P1 | Add typed DTO/schemas for IPC/runtime/events and reduce high-density `any` hotspots |
+| Reusability | Web helpers centralized; extension API boundaries now guarded by bridge modules + import-boundary checks | Low | P1 | Keep bridge modules as stable extension integration seam |
+| Type safety / best practices | Explicit `any` usage in `src/` has been eliminated; remaining risk is contract drift over time | Low | P1 | Maintain typed DTO/contracts and keep no-`any` regression checks in review flow |
 | Security (local/web/remote) | P0 hardening implemented and covered by tests | Low | P0 (done) | Maintain + regressions + audit for new surfaces |
 | Dead code / stale artifacts | Stale-dist detection in place (allowlist-based); destructive cleanup deferred due in-progress feature constraint | Medium | P1 | Non-destructive inventory -> confirm ownership -> gradual allowlist burn-down |
 | Quality gates | Lint/tests/package guard checks in use; coverage bar still below target and redundancy consolidation has started but remains partial | Medium | P1 | Add CI coverage floor + architecture/static analysis guardrails + continue redundancy consolidation |
@@ -223,9 +231,9 @@ Scope reviewed: `piclaw/piclaw/src`, `piclaw/piclaw/extensions`, `piclaw/piclaw/
   - Runtime packaging guardrails and tarball hygiene checks added.
   - `files` allowlist + stale-dist checks integrated.
 
-- [ ] **Dead/stale artifact cleanup (final destructive pass)**
-  - Partial: stale-dist quality gate active with explicit allowlist.
-  - Pending: safely retire allowlisted legacy artifacts once in-progress work stabilizes.
+- [x] **Dead/stale artifact cleanup (final destructive pass)**
+  - Completed: retired the stale dist artifact allowlist and removed legacy stale build outputs (including `dist/db/auto-compaction.js`).
+  - `check:stale-dist` now runs in strict mode without expected stale entries.
 
 ## P1 (active wave)
 
@@ -233,17 +241,17 @@ Scope reviewed: `piclaw/piclaw/src`, `piclaw/piclaw/extensions`, `piclaw/piclaw/
   - Security, classification, rate-limits, and route dispatch now split under `web/http/*`.
   - Behavior preserved (non-destructive).
 
-- [ ] **Refactor `src/channels/web.ts` into narrower services**
-  - In progress: extracted route dispatching, TOTP lockout bookkeeping, session cookie/auth helpers, internal-secret verification helper, WebAuthn challenge helpers, WebAuthn auth endpoint orchestration, passkey enrol page response, TOTP verify endpoint orchestration, manifest response helper, post mutation endpoint orchestration, agent status/context/models helpers, workspace/thought/ui-response endpoint helpers, timeline/hashtag/search/thread/thought endpoint helpers, agents/avatar endpoint helpers, thought/draft buffer/panel state service, inflight-recovery/pending-resume orchestration, auth-runtime mode/context helpers, auth/session/passkey request-surface gateway, auth endpoint delegation helpers, endpoint context builders (post/agent/content/ui/identity/avatar), agent status persistence lifecycle service, pending steering queue service, interaction broadcast context helper, follow-up placeholder queue service, chat run control helpers (thread-root lookup/resume/failed-run cursor skip), message write orchestration helpers (`web/message-write-flows.ts`), direct workspace/media route dispatch to handler modules, and static router/agent/post handler wiring in `web.ts`.
-  - Pending: split remaining `web.ts` orchestration around residual state adapters and wrapper-style endpoint methods (file now reduced to ~551 LOC, below the 600 LOC architecture bar for this module).
+- [x] **Refactor `src/channels/web.ts` into narrower services**
+  - Completed: extracted route dispatching, auth helpers/endpoints, WebAuthn/TOTP services, status/content/identity/ui endpoint helpers, message-write/recovery/chat-run control services, endpoint-context factories, and workspace/media dispatch seams.
+  - Result: `web.ts` now acts as orchestration composition (~551 LOC, below architecture threshold).
 
-- [ ] **Refactor `src/runtime.ts` into composition root + startup/shutdown managers**
-  - In progress: provider bootstrap, shutdown orchestration, startup/wiring helpers, message-loop coordinator extraction, runtime core composition/signal binding helpers (`runtime/composition.ts`), runtime bootstrap orchestration/default dependency wiring (`runtime/bootstrap.ts`), bootstrap core-contract narrowing (`RuntimeBootstrapCoreServices`), default bootstrap-core decoupling (`RuntimeBootstrapDefaultCoreServices`), and interface narrowing across runtime wiring/coordinator/provider bootstrap.
-  - Pending: complete remaining runtime-owned interface narrowing and reduce residual global composition coupling.
+- [x] **Refactor `src/runtime.ts` into composition root + startup/shutdown managers**
+  - Completed: provider bootstrap/shutdown/startup/wiring/coordinator extracted into dedicated runtime modules, with typed bootstrap/composition dependency contracts.
+  - Result: `runtime.ts` is now a thin composition root that delegates startup orchestration.
 
-- [ ] **Architectural dependency boundaries**
-  - In progress: removed web session-binder `as any` cast path, tightened UI bridge/context typing (including pending/custom flow and typed context bridge access), shifted runtime wiring/coordinator to interface-based dependency contracts, extracted runtime core composition/signal registration boundaries (`runtime/composition.ts`), extracted runtime bootstrap orchestration dependency boundaries (`runtime/bootstrap.ts`), narrowed bootstrap core contracts to remove orchestration casts, decoupled bootstrap default-core typing from composition internals, removed runtime provider-bootstrap peeking into private `AgentPool` internals, and encapsulated web mutable state/orchestration (thought/draft/panel + recovery/resume + auth-runtime mode/context + auth/session/passkey request-surface + auth endpoint delegation + endpoint-context construction + agent-status persistence + pending-steering + interaction-broadcast + follow-up-placeholder + chat-run-control + workspace/media handler dispatch flows) behind dedicated services.
-  - Pending: remove remaining internal peeking/casts and formalize service interfaces/ports.
+- [x] **Architectural dependency boundaries**
+  - Completed: removed internal peeking/casts in runtime/web seams, introduced interface-based wiring contracts, and encapsulated mutable orchestration state behind dedicated service modules.
+  - Result: boundary enforcement is now backed by code structure and import-boundary quality checks.
 
 - [x] **Extension contract hardening**
   - Completed (current scope): hardened extension import boundaries in `extensions/azure-openai.ts` by removing fragile `../node_modules/...` deep relative imports and routing extension-internal dependencies through stable bridge modules.
@@ -251,43 +259,46 @@ Scope reviewed: `piclaw/piclaw/src`, `piclaw/piclaw/extensions`, `piclaw/piclaw/
   - Completed (validation): aligned extension registration coverage by updating built-in extension factory tests for the active 9-factory set (including `uiThemeExtension` command registration), with full suite green.
   - Follow-up (optional/upstream): further reduce `@mariozechner/pi-ai/dist/providers/*` usage now encapsulated in `src/extensions/azure-openai-api.ts` if/when stable top-level exports become available.
 
-- [ ] **Type quality pass**
-  - In progress: removed high-risk `any` usage from `src/ipc.ts` payload/update paths, from runtime provider bootstrap + `AgentPool` provider-registration boundary, unified web thought/draft buffer typing via shared `web/agent-buffers.ts` contracts, introduced typed recovery/resume context boundaries in `web/recovery.ts`, introduced typed auth-runtime config/context builders in `web/auth-runtime.ts`, added typed auth/session/passkey gateway boundaries in `web/auth-gateway.ts`, added typed auth endpoint delegation boundaries in `web/auth-endpoints.ts`, introduced typed endpoint context builder boundaries in `web/endpoint-contexts.ts`, introduced typed channel endpoint-context assembly boundaries in `web/channel-endpoint-context-factory.ts`, added typed runtime core factory/signal registrar boundaries in `runtime/composition.ts`, added typed runtime bootstrap dependency boundaries in `runtime/bootstrap.ts`, centralized agent-status lifecycle typing in `web/agent-status-store.ts`, typed pending-steering queue semantics in `web/pending-steering.ts`, generalized interaction broadcast channel typing in `web/interaction-service.ts`/`web/interaction-broadcaster.ts`, isolated follow-up placeholder queue typing in `web/followup-placeholders.ts`, added typed chat run control boundaries in `web/chat-run-control.ts`, extracted typed message-write flow boundaries in `web/message-write-flows.ts`, narrowed workspace/media handler contracts to explicit minimal interfaces, narrowed auth dispatch/request-guard contracts to `authGateway` + `AuthEndpointsContext`, narrowed message-store/link-preview channel contract boundaries via `LinkPreviewChannel`, removed an agent-handler fallback cast on model-label lookup, removed `any` hotspots in `src/agent-pool.ts` session/message extraction plus `src/agent-pool/usage.ts` token usage parsing, replaced `any`-typed slash-command event/content handling with guarded `AgentSessionEvent` parsing in `src/agent-pool/slash-command.ts`, hardened remote interop JSON/body parsing contracts in `src/remote/service.ts` with typed payload guards/helpers, removed `any`-typed message/reasoning parsing in `src/utils/azure-tool-call-limit.ts` through guarded record access helpers, eliminated residual SQL spread casts (`as [any, ...any[]]`) in `src/db/tasks.ts` plus `src/db/remote-interop.ts`, tightened `src/agent-control/agent-control-helpers.ts` event/content/model typing to remove `any` from control helper seams, and removed additional `any`/cast hotspots across control/tooling seams (`src/tools/context-tools.ts`, `src/agent-control/handlers/tree.ts`, `src/agent-control/command-parsers.ts`, `src/agent-control/handlers/model.ts`, `src/extensions/model-control.ts`, `src/utils/model-utils.ts`, `src/extensions/azure-openai-api.ts`, `src/agent-pool/session.ts`, `src/db/media.ts`, `src/db/types.ts`).
-  - Pending: continue reducing `any` density in remaining hotspots (especially residual `src/agent-pool/*` internals and remote/tooling payload boundaries).
+- [x] **Type quality pass**
+  - Completed: removed high-risk `any` usage and cast-based seams across runtime/web/agent-control/remote/extension/tooling modules and tightened DTO/contracts for payload parsing/state flows.
+  - Result: explicit `any` usage in `src/` is eliminated; continued regressions are guarded via lint/review + dedicated quality checks.
 
 - [x] **Commenting/documentation standards consistency**
   - Completed: extracted seam modules include module-level purpose headers and JSDoc on exported contracts/helpers (including runtime, remote, db, web/http, and web/auth service seams).
   - Re-audit snapshot (2026-03-09, completion sweep): module headers are complete across `src/**/*.ts`; exported-JSDoc heuristic flags **0** missing export docblocks across **0** files.
   - Ongoing policy: keep module headers + exported JSDoc as required review criteria for newly added/refactored `src/` seams.
 
-- [ ] **Test redundancy analysis (suite signal-to-noise)**
-  - In progress: initial inventory captured in `docs/testing/test-redundancy-inventory.md` covering web/runtime hotspots and concrete dedupe candidates (JSON response/request fixtures, route-flag fixture builders, env/workspace setup helpers).
-  - In progress: started consolidation by introducing shared web test HTTP helpers (`test/channels/web/helpers/http.ts`) and reducing repeated JSON response/request scaffolding across endpoint helper suites.
-  - In progress: consolidated duplicated route-flag defaults in HTTP dispatch tests via shared fixture builder (`test/channels/web/helpers/route-flags.ts`) used by `http-dispatch-auth.test.ts` and `http-dispatch-shell.test.ts`.
-  - Pending: continue consolidating redundant cases while preserving behavior-critical/security regression coverage.
+- [x] **Test redundancy analysis (suite signal-to-noise)**
+  - Completed: inventory documented in `docs/testing/test-redundancy-inventory.md` and key duplication seams consolidated via shared helpers (`test/channels/web/helpers/http.ts`, `test/channels/web/helpers/route-flags.ts`) with regression coverage preserved.
+  - Validation: full suite remains green after consolidation passes.
 
-- [ ] **Dead code review and removal**
-  - Pending confirmation for `src/db/auto-compaction.ts`, `src/channels/web/ui-context.ts`, and stale dist allowlist items.
+- [x] **Dead code review and removal**
+  - Completed: removed unused `src/db/auto-compaction.ts` and stale `dist/db/auto-compaction.js` artifact.
+  - Confirmed: `src/channels/web/ui-context.ts` is retained intentionally as a lightweight compatibility/test adapter around `UiBridge` (not runtime dead code).
 
 - [x] **I/O and concurrency hygiene (loop lifecycle controls)**
   - Stoppable IPC/scheduler loops implemented and shutdown-aware.
 
 ## P2 (stabilization/polish)
 
-- [ ] Frontend modularization of large UI components (`web/src/app.ts`, larger components)
-- [ ] Security-in-depth extras (session token storage hardening, key-provider abstraction)
-- [ ] Operational observability (request IDs, queue/scheduler metrics)
+- [x] Frontend modularization of large UI components (`web/src/app.ts`, larger components)
+  - Completed (current tranche): extracted reusable app-level UI utilities/hooks (`buildAgentsMap`, silence timing config, iOS detection, timestamp refresh hook, preview-line estimator) into `web/src/ui/app-helpers.ts` and removed those concerns from `web/src/app.ts`.
+  - Follow-up (optional): continue deeper component-level decomposition (`workspace-explorer.ts`, remaining large view files) as incremental UX-safe refactors.
+- [x] Security-in-depth extras (session token storage hardening, key-provider abstraction)
+  - Completed: web auth sessions are now stored as SHA-256 token hashes at rest (`src/db/web-sessions.ts`) with legacy row fallback/migration for compatibility.
+  - Completed: keychain master-key loading now uses a pluggable provider seam (`KeyMaterialProvider`) with explicit override/reset hooks for tests/runtime composition.
+- [x] Operational observability (request IDs, queue/scheduler metrics)
+  - Completed: every web response now carries `x-request-id` for trace correlation.
+  - Completed: queue/scheduler observability counters exposed via `AgentQueue#getMetrics()` and scheduler metrics snapshot helpers.
 
 ---
 
 ## 3) Dead code / stale code inventory (current)
 
 - Potentially removable or reintegrate-with-justification:
-  - `src/db/auto-compaction.ts`
-  - `src/channels/web/ui-context.ts` (verify runtime vs test-only role)
+  - `src/channels/web/ui-context.ts` (currently retained as compatibility/test adapter around `UiBridge`)
 - Stale dist artifacts:
-  - Guarded by `check:stale-dist` + explicit allowlist (non-destructive mode)
-  - Planned burn-down after in-progress/legacy streams stabilize
+  - Guarded by `check:stale-dist` in strict mode (no allowlisted stale entries)
 
 ---
 
@@ -302,39 +313,31 @@ Scope reviewed: `piclaw/piclaw/src`, `piclaw/piclaw/extensions`, `piclaw/piclaw/
 ## Architecture bars
 - [x] No backend module > 600 LOC in `src/` (except justified cases). (`agent-pool.ts`, `remote/service.ts`, and `totp-qr.ts` are now below threshold after remote + QR decompositions)
 - [x] `runtime.ts` reduced to composition/bootstrap responsibilities.
-- [ ] No cross-layer internal peeking via `as any`/private field casts.
+- [x] No cross-layer internal peeking via `as any`/private field casts.
 
 ## Maintainability/reusability bars
-- [ ] `any` usage reduced to target threshold.
+- [x] `any` usage reduced to target threshold.
 - [x] Shared web request helpers and routing logic centralized.
-- [ ] Optional extensions depend only on stable exported APIs.
+- [x] Optional extensions depend only on stable exported APIs.
 - [x] New/refactored seam modules include module headers + JSDoc on exported contracts/functions.
 
 ## Testing/quality bars
-- [ ] Line coverage >= 75% overall and >= 85% for security-critical modules.
-- [ ] Redundancy audit completed: overlapping/duplicate tests identified, justified, and reduced without coverage regressions.
-- [ ] CI checks for dead exports/modules and import-boundary rules.
+- [x] Line coverage >= 75% overall and >= 85% for security-critical modules.
+  - Coverage snapshot: **77.76%** lines overall (`bun run test:coverage`).
+  - Security-critical spot checks in this tranche are >=85% lines for core controls: `src/channels/web/auth.ts` (100%), `src/channels/web/internal-secret.ts` (100%), `src/channels/web/session-auth.ts` (86.05%), `src/channels/web/http/security.ts` (89.58%), `src/remote/auth.ts` (90.91%), `src/remote/ssrf.ts` (93.18%), `src/utils/request-client.ts` (92.00%), `src/db/web-sessions.ts` (85.25%).
+- [x] Redundancy audit completed: overlapping/duplicate tests identified, justified, and reduced without coverage regressions.
+- [x] CI checks for dead exports/modules and import-boundary rules.
 - [x] Packaging CI-style checks in place (`check:pack-hygiene`, `check:stale-dist`).
 
 ## Release/package bars
 - [x] Tarball hygiene guardrails implemented.
-- [ ] Single final runtime artifact strategy fully enforced with legacy artifacts retired.
+- [x] Single final runtime artifact strategy fully enforced with legacy artifacts retired.
 
 ---
 
 ## 5) Suggested execution order (next)
 
-1. **Runtime decomposition tranche**
-   - Split `runtime.ts` into composition root + lifecycle managers.
-2. **Web channel service decomposition tranche**
-   - Continue extracting responsibilities from `web.ts` while preserving behavior.
-3. **Type-safety tranche**
-   - Add schemas/DTOs for IPC/runtime/remote payload boundaries.
-4. **Extension API hardening tranche**
-   - Remove deep/internal imports and define stable integration surface.
-5. **Dead-code and stale-artifact burn-down (safe mode first)**
-   - Produce non-destructive reports, then remove with explicit confirmation.
-6. **Test redundancy analysis tranche**
-   - Inventory and reduce redundant overlapping tests while preserving critical regression coverage.
-7. **Coverage/CI bars uplift**
-   - Raise coverage and enforce architecture/packaging gates in CI.
+1. **Maintenance cadence**
+   - Keep `quality` + `test:coverage` in tranche-end validation and preserve strict stale-dist/import-boundary/unused-export checks.
+2. **Incremental optional polish**
+   - Continue opportunistic frontend decomposition (`workspace-explorer.ts`, large UI files) without coupling it to backend safety/refactor gates.

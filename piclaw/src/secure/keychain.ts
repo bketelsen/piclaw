@@ -67,7 +67,12 @@ interface KeychainRow {
   kdf_iterations: number;
 }
 
-function loadKeyMaterial(): Uint8Array {
+/** Pluggable key material source for runtime/tests. */
+export interface KeyMaterialProvider {
+  getKeyMaterial(): Uint8Array;
+}
+
+function readKeyMaterialFromEnv(): Uint8Array {
   let rawKey = process.env.PICLAW_KEYCHAIN_KEY || "";
   const keyFile = process.env.PICLAW_KEYCHAIN_KEY_FILE;
   if (!rawKey && keyFile) {
@@ -77,6 +82,19 @@ function loadKeyMaterial(): Uint8Array {
     throw new Error("Keychain is disabled. Set PICLAW_KEYCHAIN_KEY or PICLAW_KEYCHAIN_KEY_FILE.");
   }
   return encoder.encode(rawKey);
+}
+
+let keyMaterialProvider: KeyMaterialProvider = {
+  getKeyMaterial: readKeyMaterialFromEnv,
+};
+
+function loadKeyMaterial(): Uint8Array {
+  return keyMaterialProvider.getKeyMaterial();
+}
+
+/** Override/reset key material provider for tests and advanced runtime composition. */
+export function setKeyMaterialProviderForTests(provider: KeyMaterialProvider | null): void {
+  keyMaterialProvider = provider ?? { getKeyMaterial: readKeyMaterialFromEnv };
 }
 
 async function deriveAesKey(salt: Uint8Array, iterations: number): Promise<CryptoKey> {

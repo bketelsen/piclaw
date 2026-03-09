@@ -25,6 +25,7 @@
  */
 
 import { extname, resolve } from "path";
+import { createUuid } from "../../utils/ids.js";
 import type { WebChannel } from "../web.js";
 import { rememberWebOrigin } from "./request-origin.js";
 import { handleAgentRoutes } from "./http/dispatch-agent.js";
@@ -81,10 +82,13 @@ export class RequestRouterService {
    * with security headers (CSP, HSTS, X-Frame-Options, etc.).
    */
   async handle(req: Request): Promise<Response> {
+    const requestId = createUuid("req");
     const response = await this.route(req);
     // Determine TLS from the request URL scheme to conditionally add HSTS
     const isTls = req.url.startsWith("https://");
-    return withSecurityHeaders(response, isTls);
+    const secured = withSecurityHeaders(response, isTls);
+    secured.headers.set("x-request-id", requestId);
+    return secured;
   }
 
   /**

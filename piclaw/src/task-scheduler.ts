@@ -44,6 +44,40 @@ export interface SchedulerDeps {
   sendNudge?: (text: string) => Promise<void>;
 }
 
+/** Lightweight runtime metrics for scheduler observability. */
+export interface SchedulerMetrics {
+  polls: number;
+  tasksEnqueued: number;
+  taskRunsStarted: number;
+  taskRunsSucceeded: number;
+  taskRunsFailed: number;
+  lastPollAt: string | null;
+}
+
+const schedulerMetrics: SchedulerMetrics = {
+  polls: 0,
+  tasksEnqueued: 0,
+  taskRunsStarted: 0,
+  taskRunsSucceeded: 0,
+  taskRunsFailed: 0,
+  lastPollAt: null,
+};
+
+/** Return an immutable snapshot of scheduler metrics counters. */
+export function getSchedulerMetrics(): SchedulerMetrics {
+  return { ...schedulerMetrics };
+}
+
+/** Reset scheduler metrics (used by tests to isolate assertions). */
+export function resetSchedulerMetricsForTests(): void {
+  schedulerMetrics.polls = 0;
+  schedulerMetrics.tasksEnqueued = 0;
+  schedulerMetrics.taskRunsStarted = 0;
+  schedulerMetrics.taskRunsSucceeded = 0;
+  schedulerMetrics.taskRunsFailed = 0;
+  schedulerMetrics.lastPollAt = null;
+}
+
 /**
  * Compute the next execution time for a task based on its schedule type:
  *   - cron: parse the expression and return the next occurrence.
@@ -173,6 +207,7 @@ export async function runScheduledTask(task: ScheduledTask, deps: SchedulerDeps)
   if (!fresh || fresh.status !== "active") return;
 
   const start = Date.now();
+  schedulerMetrics.taskRunsStarted += 1;
   let result: string | null = null;
   let error: string | null = null;
 
@@ -230,6 +265,9 @@ export async function runScheduledTask(task: ScheduledTask, deps: SchedulerDeps)
     }
   }
 
+  if (error) schedulerMetrics.taskRunsFailed += 1;
+  else schedulerMetrics.taskRunsSucceeded += 1;
+
   // Record the run in the task_run_logs table.
   logTaskRun({
     task_id: task.id,
@@ -261,10 +299,13 @@ export function startSchedulerLoop(deps: SchedulerDeps): () => void {
   console.log("[scheduler] Started");
   const loop = async () => {
     try {
+      schedulerMetrics.polls += 1;
+      schedulerMetrics.lastPollAt = new Date().toISOString();
       for (const task of getDueTasks()) {
         const cur = getTaskById(task.id);
         if (!cur || cur.status !== "active") continue;
         deps.queue.enqueueTask(cur.id, () => runScheduledTask(cur, deps));
+        schedulerMetrics.tasksEnqueued += 1;
       }
     } catch (e) { console.error("[scheduler]", e); }
     if (!started) return;
