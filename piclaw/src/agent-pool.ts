@@ -282,6 +282,17 @@ export class AgentPool {
     }
   }
 
+  hasProviderModels(provider: string): boolean {
+    return this.modelRegistry.getAll().some((model) => model.provider === provider);
+  }
+
+  registerModelProvider(
+    providerName: string,
+    config: Parameters<ModelRegistry["registerProvider"]>[1]
+  ): void {
+    this.modelRegistry.registerProvider(providerName, config);
+  }
+
   resolveModelInput(input: string): { model?: string; error?: string } {
     return resolveModelLabel(this.modelRegistry, input);
   }

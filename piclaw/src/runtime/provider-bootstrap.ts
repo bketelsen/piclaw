@@ -2,12 +2,32 @@
  * runtime/provider-bootstrap.ts – Optional model provider registration at startup.
  */
 
-import type { AgentPool } from "../agent-pool.js";
+import type { ModelRegistry } from "@mariozechner/pi-coding-agent";
 import {
   getApiProvider,
   streamSimpleAzureOpenAIResponses,
   streamSimpleOpenAICompletions,
 } from "@mariozechner/pi-ai";
+
+export interface ProviderBootstrapAgentPool {
+  hasProviderModels(provider: string): boolean;
+  registerModelProvider(
+    providerName: string,
+    config: Parameters<ModelRegistry["registerProvider"]>[1]
+  ): void;
+}
+
+type ProviderModelConfig = NonNullable<
+  Parameters<ProviderBootstrapAgentPool["registerModelProvider"]>[1]["models"]
+>[number];
+
+type ProviderApi = ProviderModelConfig["api"];
+
+const AZURE_OPENAI_PROVIDER = "azure-openai";
+const AZURE_OPENAI_API: ProviderApi = "azure-openai-responses-mi";
+
+const AZURE_FOUNDRY_PROVIDER = "azure-foundry";
+const AZURE_FOUNDRY_API: ProviderApi = "azure-foundry-openai-completions-mi";
 
 function splitCsv(value: string | undefined): string[] {
   return (value ?? "")
@@ -16,42 +36,61 @@ function splitCsv(value: string | undefined): string[] {
     .filter((v) => v.length > 0);
 }
 
-/** Ensure optional Azure providers are discoverable in /model at startup. */
-export function registerOptionalProviders(agentPool: AgentPool): void {
-  const registry = (agentPool as unknown as { modelRegistry?: any }).modelRegistry;
+function isApiProviderRegistered(api: ProviderApi): boolean {
+  return Boolean(getApiProvider(api));
+}
 
+function buildAzureOpenAiModels(modelIds: string[], modelNames: string[]): ProviderModelConfig[] {
+  return modelIds.map((id: string, idx: number) => ({
+    id,
+    name: modelNames[idx] || `Azure ${id}`,
+    api: AZURE_OPENAI_API,
+    reasoning: true,
+    input: ["text"],
+    contextWindow: 200000,
+    maxTokens: 64000,
+    cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+  }));
+}
+
+function buildAzureFoundryModels(modelIds: string[], modelNames: string[]): ProviderModelConfig[] {
+  return modelIds.map((id: string, idx: number) => ({
+    id,
+    name: modelNames[idx] || `Azure Foundry ${id}`,
+    api: AZURE_FOUNDRY_API,
+    reasoning: false,
+    input: ["text"],
+    contextWindow: 200000,
+    maxTokens: 64000,
+    cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+  }));
+}
+
+/** Ensure optional Azure providers are discoverable in /model at startup. */
+export function registerOptionalProviders(agentPool: ProviderBootstrapAgentPool): void {
   const aoaiToken = process.env.AOAI_API_KEY;
   const aoaiBaseUrl = process.env.AOAI_BASE_URL;
-  if (registry && aoaiToken && aoaiBaseUrl) {
-    const hasAzureModels = registry.getAll?.().some((model: any) => model.provider === "azure-openai");
-    const azureApiRegistered = Boolean(getApiProvider("azure-openai-responses-mi" as any));
+  if (aoaiToken && aoaiBaseUrl) {
+    const hasAzureModels = agentPool.hasProviderModels(AZURE_OPENAI_PROVIDER);
+    const azureApiRegistered = isApiProviderRegistered(AZURE_OPENAI_API);
+
     if (!hasAzureModels) {
       const ids = splitCsv(process.env.AOAI_MODEL_IDS);
       const names = splitCsv(process.env.AOAI_MODEL_NAMES);
       const defaultIds = ["gpt-5-2-codex", "gpt-5-3-codex", "gpt-5-1-codex-mini", "gpt-5-1", "gpt-5-mini"];
       const modelIds = ids.length > 0 ? ids : defaultIds;
-      const models = modelIds.map((id: string, idx: number) => ({
-        id,
-        name: names[idx] || `Azure ${id}`,
-        api: "azure-openai-responses-mi",
-        reasoning: true,
-        input: ["text"],
-        contextWindow: 200000,
-        maxTokens: 64000,
-        cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
-      }));
 
-      registry.registerProvider("azure-openai", {
+      agentPool.registerModelProvider(AZURE_OPENAI_PROVIDER, {
         baseUrl: aoaiBaseUrl,
-        api: "azure-openai-responses-mi",
+        api: AZURE_OPENAI_API,
         apiKey: aoaiToken,
         streamSimple: streamSimpleAzureOpenAIResponses,
-        models,
+        models: buildAzureOpenAiModels(modelIds, names),
       });
     } else if (!azureApiRegistered) {
-      registry.registerProvider("azure-openai", {
+      agentPool.registerModelProvider(AZURE_OPENAI_PROVIDER, {
         baseUrl: aoaiBaseUrl,
-        api: "azure-openai-responses-mi",
+        api: AZURE_OPENAI_API,
         apiKey: aoaiToken,
         streamSimple: streamSimpleAzureOpenAIResponses,
       });
@@ -60,35 +99,26 @@ export function registerOptionalProviders(agentPool: AgentPool): void {
 
   const foundryToken = process.env.FOUNDRY_API_KEY || process.env.AOAI_API_KEY;
   const foundryBaseUrl = process.env.FOUNDRY_BASE_URL;
-  if (registry && foundryToken && foundryBaseUrl) {
-    const hasFoundryModels = registry.getAll?.().some((model: any) => model.provider === "azure-foundry");
-    const foundryApiRegistered = Boolean(getApiProvider("azure-foundry-openai-completions-mi" as any));
+  if (foundryToken && foundryBaseUrl) {
+    const hasFoundryModels = agentPool.hasProviderModels(AZURE_FOUNDRY_PROVIDER);
+    const foundryApiRegistered = isApiProviderRegistered(AZURE_FOUNDRY_API);
+
     if (!hasFoundryModels) {
       const ids = splitCsv(process.env.FOUNDRY_MODEL_IDS);
       const names = splitCsv(process.env.FOUNDRY_MODEL_NAMES);
       const modelIds = ids.length > 0 ? ids : ["mistral-large-3"];
-      const models = modelIds.map((id: string, idx: number) => ({
-        id,
-        name: names[idx] || `Azure Foundry ${id}`,
-        api: "azure-foundry-openai-completions-mi",
-        reasoning: false,
-        input: ["text"],
-        contextWindow: 200000,
-        maxTokens: 64000,
-        cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
-      }));
 
-      registry.registerProvider("azure-foundry", {
+      agentPool.registerModelProvider(AZURE_FOUNDRY_PROVIDER, {
         baseUrl: foundryBaseUrl,
-        api: "azure-foundry-openai-completions-mi",
+        api: AZURE_FOUNDRY_API,
         apiKey: foundryToken,
         streamSimple: streamSimpleOpenAICompletions,
-        models,
+        models: buildAzureFoundryModels(modelIds, names),
       });
     } else if (!foundryApiRegistered) {
-      registry.registerProvider("azure-foundry", {
+      agentPool.registerModelProvider(AZURE_FOUNDRY_PROVIDER, {
         baseUrl: foundryBaseUrl,
-        api: "azure-foundry-openai-completions-mi",
+        api: AZURE_FOUNDRY_API,
         apiKey: foundryToken,
         streamSimple: streamSimpleOpenAICompletions,
       });
