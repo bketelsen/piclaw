@@ -31,6 +31,33 @@ export function useEditorState({ onTabClosed } = {}) {
         });
     }, []);
 
+    // ── Markdown preview state ────────────────────────────────
+    const [previewTabs, setPreviewTabs] = useState(() => new Set());
+
+    const handleTabTogglePreview = useCallback((id) => {
+        setPreviewTabs((prev) => {
+            const next = new Set(prev);
+            if (next.has(id)) {
+                next.delete(id);
+            } else {
+                next.add(id);
+            }
+            return next;
+        });
+    }, []);
+
+    // Clean up preview state when tabs close — declared before tab
+    // action callbacks so it can appear in their dependency arrays
+    // without a temporal dead zone violation.
+    const cleanupPreviewTab = useCallback((id) => {
+        setPreviewTabs((prev) => {
+            if (!prev.has(id)) return prev;
+            const next = new Set(prev);
+            next.delete(id);
+            return next;
+        });
+    }, []);
+
     // ── Tab actions ─────────────────────────────────────────────
 
     /** Open a file in the editor. Creates a tab and sets it active. */
@@ -66,7 +93,7 @@ export function useEditorState({ onTabClosed } = {}) {
             cleanupPreviewTab(activeId);
             onTabClosed?.(activeId);
         }
-    }, [onTabClosed]);
+    }, [onTabClosed, cleanupPreviewTab]);
 
     /** Close a specific tab (from tab strip). */
     const handleTabClose = useCallback((id) => {
@@ -122,31 +149,6 @@ export function useEditorState({ onTabClosed } = {}) {
         if (activeId) {
             window.dispatchEvent(new CustomEvent('workspace-reveal-path', { detail: { path: activeId } }));
         }
-    }, []);
-
-    // ── Markdown preview state ────────────────────────────────
-    const [previewTabs, setPreviewTabs] = useState(() => new Set());
-
-    const handleTabTogglePreview = useCallback((id) => {
-        setPreviewTabs((prev) => {
-            const next = new Set(prev);
-            if (next.has(id)) {
-                next.delete(id);
-            } else {
-                next.add(id);
-            }
-            return next;
-        });
-    }, []);
-
-    // Clean up preview state when tabs close
-    const cleanupPreviewTab = useCallback((id) => {
-        setPreviewTabs((prev) => {
-            if (!prev.has(id)) return prev;
-            const next = new Set(prev);
-            next.delete(id);
-            return next;
-        });
     }, []);
 
     // ── SSE rename sync ─────────────────────────────────────────
