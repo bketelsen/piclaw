@@ -380,7 +380,7 @@ body {
     cursor: pointer;
     user-select: none;
     -webkit-user-select: none;
-    -webkit-user-drag: element;
+    -webkit-user-drag: none;
     white-space: nowrap;
     overflow: hidden;
     border-radius: 3px;
@@ -480,6 +480,7 @@ body {
     color: var(--text-secondary);
     stroke-linecap: round;
     stroke-linejoin: round;
+    -webkit-user-drag: none;
 }
 
 .workspace-node-icon.folder {
@@ -504,6 +505,7 @@ body {
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+    -webkit-user-drag: none;
 }
 
 .workspace-rename-input {
