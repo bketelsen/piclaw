@@ -77,6 +77,13 @@ export function AgentStatus({ status, draft, plan, thought, pendingRequest, inte
     const panelTitle = (label) => label;
     const isLastActivity = Boolean(status?.last_activity || status?.lastActivity);
     const intentKind = intent?.kind || 'info';
+    const intentColor = intentKind === 'warning'
+        ? '#f59e0b'
+        : intentKind === 'error'
+            ? 'var(--danger-color)'
+            : intentKind === 'success'
+                ? 'var(--success-color)'
+                : turnColor;
 
     let content = '';
     const title = status?.title;
@@ -153,15 +160,16 @@ export function AgentStatus({ status, draft, plan, thought, pendingRequest, inte
         <div class="agent-status-panel">
             ${intent && html`
                 <div
-                    class=${`agent-status agent-status-intent agent-status-intent-${intentKind}`}
+                    class="agent-thinking agent-thinking-intent"
                     aria-live="polite"
-                    style=${turnColor ? `--turn-color: ${turnColor};` : ''}
+                    style=${intentColor ? `--turn-color: ${intentColor};` : ''}
                     title=${intent?.detail || ''}
                 >
-                    <span class="agent-status-text">
+                    <div class="agent-thinking-title intent">
+                        ${intentColor && html`<span class=${dotClass} aria-hidden="true"></span>`}
                         ${intent.title}
-                    </span>
-                    ${intent.detail && html`<span class="agent-status-intent-detail">${intent.detail}</span>`}
+                    </div>
+                    ${intent.detail && html`<div class="agent-thinking-body">${intent.detail}</div>`}
                 </div>
             `}
             ${pendingRequest && html`
