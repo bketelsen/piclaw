@@ -105,6 +105,9 @@ Current cycle list (from latest audit):
 12) `channels/web.ts > channels/web/request-router-service.ts > channels/web/http/dispatch-content.ts`
 13) `channels/web.ts > channels/web/request-router-service.ts > channels/web/http/dispatch-shell.ts`
 
+Latest audit at time of close:
+- `bunx madge --circular src/index.ts` now reports no remaining circular dependencies.
+
 ## Updates
 
 ### 2026-03-13
