@@ -287,6 +287,12 @@ export async function getWorkspaceTree(path = '', depth = 2, showHidden = false)
     return request(url);
 }
 
+/** Get the current workspace git branch for the nearest enclosing repo. */
+export async function getWorkspaceBranch(path = '') {
+    const url = `/workspace/branch?path=${encodeURIComponent(path || '')}`;
+    return request(url);
+}
+
 /**
  * Get workspace file preview
  */

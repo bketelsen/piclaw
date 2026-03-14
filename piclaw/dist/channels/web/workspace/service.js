@@ -7,9 +7,9 @@
  * Consumers: web/handlers/workspace.ts creates and uses a WorkspaceService.
  */
 import { WorkspaceFileService } from "./file-service.js";
+import { getWorkspaceGitBranch } from "./git-branch.js";
 import { WorkspaceTreeCache } from "./tree-cache.js";
 import { startWorkspaceWatcher } from "./watcher.js";
-export { createWorkspaceUpdateThrottle } from "./watcher.js";
 /** High-level workspace explorer service combining files, tree, and watcher. */
 export class WorkspaceService {
     treeCache = new WorkspaceTreeCache();
@@ -22,6 +22,16 @@ export class WorkspaceService {
     }
     getRaw(pathParam) {
         return this.fileService.getRaw(pathParam);
+    }
+    getGitBranch(pathParam) {
+        const branch = getWorkspaceGitBranch(pathParam);
+        return {
+            status: 200,
+            body: {
+                branch: branch?.branch || null,
+                repo_path: branch?.repoPath || null,
+            },
+        };
     }
     attachFile(pathParam) {
         return this.fileService.attachFile(pathParam);

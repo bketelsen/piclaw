@@ -48,6 +48,13 @@ export function handleWorkspaceFile(req: Request): Response {
   return jsonResponse(result.body, result.status);
 }
 
+/** Handle GET /workspace/branch: return the nearest enclosing git branch, if any. */
+export function handleWorkspaceBranch(req: Request): Response {
+  const url = new URL(req.url);
+  const result = workspaceService.getGitBranch(url.searchParams.get("path"));
+  return jsonResponse(result.body, result.status);
+}
+
 /** Handle PUT /workspace/file: update file contents. */
 export async function handleWorkspaceUpdate(req: Request): Promise<Response> {
   let data: { path?: string; content?: string };

@@ -4,6 +4,7 @@
 
 import {
   handleWorkspaceAttach,
+  handleWorkspaceBranch,
   handleWorkspaceCreate,
   handleWorkspaceDelete,
   handleWorkspaceDownload,
@@ -21,6 +22,7 @@ export interface WorkspaceDispatchChannel {
   handleWorkspaceVisibility(req: Request): Promise<Response>;
   handleWorkspaceTree?(req: Request): Response;
   handleWorkspaceFile?(req: Request): Response;
+  handleWorkspaceBranch?(req: Request): Response;
   handleWorkspaceUpdate?(req: Request): Promise<Response>;
   handleWorkspaceDelete?(req: Request): Response;
   handleWorkspaceRaw?(req: Request): Response;
@@ -46,6 +48,10 @@ export async function handleWorkspaceRoutes(
 
   if (req.method === "GET" && pathname === "/workspace/file") {
     return channel.handleWorkspaceFile?.(req) ?? handleWorkspaceFile(req);
+  }
+
+  if (req.method === "GET" && pathname === "/workspace/branch") {
+    return channel.handleWorkspaceBranch?.(req) ?? handleWorkspaceBranch(req);
   }
 
   if (req.method === "PUT" && pathname === "/workspace/file") {

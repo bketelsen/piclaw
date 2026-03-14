@@ -27,6 +27,12 @@ export function handleWorkspaceFile(req) {
     const result = workspaceService.getFile(url.searchParams.get("path"), url.searchParams.get("max"), url.searchParams.get("mode"));
     return jsonResponse(result.body, result.status);
 }
+/** Handle GET /workspace/branch: return the nearest enclosing git branch, if any. */
+export function handleWorkspaceBranch(req) {
+    const url = new URL(req.url);
+    const result = workspaceService.getGitBranch(url.searchParams.get("path"));
+    return jsonResponse(result.body, result.status);
+}
 /** Handle PUT /workspace/file: update file contents. */
 export async function handleWorkspaceUpdate(req) {
     let data;

@@ -13,6 +13,7 @@ describe("web http workspace dispatch", () => {
     const channel = {
       handleWorkspaceTree: () => new Response("tree"),
       handleWorkspaceFile: () => new Response("file"),
+      handleWorkspaceBranch: () => new Response("branch"),
       handleWorkspaceUpdate: async () => new Response("update", { status: 201 }),
       handleWorkspaceDelete: () => new Response("delete"),
       handleWorkspaceRaw: () => new Response("raw"),
@@ -27,6 +28,9 @@ describe("web http workspace dispatch", () => {
 
     const fileReq = new Request("https://example.com/workspace/file", { method: "GET" });
     expect(await (await handleWorkspaceRoutes(channel, fileReq, "/workspace/file"))?.text()).toBe("file");
+
+    const branchReq = new Request("https://example.com/workspace/branch", { method: "GET" });
+    expect(await (await handleWorkspaceRoutes(channel, branchReq, "/workspace/branch"))?.text()).toBe("branch");
 
     const updateReq = new Request("https://example.com/workspace/file", { method: "PUT" });
     expect((await handleWorkspaceRoutes(channel, updateReq, "/workspace/file"))?.status).toBe(201);

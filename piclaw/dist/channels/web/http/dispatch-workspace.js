@@ -1,7 +1,7 @@
 /**
  * web/http/dispatch-workspace.ts – Workspace route dispatch helpers.
  */
-import { handleWorkspaceAttach, handleWorkspaceCreate, handleWorkspaceDelete, handleWorkspaceDownload, handleWorkspaceFile, handleWorkspaceRaw, handleWorkspaceMove, handleWorkspaceRename, handleWorkspaceTree, handleWorkspaceUpdate, handleWorkspaceUpload, } from "../handlers/workspace.js";
+import { handleWorkspaceAttach, handleWorkspaceBranch, handleWorkspaceCreate, handleWorkspaceDelete, handleWorkspaceDownload, handleWorkspaceFile, handleWorkspaceRaw, handleWorkspaceMove, handleWorkspaceRename, handleWorkspaceTree, handleWorkspaceUpdate, handleWorkspaceUpload, } from "../handlers/workspace.js";
 /**
  * Handle /workspace routes when the request matches; otherwise return null.
  */
@@ -11,6 +11,9 @@ export async function handleWorkspaceRoutes(channel, req, pathname) {
     }
     if (req.method === "GET" && pathname === "/workspace/file") {
         return channel.handleWorkspaceFile?.(req) ?? handleWorkspaceFile(req);
+    }
+    if (req.method === "GET" && pathname === "/workspace/branch") {
+        return channel.handleWorkspaceBranch?.(req) ?? handleWorkspaceBranch(req);
     }
     if (req.method === "PUT" && pathname === "/workspace/file") {
         return await (channel.handleWorkspaceUpdate?.(req) ?? handleWorkspaceUpdate(req));

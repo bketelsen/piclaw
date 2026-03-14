@@ -42,7 +42,7 @@ test("workspace tree cache reuses responses briefly", async () => {
 
 test("workspace update throttle delays bursts", async () => {
   const { createWorkspaceUpdateThrottle } = await import(
-    "../../../src/channels/web/workspace/service.js"
+    "../../../src/channels/web/workspace/watcher.js"
   );
 
   const updates: Array<Array<{ path: string }>> = [];
