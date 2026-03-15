@@ -239,7 +239,7 @@ export async function handleAgentMessage(channel, req, pathname, chatJid, defaul
             setChatCursor(chatJid, interaction.timestamp);
         }
     };
-    const withAgentProfile = createAgentProfileBuilder(ASSISTANT_NAME, resolveAvatarUrl("agent", ASSISTANT_AVATAR), USER_NAME || null, resolveAvatarUrl("user", USER_AVATAR), USER_AVATAR_BACKGROUND || null);
+    const withAgentProfile = createAgentProfileBuilder(chatJid, ASSISTANT_NAME, resolveAvatarUrl("agent", ASSISTANT_AVATAR), USER_NAME || null, resolveAvatarUrl("user", USER_AVATAR), USER_AVATAR_BACKGROUND || null);
     const emitCommandStatus = (payload) => {
         channel.updateAgentStatus(chatJid, payload);
         channel.broadcastEvent("agent_status", withAgentProfile(payload));
@@ -440,7 +440,7 @@ export async function handleAgentMessage(channel, req, pathname, chatJid, defaul
         `(key=chat:${chatJid}:${interaction.id})`);
     channel.queue.enqueue(async () => {
         await processChat(channel, chatJid, agentId, interaction.data?.thread_id ?? interaction.id);
-    }, `chat:${chatJid}:${interaction.id}`);
+    }, `chat:${chatJid}:${interaction.id}`, `chat:${chatJid}`);
     return channel.json({ user_message: interaction, thread_id: threadId }, 201);
 }
 /** Process a chat message: detect commands, queue agent run, or store post. */
@@ -531,7 +531,7 @@ export async function processChat(channel, chatJid, agentId, threadRootId) {
     const DRAFT_PREVIEW_LINES = 8;
     const PREVIEW_MAX_CHARS_PER_LINE = 160;
     const turnId = createUuid("turn");
-    const withAgentProfile = createAgentProfileBuilder(ASSISTANT_NAME, resolveAvatarUrl("agent", ASSISTANT_AVATAR), USER_NAME || null, resolveAvatarUrl("user", USER_AVATAR), USER_AVATAR_BACKGROUND || null);
+    const withAgentProfile = createAgentProfileBuilder(chatJid, ASSISTANT_NAME, resolveAvatarUrl("agent", ASSISTANT_AVATAR), USER_NAME || null, resolveAvatarUrl("user", USER_AVATAR), USER_AVATAR_BACKGROUND || null);
     const emitter = createAgentEventEmitter(channel, withAgentProfile);
     const trackedEmitter = {
         ...emitter,

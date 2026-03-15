@@ -71,6 +71,8 @@ export interface InteractionData {
 export interface InteractionRow {
   /** Auto-increment primary key. */
   id: number;
+  /** Optional logical chat identifier for branch-aware web consumers. */
+  chat_jid?: string;
   /** ISO-8601 timestamp of when the interaction was recorded. */
   timestamp: string;
   /** The parsed JSON payload (see InteractionData). */

@@ -55,11 +55,11 @@ export function getDataRateLimitRule(method: string, pathname: string): DataRate
       message: "Too many queued-message actions. Slow down.",
     };
   }
-  if (method === "POST" && pathname === "/agent/branch-fork") {
+  if (method === "POST" && (pathname === "/agent/branch-fork" || pathname === "/agent/branch-rename" || pathname === "/agent/branch-prune")) {
     return {
       bucket: "data/agent_branch",
       limit: DATA_AGENT_BRANCH_LIMIT,
-      message: "Too many branch forks. Slow down.",
+      message: "Too many branch actions. Slow down.",
     };
   }
   if (method === "POST" && pathname === "/agent/peer-message") {

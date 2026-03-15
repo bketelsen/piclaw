@@ -10,7 +10,7 @@ export interface UiEndpointsContext {
   getWorkspaceShowHidden(): boolean;
   setWorkspaceShowHidden(value: boolean): void;
   setPanelExpanded(turnId: string, panel: "thought" | "draft", expanded: boolean): void;
-  handleUiResponse(requestId: string, outcome: unknown): { status: "ok" | "unknown_request" };
+  handleUiResponse(requestId: string, outcome: unknown, chatJid?: string | null): { status: "ok" | "unknown_request" };
 }
 
 /** POST /workspace/visibility helper. */
@@ -61,7 +61,7 @@ export async function handleThoughtVisibilityRequest(req: Request, ctx: UiEndpoi
 
 /** POST /agent/respond helper. */
 export async function handleAgentRespondRequest(req: Request, ctx: UiEndpointsContext): Promise<Response> {
-  let data: { request_id?: string; outcome?: unknown };
+  let data: { request_id?: string; outcome?: unknown; chat_jid?: string };
   try {
     data = await req.json();
   } catch {
@@ -75,6 +75,6 @@ export async function handleAgentRespondRequest(req: Request, ctx: UiEndpointsCo
     return ctx.json({ error: "request_id too long" }, 400);
   }
 
-  const status = ctx.handleUiResponse(data.request_id, data.outcome);
+  const status = ctx.handleUiResponse(data.request_id, data.outcome, data.chat_jid);
   return ctx.json(status);
 }

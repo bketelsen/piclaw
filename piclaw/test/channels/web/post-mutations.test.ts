@@ -56,8 +56,12 @@ describe("web post mutation helpers", () => {
   test("handleUpdatePostRequest updates thread id and broadcasts", async () => {
     let setThread: { messageId: number; threadId: number } | null = null;
     let broadcasted = false;
+    let usedChatJid: string | null = null;
     const ctx = createContext({
-      replaceMessageContent: () => interaction(44),
+      replaceMessageContent: (chatJid) => {
+        usedChatJid = chatJid;
+        return interaction(44);
+      },
       setThreadId: (messageId, threadId) => {
         setThread = { messageId, threadId };
       },
@@ -66,7 +70,7 @@ describe("web post mutation helpers", () => {
       },
     });
 
-    const req = new Request("https://example.com/post/44", {
+    const req = new Request("https://example.com/post/44?chat_jid=web%3Abranch", {
       method: "PATCH",
       body: JSON.stringify({ content: "updated", thread_id: 7 }),
       headers: { "Content-Type": "application/json" },
@@ -75,6 +79,7 @@ describe("web post mutation helpers", () => {
     const res = await handleUpdatePostRequest(req, 44, ctx);
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ ok: true, id: 44 });
+    expect(usedChatJid).toBe("web:branch");
     expect(setThread).toEqual({ messageId: 44, threadId: 7 });
     expect(broadcasted).toBeTrue();
   });
@@ -90,10 +95,12 @@ describe("web post mutation helpers", () => {
     expect(await missingRes.json()).toEqual({ error: "Missing content" });
 
     let usedThreadId: number | undefined;
+    let usedChatJid: string | null = null;
     let broadcasted = false;
     const ctx = createContext({
       lastCommandInteractionId: 99,
-      storeMessage: (_chatJid, _content, _isBot, _mediaIds, options) => {
+      storeMessage: (chatJid, _content, _isBot, _mediaIds, options) => {
+        usedChatJid = chatJid;
         usedThreadId = options?.threadId;
         return interaction(55);
       },
@@ -102,7 +109,7 @@ describe("web post mutation helpers", () => {
       },
     });
 
-    const okReq = new Request("https://example.com/internal/post", {
+    const okReq = new Request("https://example.com/internal/post?chat_jid=web%3Abranch", {
       method: "POST",
       body: JSON.stringify({ content: "hello" }),
       headers: { "Content-Type": "application/json" },
@@ -111,6 +118,7 @@ describe("web post mutation helpers", () => {
 
     expect(okRes.status).toBe(201);
     expect(await okRes.json()).toEqual({ ok: true, id: 55 });
+    expect(usedChatJid).toBe("web:branch");
     expect(usedThreadId).toBe(99);
     expect(broadcasted).toBeTrue();
   });

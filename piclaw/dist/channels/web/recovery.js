@@ -76,7 +76,7 @@ export function recoverInflightRuns(ctx, store = defaultStore) {
             // single queued task for the chat instead of racing duplicate replays.
             ctx.enqueue(async () => {
                 await ctx.processChat(inflight.chatJid, ctx.defaultAgentId);
-            }, `resume:${inflight.chatJid}`);
+            }, `resume:${inflight.chatJid}`, `chat:${inflight.chatJid}`);
         }
     }
 }
@@ -97,6 +97,6 @@ export function resumePendingChats(ctx, chatJid, store = defaultStore) {
         console.log(`[web] Queuing resume for ${jid}`);
         ctx.enqueue(async () => {
             await ctx.processChat(jid, ctx.defaultAgentId);
-        }, `resume:${jid}`);
+        }, `resume:${jid}`, `chat:${jid}`);
     }
 }

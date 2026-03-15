@@ -232,6 +232,142 @@ test("web channel relays peer messages into another active chat", async () => {
   expect(enqueuedKeys.some((key) => key.startsWith("chat:web:target:"))).toBe(true);
 });
 
+test("web channel lists known chat branches for a root chat", async () => {
+  const ws = createTempWorkspace("piclaw-web-channel-");
+  cleanupWorkspace = ws.cleanup;
+  restoreEnv = setEnv({ PICLAW_WORKSPACE: ws.workspace, PICLAW_STORE: ws.store, PICLAW_DATA: ws.data });
+
+  const db = await import("../../../src/db.js");
+  db.initDatabase();
+  db.getDb().exec("DELETE FROM message_media; DELETE FROM messages; DELETE FROM chats; DELETE FROM chat_cursors; DELETE FROM chat_branches;");
+  db.storeChatMetadata("web:default", new Date().toISOString(), "Default");
+  const root = db.getChatBranchByChatJid("web:default");
+  db.storeChatMetadata("web:default:branch:1", new Date().toISOString(), "Research");
+  db.ensureChatBranch({
+    chat_jid: "web:default:branch:1",
+    root_chat_jid: "web:default",
+    parent_branch_id: root?.branch_id ?? null,
+    agent_name: "research",
+    display_name: "Research",
+  });
+
+  const webMod = await import("../../../src/channels/web.js");
+  const web = new (webMod.WebChannel as any)({
+    queue: { enqueue: () => {} },
+    agentPool: {
+      listActiveChats: () => [],
+      listKnownChats: (rootChatJid?: string | null) => db.listChatBranches(rootChatJid || null).map((branch) => ({
+        branch_id: branch.branch_id,
+        chat_jid: branch.chat_jid,
+        root_chat_jid: branch.root_chat_jid,
+        parent_branch_id: branch.parent_branch_id,
+        agent_name: branch.agent_name,
+        display_name: branch.display_name,
+        session_id: null,
+        session_name: null,
+        model: null,
+        is_active: false,
+        has_side_session: false,
+      })),
+      getContextUsageForChat: async () => null,
+    },
+  });
+
+  const res = await (web as any).handleRequest(new Request("http://test/agent/branches?root_chat_jid=web%3Adefault"));
+  expect(res.status).toBe(200);
+  const json = await res.json();
+  expect(json.chats).toHaveLength(2);
+  expect(json.chats.map((chat: any) => chat.chat_jid)).toEqual(["web:default", "web:default:branch:1"]);
+});
+
+test("web channel renames a registry-backed chat branch", async () => {
+  const ws = createTempWorkspace("piclaw-web-channel-");
+  cleanupWorkspace = ws.cleanup;
+  restoreEnv = setEnv({ PICLAW_WORKSPACE: ws.workspace, PICLAW_STORE: ws.store, PICLAW_DATA: ws.data });
+
+  const db = await import("../../../src/db.js");
+  db.initDatabase();
+  db.getDb().exec("DELETE FROM message_media; DELETE FROM messages; DELETE FROM chats; DELETE FROM chat_cursors; DELETE FROM chat_branches;");
+  db.storeChatMetadata("web:default", new Date().toISOString(), "Default");
+  db.ensureChatBranch({
+    chat_jid: "web:default:branch:1",
+    root_chat_jid: "web:default",
+    agent_name: "research",
+    display_name: "Research",
+  });
+
+  const webMod = await import("../../../src/channels/web.js");
+  const web = new (webMod.WebChannel as any)({
+    queue: { enqueue: () => {} },
+    agentPool: {
+      listActiveChats: () => [],
+      renameChatBranch: async (chatJid: string, options: { agentName?: string | null; displayName?: string | null }) => db.renameChatBranchIdentity({
+        chat_jid: chatJid,
+        ...(options.agentName !== undefined ? { agent_name: options.agentName } : {}),
+        ...(options.displayName !== undefined ? { display_name: options.displayName } : {}),
+      }),
+      getContextUsageForChat: async () => null,
+    },
+  });
+
+  const req = new Request("http://test/agent/branch-rename", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      chat_jid: "web:default:branch:1",
+      agent_name: "research-lead",
+      display_name: "Research Lead",
+    }),
+  });
+
+  const res = await (web as any).handleRequest(req);
+  expect(res.status).toBe(200);
+  const json = await res.json();
+  expect(json.branch.agent_name).toBe("research-lead");
+  expect(json.branch.display_name).toBe("Research Lead");
+  expect(db.getChatBranchByAgentName("research-lead")?.chat_jid).toBe("web:default:branch:1");
+});
+
+test("web channel prunes a registry-backed chat branch", async () => {
+  const ws = createTempWorkspace("piclaw-web-channel-");
+  cleanupWorkspace = ws.cleanup;
+  restoreEnv = setEnv({ PICLAW_WORKSPACE: ws.workspace, PICLAW_STORE: ws.store, PICLAW_DATA: ws.data });
+
+  const db = await import("../../../src/db.js");
+  db.initDatabase();
+  db.getDb().exec("DELETE FROM message_media; DELETE FROM messages; DELETE FROM chats; DELETE FROM chat_cursors; DELETE FROM chat_branches;");
+  db.storeChatMetadata("web:default", new Date().toISOString(), "Default");
+  db.ensureChatBranch({
+    chat_jid: "web:default:branch:1",
+    root_chat_jid: "web:default",
+    agent_name: "research",
+    display_name: "Research",
+  });
+
+  const webMod = await import("../../../src/channels/web.js");
+  const web = new (webMod.WebChannel as any)({
+    queue: { enqueue: () => {} },
+    agentPool: {
+      listActiveChats: () => [],
+      pruneChatBranch: async (chatJid: string) => db.archiveChatBranch(chatJid),
+      getContextUsageForChat: async () => null,
+    },
+  });
+
+  const req = new Request("http://test/agent/branch-prune", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ chat_jid: "web:default:branch:1" }),
+  });
+
+  const res = await (web as any).handleRequest(req);
+  expect(res.status).toBe(200);
+  const json = await res.json();
+  expect(json.branch.chat_jid).toBe("web:default:branch:1");
+  expect(json.branch.archived_at).toBeTruthy();
+  expect(db.listChatBranches("web:default").map((chat: any) => chat.chat_jid)).toEqual(["web:default"]);
+});
+
 test("web channel resolves peer relay by target agent name", async () => {
   const ws = createTempWorkspace("piclaw-web-channel-");
   cleanupWorkspace = ws.cleanup;

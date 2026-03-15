@@ -157,7 +157,7 @@ export async function runMessageLoop(deps: MessageLoopDeps): Promise<void> {
           deps.queue.enqueue(async () => {
             const ok = await deps.processMessages(chatJid);
             if (!ok) throw new Error(`Agent processing failed for ${chatJid}`);
-          }, `chat:${chatJid}`);
+          }, `chat:${chatJid}`, `chat:${chatJid}`);
         }
       }
     } catch (err) {

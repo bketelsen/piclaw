@@ -13,6 +13,7 @@ import { getTestWorkspace, setEnv } from "../../helpers.js";
 
 // ── Post content length validation ──
 import { parsePostPayload } from "../../../src/channels/web/posts-service.js";
+import { createAgentProfileBuilder } from "../../../src/channels/web/agent-utils.js";
 
 describe("parsePostPayload", () => {
   test("rejects content exceeding 100 KB", () => {
@@ -189,7 +190,7 @@ describe("MediaService.createFromFile", () => {
 });
 
 // ── SSE client cap ──
-import { handleSse, type SseClientContainer, type PendingClient } from "../../../src/channels/web/sse.js";
+import { broadcastEvent, handleSse, requiresChatScopedDelivery, type SseClientContainer, type PendingClient } from "../../../src/channels/web/sse.js";
 
 describe("SSE client cap", () => {
   test("rejects connections when at capacity (50)", () => {
@@ -226,6 +227,72 @@ describe("SSE client cap", () => {
     for (const client of channel.clients) {
       clearInterval(client.heartbeat);
     }
+  });
+
+  test("broadcastEvent filters chat-scoped SSE events per subscribed chat", () => {
+    const seenA: Uint8Array[] = [];
+    const seenB: Uint8Array[] = [];
+    const seenGlobal: Uint8Array[] = [];
+    const channel: SseClientContainer = {
+      clients: new Set<PendingClient>([
+        { controller: { enqueue: (bytes: Uint8Array) => { seenA.push(bytes); } } as any, heartbeat: setTimeout(() => {}, 0) as any, chatJid: "web:a" },
+        { controller: { enqueue: (bytes: Uint8Array) => { seenB.push(bytes); } } as any, heartbeat: setTimeout(() => {}, 0) as any, chatJid: "web:b" },
+        { controller: { enqueue: (bytes: Uint8Array) => { seenGlobal.push(bytes); } } as any, heartbeat: setTimeout(() => {}, 0) as any, chatJid: null },
+      ]),
+    };
+
+    broadcastEvent(channel, "agent_status", { chat_jid: "web:a", type: "thinking" });
+
+    expect(seenA.length).toBe(1);
+    expect(seenB.length).toBe(0);
+    expect(seenGlobal.length).toBe(1);
+
+    for (const client of channel.clients) {
+      clearTimeout(client.heartbeat);
+    }
+  });
+
+  test("broadcastEvent drops chat-scoped events that omit chat_jid", () => {
+    const seen: Uint8Array[] = [];
+    const channel: SseClientContainer = {
+      clients: new Set<PendingClient>([
+        { controller: { enqueue: (bytes: Uint8Array) => { seen.push(bytes); } } as any, heartbeat: setTimeout(() => {}, 0) as any, chatJid: "web:a" },
+      ]),
+    };
+
+    expect(requiresChatScopedDelivery("agent_status")).toBe(true);
+    broadcastEvent(channel, "agent_status", { type: "thinking" });
+    expect(seen.length).toBe(0);
+
+    for (const client of channel.clients) {
+      clearTimeout(client.heartbeat);
+    }
+  });
+
+  test("broadcastEvent still delivers explicitly global events without chat_jid", () => {
+    const seen: Uint8Array[] = [];
+    const channel: SseClientContainer = {
+      clients: new Set<PendingClient>([
+        { controller: { enqueue: (bytes: Uint8Array) => { seen.push(bytes); } } as any, heartbeat: setTimeout(() => {}, 0) as any, chatJid: "web:a" },
+      ]),
+    };
+
+    expect(requiresChatScopedDelivery("workspace_update")).toBe(false);
+    broadcastEvent(channel, "workspace_update", { updates: [] });
+    expect(seen.length).toBe(1);
+
+    for (const client of channel.clients) {
+      clearTimeout(client.heartbeat);
+    }
+  });
+
+  test("createAgentProfileBuilder stamps chat_jid onto streamed agent payloads", () => {
+    const withProfile = createAgentProfileBuilder("web:branch-a", "Pi");
+    const payload = withProfile({ type: "thinking", turn_id: "turn-1" });
+
+    expect(payload.chat_jid).toBe("web:branch-a");
+    expect(payload.agent_name).toBe("Pi");
+    expect(payload.turn_id).toBe("turn-1");
   });
 
   test("accepts connection at 49 clients (below cap)", () => {
@@ -421,6 +488,35 @@ describe("CSRF origin checks", () => {
     expect(reached).toBe(false);
   });
 
+  test("auth-gates /agent/branches before route dispatch", async () => {
+    let reached = false;
+    class AuthChannel extends StubChannel {
+      authGateway = {
+        isAuthEnabled: () => true,
+        isInternalSecretEnabled: () => false,
+        verifyInternalSecret: () => false,
+        isAuthenticated: () => false,
+      };
+      async handleAgentBranches() {
+        reached = true;
+        return this.json({ ok: true }, 200);
+      }
+    }
+
+    const router = new RequestRouterService(new AuthChannel() as any);
+    const req = new Request("http://localhost/agent/branches?root_chat_jid=web:default", {
+      method: "GET",
+      headers: {
+        Host: "localhost",
+      },
+    });
+
+    const res = await router.handle(req);
+    expect(res.status).toBe(302);
+    expect(res.headers.get("Location")).toBe("/login");
+    expect(reached).toBe(false);
+  });
+
   test("auth-gates /agent/branch-fork before route dispatch", async () => {
     let reached = false;
     class AuthChannel extends StubChannel {
@@ -445,6 +541,68 @@ describe("CSRF origin checks", () => {
         "Content-Type": "application/json",
       },
       body: JSON.stringify({ source_chat_jid: "web:default" }),
+    });
+
+    const res = await router.handle(req);
+    expect(res.status).toBe(401);
+    expect(reached).toBe(false);
+  });
+
+  test("auth-gates /agent/branch-rename before route dispatch", async () => {
+    let reached = false;
+    class AuthChannel extends StubChannel {
+      authGateway = {
+        isAuthEnabled: () => true,
+        isInternalSecretEnabled: () => false,
+        verifyInternalSecret: () => false,
+        isAuthenticated: () => false,
+      };
+      async handleAgentBranchRename() {
+        reached = true;
+        return this.json({ ok: true }, 200);
+      }
+    }
+
+    const router = new RequestRouterService(new AuthChannel() as any);
+    const req = new Request("http://localhost/agent/branch-rename", {
+      method: "POST",
+      headers: {
+        Origin: "http://localhost",
+        Host: "localhost",
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ chat_jid: "web:default", agent_name: "renamed" }),
+    });
+
+    const res = await router.handle(req);
+    expect(res.status).toBe(401);
+    expect(reached).toBe(false);
+  });
+
+  test("auth-gates /agent/branch-prune before route dispatch", async () => {
+    let reached = false;
+    class AuthChannel extends StubChannel {
+      authGateway = {
+        isAuthEnabled: () => true,
+        isInternalSecretEnabled: () => false,
+        verifyInternalSecret: () => false,
+        isAuthenticated: () => false,
+      };
+      async handleAgentBranchPrune() {
+        reached = true;
+        return this.json({ ok: true }, 200);
+      }
+    }
+
+    const router = new RequestRouterService(new AuthChannel() as any);
+    const req = new Request("http://localhost/agent/branch-prune", {
+      method: "POST",
+      headers: {
+        Origin: "http://localhost",
+        Host: "localhost",
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ chat_jid: "web:default:branch:1" }),
     });
 
     const res = await router.handle(req);

@@ -26,7 +26,7 @@ export interface ChatRunControlStore {
 /** Runtime callbacks required to resume a queued chat run. */
 export interface ResumeChatContext {
   defaultAgentId: string;
-  enqueue(task: () => Promise<void>, key: string): void;
+  enqueue(task: () => Promise<void>, key: string, laneKey?: string): void;
   processChat(chatJid: string, agentId: string, threadRootId?: number | null): Promise<void>;
   getChatCursor(chatJid: string): string;
 }
@@ -63,7 +63,7 @@ export function resumeChat(
   const frontier = threadRootId ?? ctx.getChatCursor(chatJid) ?? "next";
   ctx.enqueue(async () => {
     await ctx.processChat(chatJid, ctx.defaultAgentId, threadRootId ?? undefined);
-  }, `resume:${chatJid}:${String(frontier)}`);
+  }, `resume:${chatJid}:${String(frontier)}`, `chat:${chatJid}`);
 }
 
 /** Skip the failed cursor marker after a model switch to avoid replay loops. */

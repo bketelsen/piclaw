@@ -91,7 +91,7 @@ export interface UiEndpointsContextDeps extends JsonLike {
   getWorkspaceShowHidden(): boolean;
   setWorkspaceShowHidden(value: boolean): void;
   setPanelExpanded(turnId: string, panel: "thought" | "draft", expanded: boolean): void;
-  handleUiResponse(requestId: string, outcome: unknown): { status: "ok" | "unknown_request" };
+  handleUiResponse(requestId: string, outcome: unknown, chatJid?: string | null): { status: "ok" | "unknown_request" };
 }
 
 /** Build the UI endpoint context from live channel dependencies. */

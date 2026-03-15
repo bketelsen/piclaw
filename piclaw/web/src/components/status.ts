@@ -235,7 +235,7 @@ export function AgentStatus({ status, draft, plan, thought, pendingRequest, inte
 export function AgentRequestModal({ request, onRespond }) {
     if (!request) return null;
 
-    const { request_id, tool_call, options } = request;
+    const { request_id, tool_call, options, chat_jid } = request;
     const title = tool_call?.title || 'Agent Request';
     const kind = tool_call?.kind || 'other';
 
@@ -255,7 +255,7 @@ export function AgentRequestModal({ request, onRespond }) {
 
     const handleResponse = async (outcome) => {
         try {
-            await respondToAgentRequest(request_id, outcome);
+            await respondToAgentRequest(request_id, outcome, chat_jid || null);
             onRespond();
         } catch (e) {
             console.error('Failed to respond to agent request:', e);
@@ -267,7 +267,7 @@ export function AgentRequestModal({ request, onRespond }) {
             // Add to whitelist with the exact title
             await addToWhitelist(title, `Auto-approved: ${title}`);
             // Then approve this request
-            await respondToAgentRequest(request_id, 'approved');
+            await respondToAgentRequest(request_id, 'approved', chat_jid || null);
             onRespond();
         } catch (e) {
             console.error('Failed to add to whitelist:', e);

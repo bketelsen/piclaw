@@ -57,13 +57,16 @@ function createSchema(database) {
       chat_jid TEXT NOT NULL UNIQUE,
       root_chat_jid TEXT NOT NULL,
       parent_branch_id TEXT,
-      agent_name TEXT NOT NULL UNIQUE,
+      agent_name TEXT NOT NULL,
       display_name TEXT,
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL,
       archived_at TEXT,
       FOREIGN KEY (chat_jid) REFERENCES chats(jid)
     );
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_chat_branches_agent_name_active_unique
+      ON chat_branches(agent_name)
+      WHERE archived_at IS NULL;
     CREATE INDEX IF NOT EXISTS idx_chat_branches_root_chat_jid ON chat_branches(root_chat_jid);
     CREATE INDEX IF NOT EXISTS idx_chat_branches_parent_branch_id ON chat_branches(parent_branch_id);
     CREATE INDEX IF NOT EXISTS idx_chat_branches_archived_at ON chat_branches(archived_at);
@@ -448,6 +451,45 @@ function ensureWebSessionColumns(database) {
         }
     }
 }
+function ensureChatBranchConstraints(database) {
+    const tableRow = database.prepare("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'chat_branches'").get();
+    const tableSql = String(tableRow?.sql || "");
+    const hasInlineAgentNameUnique = /agent_name\s+TEXT\s+NOT\s+NULL\s+UNIQUE/i.test(tableSql);
+    if (hasInlineAgentNameUnique) {
+        database.transaction(() => {
+            database.exec(`
+        CREATE TABLE chat_branches__migrated (
+          branch_id TEXT PRIMARY KEY,
+          chat_jid TEXT NOT NULL UNIQUE,
+          root_chat_jid TEXT NOT NULL,
+          parent_branch_id TEXT,
+          agent_name TEXT NOT NULL,
+          display_name TEXT,
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL,
+          archived_at TEXT,
+          FOREIGN KEY (chat_jid) REFERENCES chats(jid)
+        );
+        INSERT INTO chat_branches__migrated (
+          branch_id, chat_jid, root_chat_jid, parent_branch_id, agent_name, display_name, created_at, updated_at, archived_at
+        )
+        SELECT
+          branch_id, chat_jid, root_chat_jid, parent_branch_id, agent_name, display_name, created_at, updated_at, archived_at
+        FROM chat_branches;
+        DROP TABLE chat_branches;
+        ALTER TABLE chat_branches__migrated RENAME TO chat_branches;
+      `);
+        })();
+    }
+    database.exec(`
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_chat_branches_agent_name_active_unique
+      ON chat_branches(agent_name)
+      WHERE archived_at IS NULL;
+    CREATE INDEX IF NOT EXISTS idx_chat_branches_root_chat_jid ON chat_branches(root_chat_jid);
+    CREATE INDEX IF NOT EXISTS idx_chat_branches_parent_branch_id ON chat_branches(parent_branch_id);
+    CREATE INDEX IF NOT EXISTS idx_chat_branches_archived_at ON chat_branches(archived_at);
+  `);
+}
 /**
  * Add newer per-chat state columns to chat_cursors for databases created
  * before they were introduced. ALTER TABLE ADD COLUMN is safe to run
@@ -556,6 +598,7 @@ export function initDatabase() {
     db.exec("PRAGMA busy_timeout = 5000;");
     db.exec("PRAGMA secure_delete = ON;");
     createSchema(db);
+    ensureChatBranchConstraints(db);
     ensureMessageColumns(db);
     ensureScheduledTaskColumns(db);
     ensureWebSessionColumns(db);

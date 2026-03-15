@@ -307,6 +307,7 @@ export async function handleAgentMessage(
   };
 
   const withAgentProfile = createAgentProfileBuilder(
+    chatJid,
     ASSISTANT_NAME,
     resolveAvatarUrl("agent", ASSISTANT_AVATAR),
     USER_NAME || null,
@@ -557,7 +558,7 @@ export async function handleAgentMessage(
 
   channel.queue.enqueue(async () => {
     await processChat(channel, chatJid, agentId, interaction.data?.thread_id ?? interaction.id);
-  }, `chat:${chatJid}:${interaction.id}`);
+  }, `chat:${chatJid}:${interaction.id}`, `chat:${chatJid}`);
 
   return channel.json({ user_message: interaction, thread_id: threadId }, 201);
 
@@ -684,6 +685,7 @@ export async function processChat(
 
   const turnId = createUuid("turn");
   const withAgentProfile = createAgentProfileBuilder(
+    chatJid,
     ASSISTANT_NAME,
     resolveAvatarUrl("agent", ASSISTANT_AVATAR),
     USER_NAME || null,

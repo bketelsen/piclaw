@@ -60,6 +60,6 @@ export async function handleAgentRespondRequest(req, ctx) {
     if (data.request_id.length > 256) {
         return ctx.json({ error: "request_id too long" }, 400);
     }
-    const status = ctx.handleUiResponse(data.request_id, data.outcome);
+    const status = ctx.handleUiResponse(data.request_id, data.outcome, data.chat_jid);
     return ctx.json(status);
 }

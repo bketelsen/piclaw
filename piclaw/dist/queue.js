@@ -1,8 +1,9 @@
 /**
- * queue.ts – Serial execution queue with retry for agent runs.
+ * queue.ts – Lane-aware execution queue with retry for agent runs.
  *
- * Ensures only one agent task runs at a time per queue instance. Failed tasks
- * are retried with exponential back-off up to DEFAULT_MAX_RETRIES times.
+ * Ensures only one task runs at a time per logical lane (for example one chat),
+ * while allowing different lanes to make progress in parallel. Failed tasks are
+ * retried with exponential back-off up to DEFAULT_MAX_RETRIES times.
  * Items can be deduplicated by an optional string `id` (useful for scheduled
  * tasks that shouldn't stack up).
  *
@@ -14,16 +15,14 @@
  *   - channels/web.ts calls enqueue() for web channel interactions.
  */
 import { DEFAULT_BASE_RETRY_MS, DEFAULT_MAX_RETRIES, getRetryDelay, shouldRetry } from "./queue/retry-policy.js";
+const DEFAULT_LANE_KEY = "__default__";
 /**
- * A serial execution queue: items run one at a time, in FIFO order.
- * If an item fails, it is re-enqueued after an exponential delay.
+ * A lane-aware execution queue: items run FIFO within each lane, while
+ * unrelated lanes may execute concurrently.
  */
 export class AgentQueue {
-    running = false;
-    pending = [];
-    current = null;
+    lanes = new Map();
     shuttingDown = false;
-    runningPromise = null;
     metrics = {
         enqueued: 0,
         deduplicated: 0,
@@ -32,46 +31,73 @@ export class AgentQueue {
         failed: 0,
         retriesScheduled: 0,
     };
+    getLane(laneKey) {
+        const resolved = laneKey || DEFAULT_LANE_KEY;
+        let lane = this.lanes.get(resolved);
+        if (!lane) {
+            lane = { running: false, pending: [], current: null, runningPromise: null };
+            this.lanes.set(resolved, lane);
+        }
+        return lane;
+    }
+    removeLaneIfIdle(laneKey) {
+        const lane = this.lanes.get(laneKey);
+        if (!lane)
+            return;
+        if (lane.running)
+            return;
+        if (lane.current)
+            return;
+        if (lane.pending.length > 0)
+            return;
+        if (lane.runningPromise)
+            return;
+        this.lanes.delete(laneKey);
+    }
+    hasQueuedId(id) {
+        for (const lane of this.lanes.values()) {
+            if (lane.current?.id === id)
+                return true;
+            if (lane.pending.some((item) => item.id === id))
+                return true;
+        }
+        return false;
+    }
     /**
-     * Add a work item to the queue. If the queue is idle, execution starts
-     * immediately; otherwise the item is appended to the pending list.
-     * Items with the same `id` are deduplicated (skipped if already queued).
+     * Add a work item to the queue.
+     * Items in the same lane run sequentially; items in different lanes may run
+     * concurrently. Items with the same `id` are deduplicated globally.
      */
-    enqueue(fn, id) {
+    enqueue(fn, id, laneKey) {
         if (this.shuttingDown)
             return;
-        // Deduplicate by id if provided
-        if (id) {
-            if (this.current?.id === id) {
-                this.metrics.deduplicated += 1;
-                return;
-            }
-            if (this.pending.some((p) => p.id === id)) {
-                this.metrics.deduplicated += 1;
-                return;
-            }
-        }
-        const item = { id, fn, retries: 0 };
-        this.metrics.enqueued += 1;
-        if (this.running) {
-            this.pending.push(item);
+        if (id && this.hasQueuedId(id)) {
+            this.metrics.deduplicated += 1;
             return;
         }
-        this.runItem(item);
+        const resolvedLaneKey = laneKey || DEFAULT_LANE_KEY;
+        const lane = this.getLane(resolvedLaneKey);
+        const item = { id, fn, laneKey: resolvedLaneKey, retries: 0 };
+        this.metrics.enqueued += 1;
+        if (lane.running) {
+            lane.pending.push(item);
+            return;
+        }
+        this.runItem(lane, item);
     }
     /** Convenience wrapper that prefixes the id with "task:" for scheduled tasks. */
-    enqueueTask(taskId, fn) {
-        this.enqueue(fn, `task:${taskId}`);
+    enqueueTask(taskId, fn, laneKey) {
+        this.enqueue(fn, `task:${taskId}`, laneKey);
     }
-    /** Start executing an item (sets running state, stores the promise). */
-    runItem(item) {
-        this.running = true;
-        this.current = item;
+    /** Start executing an item inside a lane. */
+    runItem(lane, item) {
+        lane.running = true;
+        lane.current = item;
         this.metrics.started += 1;
-        this.runningPromise = this.executeItem(item);
+        lane.runningPromise = this.executeItem(lane, item);
     }
-    /** Run the item's function, handle errors with retry, and advance to the next item. */
-    async executeItem(item) {
+    /** Run the item's function, handle errors with retry, and advance within the lane. */
+    async executeItem(lane, item) {
         try {
             await item.fn();
             this.metrics.succeeded += 1;
@@ -82,13 +108,15 @@ export class AgentQueue {
             this.scheduleRetry(item);
         }
         finally {
-            this.running = false;
-            this.current = null;
-            this.runningPromise = null;
-            // Advance to next pending item if available.
-            if (this.pending.length > 0 && !this.shuttingDown) {
-                const next = this.pending.shift();
-                this.runItem(next);
+            lane.running = false;
+            lane.current = null;
+            lane.runningPromise = null;
+            if (lane.pending.length > 0 && !this.shuttingDown) {
+                const next = lane.pending.shift();
+                this.runItem(lane, next);
+            }
+            else {
+                this.removeLaneIfIdle(item.laneKey);
             }
         }
     }
@@ -103,23 +131,29 @@ export class AgentQueue {
         setTimeout(() => {
             if (this.shuttingDown)
                 return;
-            if (this.running) {
-                this.pending.push(item);
+            const lane = this.getLane(item.laneKey);
+            if (lane.running) {
+                lane.pending.push(item);
             }
             else {
-                this.runItem(item);
+                this.runItem(lane, item);
             }
         }, delay);
     }
     /**
      * Gracefully shut down the queue: clear pending items and wait up to `ms`
-     * milliseconds for the currently running item to finish.
+     * milliseconds for currently running lane tasks to finish.
      */
     async shutdown(ms = 5000) {
         this.shuttingDown = true;
-        this.pending = [];
-        if (this.runningPromise) {
-            await Promise.race([this.runningPromise, Bun.sleep(ms)]);
+        const runningPromises = [];
+        for (const lane of this.lanes.values()) {
+            lane.pending = [];
+            if (lane.runningPromise)
+                runningPromises.push(lane.runningPromise);
+        }
+        if (runningPromises.length > 0) {
+            await Promise.race([Promise.allSettled(runningPromises), Bun.sleep(ms)]);
         }
     }
     /** Snapshot queue counters for diagnostics and tests. */

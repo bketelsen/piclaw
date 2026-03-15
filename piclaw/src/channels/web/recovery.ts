@@ -17,7 +17,7 @@ import {
 export interface WebRecoveryContext {
   assistantName: string;
   defaultAgentId: string;
-  enqueue(task: () => Promise<void>, key: string): void;
+  enqueue(task: () => Promise<void>, key: string, laneKey?: string): void;
   processChat(chatJid: string, agentId: string, threadRootId?: number): Promise<void>;
   now?: () => number;
 }
@@ -119,7 +119,7 @@ export function recoverInflightRuns(
       // single queued task for the chat instead of racing duplicate replays.
       ctx.enqueue(async () => {
         await ctx.processChat(inflight.chatJid, ctx.defaultAgentId);
-      }, `resume:${inflight.chatJid}`);
+      }, `resume:${inflight.chatJid}`, `chat:${inflight.chatJid}`);
     }
   }
 }
@@ -144,6 +144,6 @@ export function resumePendingChats(
     console.log(`[web] Queuing resume for ${jid}`);
     ctx.enqueue(async () => {
       await ctx.processChat(jid, ctx.defaultAgentId);
-    }, `resume:${jid}`);
+    }, `resume:${jid}`, `chat:${jid}`);
   }
 }

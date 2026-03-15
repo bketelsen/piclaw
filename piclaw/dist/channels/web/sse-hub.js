@@ -11,8 +11,8 @@ import { broadcastEvent, handleSse } from "./sse.js";
 /** Manages SSE client connections and provides broadcast(). */
 export class SseHub {
     clients = new Set();
-    handleRequest() {
-        return handleSse(this);
+    handleRequest(req) {
+        return handleSse(this, req);
     }
     broadcast(eventType, data) {
         broadcastEvent(this, eventType, data);

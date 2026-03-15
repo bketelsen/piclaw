@@ -1,6 +1,7 @@
 ---
 name: schedule
 description: Schedule a task to run later or on a recurring basis. Creates an IPC file that piclaw picks up to register the scheduled task.
+distribution: public
 ---
 
 # Schedule a Task

@@ -10,7 +10,7 @@ import { SSEClient } from '../api.js';
  * component.  This breaks the re-render cascade that previously caused an
  * infinite SSE reconnect loop when queue/filter state changed.
  */
-export function useSseConnection({ handleSseEvent, handleConnectionStatusChange, loadPosts }) {
+export function useSseConnection({ handleSseEvent, handleConnectionStatusChange, loadPosts, onWake, chatJid }) {
   const sseEventRef = useRef(handleSseEvent);
   sseEventRef.current = handleSseEvent;
 
@@ -20,17 +20,25 @@ export function useSseConnection({ handleSseEvent, handleConnectionStatusChange,
   const loadPostsRef = useRef(loadPosts);
   loadPostsRef.current = loadPosts;
 
+  const onWakeRef = useRef(onWake);
+  onWakeRef.current = onWake;
+
   useEffect(() => {
     loadPostsRef.current();
 
     const sse = new SSEClient(
       (type, data) => sseEventRef.current(type, data),
       (status) => statusChangeRef.current(status),
+      { chatJid },
     );
     sse.connect();
 
     const handleWindowFocus = () => {
       sse.reconnectIfNeeded();
+      const doc = typeof document !== 'undefined' ? document : null;
+      if (!doc || doc.visibilityState === 'visible') {
+        onWakeRef.current?.();
+      }
     };
     window.addEventListener('focus', handleWindowFocus);
     document.addEventListener('visibilitychange', handleWindowFocus);
@@ -40,5 +48,5 @@ export function useSseConnection({ handleSseEvent, handleConnectionStatusChange,
       document.removeEventListener('visibilitychange', handleWindowFocus);
       sse.disconnect();
     };
-  }, []);
+  }, [chatJid]);
 }

@@ -80,6 +80,20 @@ function getUniqueAgentName(baseName: string, excludeBranchId?: string | null): 
   return `${normalizedBase}-${suffix}`;
 }
 
+function requireUniqueAgentName(agentName: string, excludeBranchId?: string | null): string {
+  const normalized = normalizeBranchAgentName(agentName);
+  if (!normalized) {
+    throw new Error("Agent handle must contain at least one letter or number.");
+  }
+
+  const existing = getChatBranchByAgentName(normalized);
+  if (existing && existing.branch_id !== excludeBranchId) {
+    throw new Error(`Agent handle is already in use: @${normalized}`);
+  }
+
+  return normalized;
+}
+
 export function getChatBranchByChatJid(chatJid: string): ChatBranchRecord | null {
   const db = getDb();
   const row = db.prepare(
@@ -182,4 +196,70 @@ export function ensureChatBranch(input: {
   ).run(branchId, chatJid, rootChatJid, parentBranchId, agentName, displayName, now, now);
 
   return getChatBranchByChatJid(chatJid)!;
+}
+
+export function renameChatBranchIdentity(input: {
+  chat_jid: string;
+  agent_name?: string | null;
+  display_name?: string | null;
+}): ChatBranchRecord {
+  const chatJid = String(input.chat_jid || "").trim();
+  if (!chatJid) throw new Error("chat_jid is required");
+
+  const existing = getChatBranchByChatJid(chatJid);
+  if (!existing) throw new Error(`Unknown chat branch: ${chatJid}`);
+
+  const wantsAgentName = input.agent_name !== undefined;
+  const wantsDisplayName = input.display_name !== undefined;
+  if (!wantsAgentName && !wantsDisplayName) {
+    throw new Error("Nothing to rename.");
+  }
+
+  const nextAgentName = wantsAgentName
+    ? requireUniqueAgentName(input.agent_name || "", existing.branch_id)
+    : existing.agent_name;
+  const nextDisplayName = wantsDisplayName
+    ? (typeof input.display_name === "string" && input.display_name.trim() ? input.display_name.trim() : null)
+    : existing.display_name;
+
+  if (nextAgentName === existing.agent_name && nextDisplayName === existing.display_name) {
+    return existing;
+  }
+
+  const now = new Date().toISOString();
+  const db = getDb();
+  db.prepare(
+    `UPDATE chat_branches
+        SET agent_name = ?,
+            display_name = ?,
+            updated_at = ?
+      WHERE branch_id = ?`
+  ).run(nextAgentName, nextDisplayName, now, existing.branch_id);
+
+  return getChatBranchByChatJid(chatJid)!;
+}
+
+export function archiveChatBranch(chatJid: string): ChatBranchRecord {
+  const normalizedChatJid = String(chatJid || "").trim();
+  if (!normalizedChatJid) throw new Error("chat_jid is required");
+
+  const existing = getChatBranchByChatJid(normalizedChatJid);
+  if (!existing) throw new Error(`Unknown chat branch: ${normalizedChatJid}`);
+  if (existing.chat_jid === existing.root_chat_jid) {
+    throw new Error("Cannot prune the root chat branch.");
+  }
+  if (existing.archived_at) {
+    return existing;
+  }
+
+  const now = new Date().toISOString();
+  const db = getDb();
+  db.prepare(
+    `UPDATE chat_branches
+        SET archived_at = ?,
+            updated_at = ?
+      WHERE branch_id = ?`
+  ).run(now, now, existing.branch_id);
+
+  return getChatBranchByChatJid(normalizedChatJid)!;
 }

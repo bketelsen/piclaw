@@ -9,8 +9,9 @@
 
 import { buildPreviewLines, countSoftLines, splitLines } from "../../utils/preview.js";
 
-/** Function type that decorates payloads with agent name/avatar fields. */
+/** Function type that decorates payloads with chat + profile metadata fields. */
 export type AgentProfileBuilder = <T extends object>(payload: T) => T & {
+  chat_jid: string;
   agent_name: string;
   agent_avatar: string | null;
   user_name: string | null;
@@ -18,8 +19,9 @@ export type AgentProfileBuilder = <T extends object>(payload: T) => T & {
   user_avatar_background: string | null;
 };
 
-/** Create a profile builder from the current agent name and avatar config. */
+/** Create a profile builder from the current chat, agent name, and avatar config. */
 export function createAgentProfileBuilder(
+  chatJid: string,
   agentName: string,
   agentAvatar?: string | null,
   userName?: string | null,
@@ -28,6 +30,7 @@ export function createAgentProfileBuilder(
 ): AgentProfileBuilder {
   return (payload) => ({
     ...payload,
+    chat_jid: chatJid,
     agent_name: agentName,
     agent_avatar: agentAvatar ?? null,
     user_name: userName ?? null,

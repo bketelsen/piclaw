@@ -11,6 +11,7 @@ export function useTimeline({ preserveTimelineScroll, preserveTimelineScrollTop,
   const loadingMoreRef = useRef(false);
   const lastBeforeIdRef = useRef(null);
   const postsRef = useRef(null);
+  const chatTokenRef = useRef(0);
 
   useEffect(() => {
     hasMoreRef.current = hasMore;
@@ -20,37 +21,55 @@ export function useTimeline({ preserveTimelineScroll, preserveTimelineScrollTop,
     postsRef.current = posts;
   }, [posts]);
 
+  useEffect(() => {
+    chatTokenRef.current += 1;
+    postsRef.current = null;
+    lastBeforeIdRef.current = null;
+    loadingMoreRef.current = false;
+    hasMoreRef.current = false;
+    setPosts(null);
+    setHasMore(false);
+  }, [chatJid]);
+
   const loadPosts = useCallback(async (hashtag = null) => {
+    const token = chatTokenRef.current;
     try {
       if (hashtag) {
         const result = await getPostsByHashtag(hashtag, 50, 0, chatJid);
+        if (token !== chatTokenRef.current) return;
         setPosts(result.posts);
         setHasMore(false);
       } else {
         const result = await getTimeline(10, null, chatJid);
+        if (token !== chatTokenRef.current) return;
         setPosts(result.posts);
         setHasMore(result.has_more);
       }
     } catch (error) {
+      if (token !== chatTokenRef.current) return;
       console.error('Failed to load posts:', error);
     }
   }, [chatJid]);
 
   const refreshTimeline = useCallback(async () => {
+    const token = chatTokenRef.current;
     try {
       const result = await getTimeline(10, null, chatJid);
+      if (token !== chatTokenRef.current) return;
       setPosts((prev) => {
         if (!prev || prev.length === 0) return result.posts;
         return dedupePosts([...result.posts, ...prev]);
       });
       setHasMore((prev) => prev || result.has_more);
     } catch (error) {
+      if (token !== chatTokenRef.current) return;
       console.error('Failed to refresh timeline:', error);
     }
   }, [chatJid]);
 
   // loadMore reads posts from ref to avoid re-creating on every posts change.
   const loadMore = useCallback(async (options = {}) => {
+    const token = chatTokenRef.current;
     const currentPosts = postsRef.current;
     if (!currentPosts || currentPosts.length === 0) return;
     if (loadingMoreRef.current) return;
@@ -72,6 +91,7 @@ export function useTimeline({ preserveTimelineScroll, preserveTimelineScrollTop,
     lastBeforeIdRef.current = oldestId;
     try {
       const result = await getTimeline(10, oldestId, chatJid);
+      if (token !== chatTokenRef.current) return;
       if (result.posts.length > 0) {
         applyUpdate(() => {
           setPosts(prev => dedupePosts([...result.posts, ...(prev || [])]));
@@ -81,9 +101,12 @@ export function useTimeline({ preserveTimelineScroll, preserveTimelineScrollTop,
         setHasMore(false);
       }
     } catch (error) {
+      if (token !== chatTokenRef.current) return;
       console.error('Failed to load more posts:', error);
     } finally {
-      loadingMoreRef.current = false;
+      if (token === chatTokenRef.current) {
+        loadingMoreRef.current = false;
+      }
     }
   }, [chatJid, preserveTimelineScroll, preserveTimelineScrollTop]);
 

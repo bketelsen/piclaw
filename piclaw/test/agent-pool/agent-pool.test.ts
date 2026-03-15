@@ -8,8 +8,9 @@
 import { expect, test, afterEach } from "bun:test";
 import { readdirSync, readFileSync } from "fs";
 import { join } from "path";
+import { SessionManager } from "@mariozechner/pi-coding-agent";
 import { getAttachmentRegistry } from "../../src/agent-pool/attachments.js";
-import { getTestWorkspace, importFresh, setEnv } from "../helpers.js";
+import { createTempWorkspace, getTestWorkspace, importFresh, setEnv } from "../helpers.js";
 
 let restoreEnv: (() => void) | null = null;
 
@@ -250,6 +251,131 @@ test("agent pool can run a side prompt with the current model and thinking level
   expect(result.thinking).toBe("plan");
   expect(result.model).toBe("openai/gpt-test");
   expect(seen).toEqual([{ model: "openai/gpt-test", reasoning: "high", prompt: "Side question" }]);
+});
+
+test("agent pool forks active chats from the previous stable turn boundary", async () => {
+  const ws = createTempWorkspace("piclaw-active-fork-");
+  restoreEnv = setEnv({ PICLAW_WORKSPACE: ws.workspace, PICLAW_STORE: ws.store, PICLAW_DATA: ws.data });
+
+  const db = await importFresh<typeof import("../src/db.js")>("../src/db.js");
+  db.initDatabase();
+  const { AgentPool } = await importFresh<typeof import("../src/agent-pool.js")>("../src/agent-pool.js");
+
+  const createAssistantMessage = (text: string) => ({
+    role: "assistant",
+    content: [{ type: "text", text }],
+    provider: "openai",
+    model: "gpt-test",
+    usage: {
+      input: 1,
+      output: 1,
+      cacheRead: 0,
+      cacheWrite: 0,
+      totalTokens: 2,
+      cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+    },
+    stopReason: "stop",
+    timestamp: Date.now(),
+  } as const);
+
+  class ForkableSession {
+    private listeners: Array<(event: any) => void> = [];
+    sessionManager: SessionManager;
+    sessionFile: string | undefined;
+    sessionName = "Research";
+    model = { provider: "openai", id: "gpt-test", reasoning: true } as const;
+    thinkingLevel = "high" as const;
+    isStreaming = false;
+    isCompacting = false;
+    isRetrying = false;
+    isBashRunning = false;
+    pendingMessageCount = 0;
+    sessionId: string;
+    gate: Promise<void> | null = null;
+
+    constructor(private workspace: string, private sessionDir: string, seed = false) {
+      this.sessionManager = SessionManager.create(workspace, sessionDir);
+      if (seed) {
+        this.sessionManager.appendMessage({ role: "user", content: "stable user", timestamp: Date.now() } as const);
+        this.sessionManager.appendMessage(createAssistantMessage("stable assistant"));
+      }
+      this.sessionFile = this.sessionManager.getSessionFile();
+      this.sessionId = this.sessionManager.getSessionId();
+    }
+
+    subscribe(listener: (event: any) => void) {
+      this.listeners.push(listener);
+      return () => {
+        this.listeners = this.listeners.filter((l) => l !== listener);
+      };
+    }
+
+    async newSession(options?: { parentSession?: string; setup?: (sessionManager: SessionManager) => Promise<void> | void }) {
+      const manager = SessionManager.create(this.workspace, this.sessionDir);
+      manager.newSession({ parentSession: options?.parentSession });
+      if (options?.setup) {
+        await options.setup(manager);
+      }
+      this.sessionManager = manager;
+      this.sessionFile = manager.getSessionFile();
+      this.sessionId = manager.getSessionId();
+      return true;
+    }
+
+    async prompt(_prompt: string) {
+      this.isStreaming = true;
+      this.sessionManager.appendMessage({ role: "user", content: "in-flight user", timestamp: Date.now() } as const);
+      this.sessionFile = this.sessionManager.getSessionFile();
+      if (this.gate) {
+        await this.gate;
+      }
+      for (const listener of this.listeners) {
+        listener({ type: "message_update", assistantMessageEvent: { type: "text_delta", delta: "done" } });
+      }
+      this.isStreaming = false;
+    }
+
+    async setModel(_model: any) {}
+    setThinkingLevel(_level: any) {}
+    setSessionName(name: string) { this.sessionName = name; }
+    async abort() {}
+    dispose() {}
+  }
+
+  let release!: () => void;
+  const gate = new Promise<void>((resolve) => { release = resolve; });
+  const sourceChatJid = "web:default";
+  const sourceSession = new ForkableSession(ws.workspace, join(ws.workspace, "sessions-source"), true);
+  sourceSession.gate = gate;
+  const created: Record<string, ForkableSession> = { [sourceChatJid]: sourceSession };
+
+  const pool = new AgentPool({
+    createSession: async (chatJid: string, sessionDir: string) => {
+      if (created[chatJid]) return created[chatJid] as any;
+      const session = new ForkableSession(ws.workspace, sessionDir, false);
+      created[chatJid] = session;
+      return session as any;
+    },
+  });
+
+  const runPromise = pool.runAgent("continue", sourceChatJid, { timeoutMs: 0 });
+  await Bun.sleep(20);
+
+  const branch = await (pool as any).createForkedChatBranch(sourceChatJid);
+  expect(branch.chat_jid).not.toBe(sourceChatJid);
+  const forkedSession = created[branch.chat_jid];
+  const forkedMessages = forkedSession.sessionManager.buildSessionContext().messages;
+  const serialized = JSON.stringify(forkedMessages);
+  expect(serialized).toContain("stable user");
+  expect(serialized).toContain("stable assistant");
+  expect(serialized).not.toContain("in-flight user");
+
+  release();
+  const result = await runPromise;
+  expect(result.status).toBe("success");
+
+  await pool.shutdown();
+  ws.cleanup();
 });
 
 test("agent pool reports side prompt errors when no model is active", async () => {

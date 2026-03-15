@@ -119,7 +119,7 @@ export async function runMessageLoop(deps) {
                         const ok = await deps.processMessages(chatJid);
                         if (!ok)
                             throw new Error(`Agent processing failed for ${chatJid}`);
-                    }, `chat:${chatJid}`);
+                    }, `chat:${chatJid}`, `chat:${chatJid}`);
                 }
             }
         }

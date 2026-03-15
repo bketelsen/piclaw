@@ -124,6 +124,7 @@ describe("ui-context", () => {
     console.error = originalError;
     const errorEvent = events.find((event) => event.type === "extension_ui_error");
     expect(errorEvent).toBeDefined();
+    expect(errorEvent?.payload?.chat_jid).toBe("web:default");
   });
 
   test("bindSessionUiContext ignores non-web chats", async () => {

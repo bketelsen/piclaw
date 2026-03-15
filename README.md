@@ -34,7 +34,14 @@ cd /workspace && pi
 
 ### Setting up provider credentials
 
-The easiest way to set up model/provider credentials is from the **terminal pane** in the web UI:
+The easiest way to set up model/provider credentials is from the **terminal pane** in the web UI.
+
+> [!NOTE]
+> For security, the authenticated web terminal is **disabled by default**. To use it, set `PICLAW_WEB_TERMINAL_ENABLED=1` before starting piclaw, for example:
+>
+> ```bash
+> PICLAW_WEB_TERMINAL_ENABLED=1 make up
+> ```
 
 1. Open the web UI.
 2. Click the **terminal** button to open the terminal pane.
@@ -59,7 +66,7 @@ The UI is single-user, mobile-friendly, and streams updates over SSE:
 - **Link previews** via server-side OpenGraph fetch
 - **Multi-turn threading** — subsequent turns are visually threaded under the first
 - **Themes + tinting** — presets plus `/theme` and `/tint` commands (Solarized auto light/dark)
-- **Terminal pane** — open a shell inside the container for setup tasks like running `pi /login` to add provider credentials
+- **Terminal pane** — optional authenticated shell inside the container for setup tasks like running `pi /login` to add provider credentials (enable with `PICLAW_WEB_TERMINAL_ENABLED=1`)
 - **Context usage indicator** — compose-footer pie indicator refreshes on reconnect and when returning to the tab, instead of lingering until the next poll cycle takes notice
 - **Mobile-first layout** with webapp manifest
 
@@ -93,6 +100,7 @@ Key environment variables:
 | Variable | Default | Purpose |
 |----------|---------|---------|
 | `PICLAW_WEB_PORT` | `8080` | Web UI port |
+| `PICLAW_WEB_TERMINAL_ENABLED` | `0` | Enable the authenticated web terminal pane/backend; disabled by default for security |
 | `PICLAW_WEB_TOTP_SECRET` | _(empty)_ | Base32 TOTP secret; enables login gate |
 | `PICLAW_WEB_PASSKEY_MODE` | `totp-fallback` | Passkey mode: `totp-fallback`, `passkey-only`, or `totp-only` |
 | `PICLAW_ASSISTANT_NAME` | `PiClaw` | Display name in the UI |

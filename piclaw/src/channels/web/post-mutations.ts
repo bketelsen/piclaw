@@ -4,6 +4,16 @@
 
 import type { InteractionRow } from "../../db.js";
 
+function resolveChatJid(req: Request, defaultChatJid: string, bodyChatJid?: unknown): string {
+  const urlChatJid = new URL(req.url).searchParams.get("chat_jid");
+  const candidate = typeof bodyChatJid === "string" && bodyChatJid.trim()
+    ? bodyChatJid
+    : typeof urlChatJid === "string" && urlChatJid.trim()
+      ? urlChatJid
+      : defaultChatJid;
+  return candidate.trim() || defaultChatJid;
+}
+
 /** Context contract consumed by post update/internal-post mutation handlers. */
 export interface PostMutationsContext {
   defaultChatJid: string;
@@ -30,7 +40,7 @@ export async function handleUpdatePostRequest(
 ): Promise<Response> {
   if (!id || id < 1) return ctx.json({ error: "Missing or invalid post id" }, 400);
 
-  let body: { content?: string; thread_id?: number };
+  let body: { content?: string; thread_id?: number; chat_jid?: string };
   try {
     body = await req.json();
   } catch {
@@ -44,7 +54,8 @@ export async function handleUpdatePostRequest(
     return ctx.json({ error: "Content too large (max 100 KB)" }, 400);
   }
 
-  const updated = ctx.replaceMessageContent(ctx.defaultChatJid, id, body.content!);
+  const chatJid = resolveChatJid(req, ctx.defaultChatJid, body.chat_jid);
+  const updated = ctx.replaceMessageContent(chatJid, id, body.content!);
   if (!updated) return ctx.json({ error: "Post not found" }, 404);
 
   if (body.thread_id) {
@@ -61,7 +72,7 @@ export async function handleUpdatePostRequest(
 
 /** POST /internal/post orchestration. */
 export async function handleInternalPostRequest(req: Request, ctx: PostMutationsContext): Promise<Response> {
-  let body: { content?: string; thread_id?: number };
+  let body: { content?: string; thread_id?: number; chat_jid?: string };
   try {
     body = await req.json();
   } catch {
@@ -73,9 +84,10 @@ export async function handleInternalPostRequest(req: Request, ctx: PostMutations
     return ctx.json({ error: "Content too large (max 100 KB)" }, 400);
   }
 
+  const chatJid = resolveChatJid(req, ctx.defaultChatJid, body.chat_jid);
   const threadId = body.thread_id || ctx.lastCommandInteractionId || undefined;
   const interaction = ctx.storeMessage(
-    ctx.defaultChatJid,
+    chatJid,
     body.content,
     true,
     [],

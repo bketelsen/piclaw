@@ -30,7 +30,10 @@ describe("web http agent dispatch", () => {
       handleAgentQueueSteer: async () => new Response("queue-steer", { status: 204 }),
       handleAgentModels: async () => new Response("models"),
       handleAgentActiveChats: async () => new Response("active-chats"),
+      handleAgentBranches: async () => new Response("branches"),
       handleAgentBranchFork: async () => new Response("branch-fork", { status: 209 }),
+      handleAgentBranchRename: async () => new Response("branch-rename", { status: 210 }),
+      handleAgentBranchPrune: async () => new Response("branch-prune", { status: 211 }),
       handleAgentPeerMessage: async () => new Response("peer-message", { status: 208 }),
       handleAgentRespond: async () => new Response("respond"),
       handleAdaptiveCardAction: async () => new Response("card-action", { status: 205 }),
@@ -66,8 +69,17 @@ describe("web http agent dispatch", () => {
     const activeChatsReq = new Request("https://example.com/agent/active-chats", { method: "GET" });
     expect(await (await handleAgentRoutes(channel, activeChatsReq, "/agent/active-chats", new URL(activeChatsReq.url)))?.text()).toBe("active-chats");
 
+    const branchesReq = new Request("https://example.com/agent/branches?root_chat_jid=web%3Adefault", { method: "GET" });
+    expect(await (await handleAgentRoutes(channel, branchesReq, "/agent/branches", new URL(branchesReq.url)))?.text()).toBe("branches");
+
     const branchForkReq = new Request("https://example.com/agent/branch-fork", { method: "POST" });
     expect((await handleAgentRoutes(channel, branchForkReq, "/agent/branch-fork", new URL(branchForkReq.url)))?.status).toBe(209);
+
+    const branchRenameReq = new Request("https://example.com/agent/branch-rename", { method: "POST" });
+    expect((await handleAgentRoutes(channel, branchRenameReq, "/agent/branch-rename", new URL(branchRenameReq.url)))?.status).toBe(210);
+
+    const branchPruneReq = new Request("https://example.com/agent/branch-prune", { method: "POST" });
+    expect((await handleAgentRoutes(channel, branchPruneReq, "/agent/branch-prune", new URL(branchPruneReq.url)))?.status).toBe(211);
 
     const peerMessageReq = new Request("https://example.com/agent/peer-message", { method: "POST" });
     expect((await handleAgentRoutes(channel, peerMessageReq, "/agent/peer-message", new URL(peerMessageReq.url)))?.status).toBe(208);

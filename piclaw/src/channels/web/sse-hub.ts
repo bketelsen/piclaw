@@ -14,8 +14,8 @@ import { broadcastEvent, handleSse, type PendingClient, type SseClientContainer 
 export class SseHub implements SseClientContainer {
   clients = new Set<PendingClient>();
 
-  handleRequest(): Response {
-    return handleSse(this);
+  handleRequest(req?: Request): Response {
+    return handleSse(this, req);
   }
 
   broadcast(eventType: string, data: unknown): void {

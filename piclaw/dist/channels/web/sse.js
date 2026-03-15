@@ -7,6 +7,38 @@
  * Consumers: web/sse-hub.ts builds on these primitives.
  */
 const encoder = new TextEncoder();
+const CHAT_SCOPED_EVENT_TYPES = new Set([
+    "agent_status",
+    "agent_thought",
+    "agent_thought_delta",
+    "agent_draft",
+    "agent_draft_delta",
+    "agent_response",
+    "new_post",
+    "new_reply",
+    "interaction_updated",
+    "interaction_deleted",
+    "agent_steer_queued",
+    "agent_followup_queued",
+    "agent_followup_consumed",
+    "agent_followup_removed",
+    "agent_request",
+    "agent_request_timeout",
+    "model_changed",
+    "ui_theme",
+    "extension_ui_timeout",
+    "extension_ui_request",
+    "extension_ui_notify",
+    "extension_ui_status",
+    "extension_ui_working",
+    "extension_ui_widget",
+    "extension_ui_title",
+    "extension_ui_editor_text",
+    "extension_ui_error",
+]);
+export function requiresChatScopedDelivery(eventType) {
+    return CHAT_SCOPED_EVENT_TYPES.has(String(eventType || "").trim());
+}
 /**
  * Maximum number of concurrent SSE clients.
  * Prevents resource exhaustion from opening too many connections.
@@ -17,7 +49,7 @@ const MAX_SSE_CLIENTS = 50;
  * Create an SSE response stream and register the client.
  * Returns 503 if the maximum client limit has been reached.
  */
-export function handleSse(channel) {
+export function handleSse(channel, req) {
     // Guard against connection exhaustion — reject if at capacity
     if (channel.clients.size >= MAX_SSE_CLIENTS) {
         return new Response(JSON.stringify({ error: "Too many connections" }), {
@@ -26,6 +58,7 @@ export function handleSse(channel) {
         });
     }
     let clientRef = null;
+    const chatJid = req ? (new URL(req.url).searchParams.get("chat_jid") || "").trim() || null : null;
     const stream = new ReadableStream({
         start: (controller) => {
             const heartbeat = setInterval(() => {
@@ -38,9 +71,9 @@ export function handleSse(channel) {
                         channel.clients.delete(clientRef);
                 }
             }, 30000);
-            clientRef = { controller, heartbeat };
+            clientRef = { controller, heartbeat, chatJid };
             channel.clients.add(clientRef);
-            controller.enqueue(encoder.encode("event: connected\ndata: {}\n\n"));
+            controller.enqueue(encoder.encode(`event: connected\ndata: ${JSON.stringify({ ...(chatJid ? { chat_jid: chatJid } : {}) })}\n\n`));
         },
         cancel: () => {
             if (clientRef) {
@@ -60,9 +93,19 @@ export function handleSse(channel) {
 }
 /** Encode and send an SSE event to all connected clients. */
 export function broadcastEvent(channel, eventType, data) {
+    const eventChatJid = data && typeof data === "object" && typeof data.chat_jid === "string"
+        ? String(data.chat_jid || "").trim() || null
+        : null;
+    if (requiresChatScopedDelivery(eventType) && !eventChatJid) {
+        console.warn(`[web/sse] Dropping chat-scoped event without chat_jid: ${eventType}`);
+        return;
+    }
     const payload = `event: ${eventType}\ndata: ${JSON.stringify(data)}\n\n`;
     const bytes = encoder.encode(payload);
     for (const client of channel.clients) {
+        if (eventChatJid && client.chatJid && client.chatJid !== eventChatJid) {
+            continue;
+        }
         try {
             client.controller.enqueue(bytes);
         }

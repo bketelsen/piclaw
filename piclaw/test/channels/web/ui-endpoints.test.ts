@@ -67,11 +67,13 @@ describe("web ui endpoint helpers", () => {
     const req = jsonRequest("https://example.com/agent/respond", {
       request_id: "ui-1",
       outcome: { ok: true },
+      chat_jid: "web:branch",
     });
     const res = await handleAgentRespondRequest(req, createContext({
-      handleUiResponse: (requestId, outcome) => {
+      handleUiResponse: (requestId, outcome, chatJid) => {
         expect(requestId).toBe("ui-1");
         expect(outcome).toEqual({ ok: true });
+        expect(chatJid).toBe("web:branch");
         return { status: "ok" };
       },
     }));

@@ -53,7 +53,7 @@ export async function handleShellRoutes(
   }
 
   if (pathname === "/sse/stream") {
-    return channel.handleSse();
+    return channel.handleSse(req);
   }
 
   if (req.method === "GET" && pathname === "/terminal/session") {

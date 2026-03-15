@@ -55,8 +55,20 @@ export async function handleAgentRoutes(
     return await channel.handleAgentActiveChats(req);
   }
 
+  if (req.method === "GET" && pathname === "/agent/branches") {
+    return await channel.handleAgentBranches(req);
+  }
+
   if (req.method === "POST" && pathname === "/agent/branch-fork") {
     return await channel.handleAgentBranchFork(req);
+  }
+
+  if (req.method === "POST" && pathname === "/agent/branch-rename") {
+    return await channel.handleAgentBranchRename(req);
+  }
+
+  if (req.method === "POST" && pathname === "/agent/branch-prune") {
+    return await channel.handleAgentBranchPrune(req);
   }
 
   if (req.method === "POST" && pathname === "/agent/peer-message") {

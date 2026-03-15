@@ -64,10 +64,68 @@ export function getChatWindowOpenOptions(chatJid, runtime = {}) {
     };
 }
 
+export function openProvisionalChatWindow(openOptions, runtime = {}) {
+    const win = runtime.window ?? (typeof window !== 'undefined' ? window : null);
+    if (!win || !openOptions) return null;
+    try {
+        return openOptions.features
+            ? win.open('about:blank', openOptions.target, openOptions.features)
+            : win.open('about:blank', openOptions.target);
+    } catch {
+        return null;
+    }
+}
+
+export function primeProvisionalChatWindow(handle, options = {}) {
+    if (!handle || !handle.document) return;
+    try {
+        const title = String(options.title || 'Opening branch…');
+        const message = String(options.message || 'Preparing a new branch window…');
+        handle.document.title = title;
+        handle.document.body.innerHTML = `
+            <div style="font-family: system-ui, sans-serif; padding: 24px; color: #222;">
+                <h1 style="font-size: 18px; margin: 0 0 12px;">${title}</h1>
+                <p style="margin: 0; line-height: 1.5;">${message}</p>
+            </div>
+        `;
+    } catch {}
+}
+
+export function navigateProvisionalChatWindow(handle, url) {
+    if (!handle || !url) return;
+    try {
+        if (handle.location && typeof handle.location.replace === 'function') {
+            handle.location.replace(String(url));
+            return;
+        }
+        handle.location = String(url);
+    } catch {}
+}
+
+export function closeProvisionalChatWindow(handle) {
+    if (!handle || typeof handle.close !== 'function') return;
+    try {
+        handle.close();
+    } catch {}
+}
+
 export function buildChatWindowUrl(baseHref, chatJid, options = {}) {
     const url = new URL(String(baseHref || 'http://localhost/'));
     const normalizedChatJid = String(chatJid || '').trim() || 'web:default';
     url.searchParams.set('chat_jid', normalizedChatJid);
+    url.searchParams.delete('branch_loader');
+    url.searchParams.delete('branch_source_chat_jid');
+    if (options.chatOnly !== false) {
+        url.searchParams.set('chat_only', '1');
+    }
+    return url.toString();
+}
+
+export function buildBranchLoaderUrl(baseHref, sourceChatJid, options = {}) {
+    const url = new URL(String(baseHref || 'http://localhost/'));
+    const normalizedChatJid = String(sourceChatJid || '').trim() || 'web:default';
+    url.searchParams.set('branch_loader', '1');
+    url.searchParams.set('branch_source_chat_jid', normalizedChatJid);
     if (options.chatOnly !== false) {
         url.searchParams.set('chat_only', '1');
     }
@@ -80,4 +138,31 @@ export function getChatWindowTarget(chatJid) {
         .toLowerCase()
         .replace(/[^a-z0-9_-]+/g, '-');
     return `piclaw-chat-${normalized || 'default'}`;
+}
+
+export function describeBranchOpenError(error) {
+    const raw = error instanceof Error ? error.message : String(error || '').trim();
+    const message = String(raw || '').trim();
+    if (!message) {
+        return 'PiClaw could not open a new branch window.';
+    }
+
+    const normalized = message.toLowerCase();
+    if (normalized.includes('no stable turn boundary')) {
+        return 'This chat is still in flight and does not yet have a stable turn boundary to fork from.';
+    }
+    if (normalized.includes('cannot fork a branch while the source chat is still active')) {
+        return 'This chat is still active. Please wait for the current turn to settle, then try again.';
+    }
+    if (normalized.includes('cancelled')) {
+        return 'Branch creation was cancelled before a new chat window could be opened.';
+    }
+    if (normalized.includes('did not return a chat id')) {
+        return 'PiClaw created no usable branch id for the new window. Please try again.';
+    }
+    if (normalized.includes('failed to fork branch') || normalized.includes('failed to fork chat branch')) {
+        return 'PiClaw could not create the new branch. Please try again.';
+    }
+
+    return message;
 }

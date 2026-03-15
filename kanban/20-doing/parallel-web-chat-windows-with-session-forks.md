@@ -377,6 +377,16 @@ Pick and justify one recommended approach that:
 - This is intentionally still a first slice of C, not the whole end-state:
   - branch-local runtime/recovery still primarily keys off `chat_jid`
   - the explicit registry now owns naming/ancestry/lifecycle metadata so later work can move queue/recovery/session-picker logic onto it without another conceptual rewrite
+- Explicit follow-up reminder: the current registry-backed `agent_name` / handle values are still provisional. We will need a deliberate rename story for branch agents/handles so identities can be cleaned up and retitled after creation without breaking routing or discoverability.
+- To fully complete the broader multi-chat / multi-agent feature, the remaining product slices should be treated as first-class requirements rather than polish:
+  - complete real browser/device-safe branch opening flows, especially iOS Safari and mobile new-tab behaviour
+  - make branch/session switching feel complete, including stronger session picker semantics and clearer active/inactive branch state
+  - add deliberate agent/branch rename support so `@agent` identities are not stuck with first-generated handles
+  - improve user-facing failure modes for branch open/fork flows (blocked popup, standalone mode, no stable fork point, backend failure)
+  - finish branch-aware live updates/reconnect behaviour so branch windows do not need manual refreshes after reload/restart events
+  - ensure each chat/branch has its own independent request/tool/draft/thought UI state, rather than sharing a single transient pane state across chats
+  - extend the runtime/agent loop so distinct chats can actually make progress in parallel, instead of a nominal multi-chat UI sitting on top of effectively serial handling
+  - continue moving from “branch metadata exists” toward “each chat really is a durable addressable agent” across runtime, recovery, and UX
 
 ### 2026-03-14
 - Ticket created from a user request for multiple parallel chat windows with

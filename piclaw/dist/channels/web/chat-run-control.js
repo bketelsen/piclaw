@@ -24,7 +24,7 @@ export function resumeChat(chatJid, threadRootId, ctx) {
     const frontier = threadRootId ?? ctx.getChatCursor(chatJid) ?? "next";
     ctx.enqueue(async () => {
         await ctx.processChat(chatJid, ctx.defaultAgentId, threadRootId ?? undefined);
-    }, `resume:${chatJid}:${String(frontier)}`);
+    }, `resume:${chatJid}:${String(frontier)}`, `chat:${chatJid}`);
 }
 /** Skip the failed cursor marker after a model switch to avoid replay loops. */
 export function skipFailedOnModelSwitch(chatJid, store = defaultStore) {

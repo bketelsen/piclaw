@@ -103,6 +103,7 @@ export function storeWebMessage(channel, params, options = {}) {
     scheduleLinkPreviews(channel, params.chatJid, rowId, params.content, options.linkPreviews);
     return {
         id: rowId,
+        chat_jid: params.chatJid,
         timestamp: msg.timestamp,
         data,
     };

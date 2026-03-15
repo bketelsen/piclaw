@@ -1,6 +1,15 @@
 /**
  * channels/web/post-mutations.ts – Post update/internal-post endpoint orchestration.
  */
+function resolveChatJid(req, defaultChatJid, bodyChatJid) {
+    const urlChatJid = new URL(req.url).searchParams.get("chat_jid");
+    const candidate = typeof bodyChatJid === "string" && bodyChatJid.trim()
+        ? bodyChatJid
+        : typeof urlChatJid === "string" && urlChatJid.trim()
+            ? urlChatJid
+            : defaultChatJid;
+    return candidate.trim() || defaultChatJid;
+}
 /** PATCH /post/:id orchestration. */
 export async function handleUpdatePostRequest(req, id, ctx) {
     if (!id || id < 1)
@@ -18,7 +27,8 @@ export async function handleUpdatePostRequest(req, id, ctx) {
     if (typeof body.content === "string" && body.content.length > 100 * 1024) {
         return ctx.json({ error: "Content too large (max 100 KB)" }, 400);
     }
-    const updated = ctx.replaceMessageContent(ctx.defaultChatJid, id, body.content);
+    const chatJid = resolveChatJid(req, ctx.defaultChatJid, body.chat_jid);
+    const updated = ctx.replaceMessageContent(chatJid, id, body.content);
     if (!updated)
         return ctx.json({ error: "Post not found" }, 404);
     if (body.thread_id) {
@@ -45,8 +55,9 @@ export async function handleInternalPostRequest(req, ctx) {
     if (body.content.length > 100 * 1024) {
         return ctx.json({ error: "Content too large (max 100 KB)" }, 400);
     }
+    const chatJid = resolveChatJid(req, ctx.defaultChatJid, body.chat_jid);
     const threadId = body.thread_id || ctx.lastCommandInteractionId || undefined;
-    const interaction = ctx.storeMessage(ctx.defaultChatJid, body.content, true, [], threadId ? { threadId } : undefined);
+    const interaction = ctx.storeMessage(chatJid, body.content, true, [], threadId ? { threadId } : undefined);
     if (!interaction)
         return ctx.json({ error: "Failed to store" }, 500);
     ctx.broadcastAgentResponse(interaction);

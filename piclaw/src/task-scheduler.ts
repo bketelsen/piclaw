@@ -3,7 +3,7 @@
  *
  * Runs a periodic loop (every SCHEDULER_POLL_INTERVAL ms) that queries the
  * database for active tasks whose `next_run` is in the past, then enqueues
- * each task on the AgentQueue for serial execution.
+ * each task on the AgentQueue for lane-aware execution.
  *
  * Each task run:
  *   1. Saves the current session tree position so the user's conversation
@@ -16,7 +16,7 @@
  *
  * Consumers:
  *   - runtime.ts calls startSchedulerLoop() at startup.
- *   - The AgentQueue (queue.ts) serialises task execution with user messages.
+ *   - The AgentQueue (queue.ts) serialises task execution with user messages per chat lane while allowing unrelated chats to progress in parallel.
  */
 
 import { SCHEDULER_POLL_INTERVAL, WORKSPACE_DIR } from "./core/config.js";
@@ -34,7 +34,7 @@ import { validateShellCommand, validateShellCwd } from "./utils/task-validation.
  * Keeps the scheduler decoupled from concrete channel implementations.
  */
 export interface SchedulerDeps {
-  /** The shared serial execution queue. */
+  /** The shared lane-aware execution queue. */
   queue: AgentQueue;
   /** The agent pool for running agent turns. */
   agentPool: AgentPool;
@@ -287,7 +287,7 @@ export function startSchedulerLoop(deps: SchedulerDeps): () => void {
       for (const task of getDueTasks()) {
         const cur = getTaskById(task.id);
         if (!cur || cur.status !== "active") continue;
-        deps.queue.enqueueTask(cur.id, () => runScheduledTask(cur, deps));
+        deps.queue.enqueueTask(cur.id, () => runScheduledTask(cur, deps), `chat:${cur.chat_jid}`);
         schedulerMetrics.tasksEnqueued += 1;
       }
     } catch (e) { console.error("[scheduler]", e); }

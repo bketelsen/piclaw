@@ -52,9 +52,12 @@ import { resolveModelLabel } from "./utils/model-utils.js";
 import { withChatContext } from "./core/chat-context.js";
 import { getSessionFileSize, rotateSession, seedRotatedSession, forcePersistSessionFile } from "./session-rotation.js";
 import {
+  archiveChatBranch,
   ensureChatBranch,
   getChatBranchByAgentName,
   getChatBranchByChatJid,
+  listChatBranches,
+  renameChatBranchIdentity,
   storeChatMetadata,
   type ChatBranchRecord,
 } from "./db.js";
@@ -147,7 +150,7 @@ export interface ActiveChatAgent {
   parent_branch_id: string | null;
   agent_name: string;
   display_name: string | null;
-  session_id: string;
+  session_id: string | null;
   session_name: string | null;
   model: string | null;
   is_active: boolean;
@@ -204,6 +207,92 @@ function buildForkedChatJid(sourceChatJid: string): string {
   return `${root}:branch:${createUuid("chat").split("-").pop()}`;
 }
 
+function createVolatileBranchRecord(chatJid: string, session?: AgentSession | null): ChatBranchRecord {
+  return {
+    branch_id: `volatile:${chatJid}`,
+    chat_jid: chatJid,
+    root_chat_jid: chatJid,
+    parent_branch_id: null,
+    agent_name: deriveAgentHandle(chatJid, session?.sessionName?.trim() || null),
+    display_name: session?.sessionName?.trim() || null,
+    created_at: new Date(0).toISOString(),
+    updated_at: new Date(0).toISOString(),
+    archived_at: null,
+  };
+}
+
+function getStableForkSeed(sourceSession: AgentSession, stableLeafId: string | null): {
+  branchEntries: any[];
+  sessionName: string | null;
+  model: { provider: string; modelId: string } | null;
+  thinkingLevel: string | null;
+} {
+  const branchEntries = stableLeafId === null
+    ? []
+    : (typeof sourceSession.sessionManager?.getBranch === "function"
+        ? sourceSession.sessionManager.getBranch(stableLeafId)
+        : []);
+
+  let sessionName: string | null = null;
+  let model: { provider: string; modelId: string } | null = null;
+  let thinkingLevel: string | null = null;
+
+  for (const entry of branchEntries) {
+    if (entry?.type === "session_info" && typeof entry.name === "string" && entry.name.trim()) {
+      sessionName = entry.name.trim();
+    } else if (entry?.type === "model_change" && typeof entry.provider === "string" && typeof entry.modelId === "string") {
+      model = { provider: entry.provider, modelId: entry.modelId };
+    } else if (entry?.type === "thinking_level_change" && typeof entry.thinkingLevel === "string") {
+      thinkingLevel = entry.thinkingLevel;
+    } else if (entry?.type === "message" && entry.message?.role === "assistant" && typeof entry.message?.provider === "string" && typeof entry.message?.model === "string") {
+      model = { provider: entry.message.provider, modelId: entry.message.model };
+    }
+  }
+
+  return { branchEntries, sessionName, model, thinkingLevel };
+}
+
+function seedSessionManagerFromBranchEntries(
+  sessionManager: any,
+  branchEntries: any[],
+  fallback: { sessionName?: string | null; model?: { provider: string; modelId: string } | null },
+): void {
+  if (!Array.isArray(branchEntries) || branchEntries.length === 0) {
+    if (fallback.sessionName?.trim()) {
+      sessionManager.appendSessionInfo(fallback.sessionName.trim());
+    }
+    if (fallback.model) {
+      sessionManager.appendModelChange(fallback.model.provider, fallback.model.modelId);
+    }
+    return;
+  }
+
+  const sourceToNewId = new Map<string, string>();
+  for (const entry of branchEntries) {
+    let newId: string | null = null;
+    if (entry?.type === "message" && entry.message) {
+      newId = sessionManager.appendMessage(entry.message);
+    } else if (entry?.type === "thinking_level_change" && typeof entry.thinkingLevel === "string") {
+      newId = sessionManager.appendThinkingLevelChange(entry.thinkingLevel);
+    } else if (entry?.type === "model_change" && typeof entry.provider === "string" && typeof entry.modelId === "string") {
+      newId = sessionManager.appendModelChange(entry.provider, entry.modelId);
+    } else if (entry?.type === "compaction" && typeof entry.summary === "string") {
+      const firstKeptEntryId = sourceToNewId.get(entry.firstKeptEntryId) || sourceToNewId.get(branchEntries[0]?.id) || "rotated-context";
+      newId = sessionManager.appendCompaction(entry.summary, firstKeptEntryId, entry.tokensBefore ?? 0, entry.details, entry.fromHook);
+    } else if (entry?.type === "session_info" && typeof entry.name === "string" && entry.name.trim()) {
+      newId = sessionManager.appendSessionInfo(entry.name.trim());
+    } else if (entry?.type === "custom_message" && typeof entry.customType === "string") {
+      newId = sessionManager.appendCustomMessageEntry(entry.customType, entry.content, entry.display, entry.details);
+    } else if (entry?.type === "custom_entry" && typeof entry.customType === "string") {
+      newId = sessionManager.appendCustomEntry(entry.customType, entry.data);
+    }
+
+    if (entry?.id && newId) {
+      sourceToNewId.set(entry.id, newId);
+    }
+  }
+}
+
 /** How long (ms) an idle session stays cached before being disposed. */
 const IDLE_TTL = 10 * 60 * 1000; // 10 minutes
 const CLEANUP_INTERVAL = 60 * 1000; // check every minute
@@ -218,6 +307,7 @@ const CLEANUP_INTERVAL = 60 * 1000; // check every minute
 export class AgentPool {
   private pool = new Map<string, PoolEntry>();
   private sidePool = new Map<string, PoolEntry>();
+  private activeForkBaseLeafByChat = new Map<string, string | null>();
   private cleanupTimer: ReturnType<typeof setInterval> | null = null;
 
   // Shared across all sessions (expensive to create, safe to reuse)
@@ -289,6 +379,10 @@ export class AgentPool {
       const session = await this.getOrCreate(chatJid);
       await this.maybeAutoRotateSession(session, chatJid);
       pruneOrphanToolResults(session, chatJid);
+      const forkBaseLeafId = typeof session.sessionManager?.getLeafId === "function"
+        ? session.sessionManager.getLeafId()
+        : null;
+      this.activeForkBaseLeafByChat.set(chatJid, forkBaseLeafId ?? null);
       console.log(`[agent-pool] Prompting session ${chatJid} (${prompt.length} chars)`);
 
       const tracker = this.createTurnTracker(chatJid, options.onTurnComplete);
@@ -356,6 +450,8 @@ export class AgentPool {
       writeAgentLog(this.logsDir, chatJid, duration, false, null, errorMsg);
       console.error(`[agent-pool] Error for ${chatJid}:`, errorMsg);
       return { status: "error", result: null, error: errorMsg };
+    } finally {
+      this.activeForkBaseLeafByChat.delete(chatJid);
     }
   }
 
@@ -703,14 +799,71 @@ export class AgentPool {
   }
 
   private ensureBranchRegistration(chatJid: string, session?: AgentSession | null): ChatBranchRecord {
-    const existing = getChatBranchByChatJid(chatJid);
-    if (existing) return existing;
-    storeChatMetadata(chatJid, new Date().toISOString(), session?.sessionName?.trim() || chatJid);
-    return ensureChatBranch({
+    try {
+      const existing = getChatBranchByChatJid(chatJid);
+      if (existing) return existing;
+      storeChatMetadata(chatJid, new Date().toISOString(), session?.sessionName?.trim() || chatJid);
+      return ensureChatBranch({
+        chat_jid: chatJid,
+        display_name: session?.sessionName?.trim() || null,
+        agent_name: deriveAgentHandle(chatJid, session?.sessionName?.trim() || null),
+      });
+    } catch {
+      return createVolatileBranchRecord(chatJid, session);
+    }
+  }
+
+  async renameChatBranch(
+    chatJid: string,
+    options: { agentName?: string | null; displayName?: string | null } = {},
+  ): Promise<ChatBranchRecord> {
+    const session = this.pool.get(chatJid)?.session ?? null;
+    const existing = this.ensureBranchRegistration(chatJid, session);
+    const nextDisplayName = options.displayName !== undefined ? options.displayName : existing.display_name;
+    const nextAgentName = options.agentName !== undefined ? options.agentName : existing.agent_name;
+    const renamed = renameChatBranchIdentity({
       chat_jid: chatJid,
-      display_name: session?.sessionName?.trim() || null,
-      agent_name: deriveAgentHandle(chatJid, session?.sessionName?.trim() || null),
+      agent_name: nextAgentName,
+      display_name: nextDisplayName,
     });
+
+    if (session && nextDisplayName !== undefined) {
+      try {
+        session.setSessionName(renamed.display_name || renamed.agent_name);
+      } catch {}
+    }
+
+    return renamed;
+  }
+
+  async pruneChatBranch(chatJid: string): Promise<ChatBranchRecord> {
+    const session = this.pool.get(chatJid)?.session ?? null;
+    const existing = this.ensureBranchRegistration(chatJid, session);
+    if (existing.chat_jid === existing.root_chat_jid) {
+      throw new Error("Cannot prune the root chat branch.");
+    }
+    if (this.isActive(chatJid)) {
+      throw new Error("Cannot prune a branch while it is active.");
+    }
+
+    const archived = archiveChatBranch(chatJid);
+    const mainEntry = this.pool.get(chatJid);
+    if (mainEntry) {
+      try {
+        mainEntry.session.dispose();
+      } catch {}
+      this.pool.delete(chatJid);
+    }
+    const sideEntry = this.sidePool.get(chatJid);
+    if (sideEntry) {
+      try {
+        sideEntry.session.dispose();
+      } catch {}
+      this.sidePool.delete(chatJid);
+    }
+    this.activeForkBaseLeafByChat.delete(chatJid);
+
+    return archived;
   }
 
   async createForkedChatBranch(
@@ -718,8 +871,14 @@ export class AgentPool {
     options: { agentName?: string | null; displayName?: string | null } = {},
   ): Promise<ChatBranchRecord> {
     const sourceSession = await this.getOrCreate(sourceChatJid);
-    if (sourceSession.isStreaming || sourceSession.isCompacting || sourceSession.isRetrying || sourceSession.isBashRunning) {
-      throw new Error("Cannot fork a branch while the source chat is still active.");
+    const sourceIsActive = Boolean(
+      sourceSession.isStreaming || sourceSession.isCompacting || sourceSession.isRetrying || sourceSession.isBashRunning,
+    );
+    const stableForkLeafId = this.activeForkBaseLeafByChat.has(sourceChatJid)
+      ? this.activeForkBaseLeafByChat.get(sourceChatJid) ?? null
+      : null;
+    if (sourceIsActive && !this.activeForkBaseLeafByChat.has(sourceChatJid)) {
+      throw new Error("Cannot fork this branch yet because no stable turn boundary is available.");
     }
 
     const sourceBranch = this.ensureBranchRegistration(sourceChatJid, sourceSession);
@@ -730,26 +889,36 @@ export class AgentPool {
     const requestedAgentName = typeof options.agentName === "string" && options.agentName.trim()
       ? options.agentName.trim()
       : sourceBranch.agent_name;
-    storeChatMetadata(nextChatJid, new Date().toISOString(), requestedDisplayName || sourceSession.sessionName?.trim() || sourceBranch.display_name || nextChatJid);
+    storeChatMetadata(nextChatJid, new Date().toISOString(), requestedDisplayName || sourceBranch.display_name || sourceSession.sessionName?.trim() || nextChatJid);
     const nextBranch = ensureChatBranch({
       chat_jid: nextChatJid,
       root_chat_jid: sourceBranch.root_chat_jid || sourceBranch.chat_jid,
       parent_branch_id: sourceBranch.branch_id,
       agent_name: requestedAgentName,
-      display_name: requestedDisplayName || sourceSession.sessionName?.trim() || sourceBranch.display_name || null,
+      display_name: requestedDisplayName || sourceBranch.display_name || sourceSession.sessionName?.trim() || null,
     });
 
     const targetSession = await this.getOrCreate(nextChatJid);
+    const stableSeed = sourceIsActive
+      ? getStableForkSeed(sourceSession, stableForkLeafId)
+      : null;
     const sourceContext = sourceSession.sessionManager.buildSessionContext();
     const parentSession = sourceSession.sessionFile?.trim() || undefined;
     const setupName = nextBranch.display_name || nextBranch.agent_name;
-    const sourceModel = sourceSession.model
+    const sourceModel = stableSeed?.model || sourceContext.model || (sourceSession.model
       ? { provider: sourceSession.model.provider, modelId: sourceSession.model.id }
-      : sourceContext.model;
+      : null);
 
     const ok = await targetSession.newSession({
       ...(parentSession ? { parentSession } : {}),
       setup: async (sessionManager) => {
+        if (stableSeed) {
+          seedSessionManagerFromBranchEntries(sessionManager, stableSeed.branchEntries, {
+            sessionName: setupName,
+            model: sourceModel,
+          });
+          return;
+        }
         seedRotatedSession(sessionManager, sourceContext, {
           sessionName: setupName,
           model: sourceModel,
@@ -766,7 +935,7 @@ export class AgentPool {
       } catch {}
     }
     try {
-      targetSession.setThinkingLevel(sourceSession.thinkingLevel);
+      targetSession.setThinkingLevel((stableSeed?.thinkingLevel || sourceContext.thinkingLevel || sourceSession.thinkingLevel) as any);
     } catch {}
     try {
       targetSession.setSessionName(setupName);
@@ -784,9 +953,12 @@ export class AgentPool {
 
   listActiveChats(): ActiveChatAgent[] {
     const chats = [...this.pool.entries()]
-      .map(([chatJid, entry]) => {
+      .flatMap(([chatJid, entry]): ActiveChatAgent[] => {
         const branch = this.ensureBranchRegistration(chatJid, entry.session);
-        return {
+        if (branch.archived_at) {
+          return [];
+        }
+        return [{
           branch_id: branch.branch_id,
           chat_jid: chatJid,
           root_chat_jid: branch.root_chat_jid,
@@ -798,7 +970,7 @@ export class AgentPool {
           model: entry.session.model ? `${entry.session.model.provider}/${entry.session.model.id}` : null,
           is_active: Boolean(entry.session.isStreaming || entry.session.isCompacting || entry.session.isRetrying || entry.session.isBashRunning),
           has_side_session: this.sidePool.has(chatJid),
-        };
+        }];
       })
       .sort((a, b) => {
         if (a.is_active !== b.is_active) return a.is_active ? -1 : 1;
@@ -806,6 +978,38 @@ export class AgentPool {
       });
 
     return chats;
+  }
+
+  listKnownChats(rootChatJid?: string | null): ActiveChatAgent[] {
+    const activeChats = this.listActiveChats();
+    const activeByChat = new Map(activeChats.map((chat) => [chat.chat_jid, chat]));
+    try {
+      return listChatBranches(rootChatJid || null)
+        .map((branch) => {
+          const active = activeByChat.get(branch.chat_jid);
+          return {
+            branch_id: branch.branch_id,
+            chat_jid: branch.chat_jid,
+            root_chat_jid: branch.root_chat_jid,
+            parent_branch_id: branch.parent_branch_id,
+            agent_name: branch.agent_name,
+            display_name: branch.display_name || active?.display_name || null,
+            session_id: active?.session_id ?? null,
+            session_name: active?.session_name ?? null,
+            model: active?.model ?? null,
+            is_active: active?.is_active ?? false,
+            has_side_session: active?.has_side_session ?? false,
+          } satisfies ActiveChatAgent;
+        })
+        .sort((a, b) => {
+          if (a.chat_jid === rootChatJid && b.chat_jid !== rootChatJid) return -1;
+          if (b.chat_jid === rootChatJid && a.chat_jid !== rootChatJid) return 1;
+          if (a.is_active !== b.is_active) return a.is_active ? -1 : 1;
+          return a.chat_jid.localeCompare(b.chat_jid);
+        });
+    } catch {
+      return activeChats;
+    }
   }
 
   findActiveChatByAgentName(agentName: string): ActiveChatAgent | null {
@@ -817,12 +1021,20 @@ export class AgentPool {
   findChatByAgentName(agentName: string): { chat_jid: string; agent_name: string } | null {
     const normalized = normalizeAgentHandlePart(agentName);
     if (!normalized) return null;
-    const branch = getChatBranchByAgentName(normalized);
-    return branch ? { chat_jid: branch.chat_jid, agent_name: branch.agent_name } : null;
+    try {
+      const branch = getChatBranchByAgentName(normalized);
+      if (branch) return { chat_jid: branch.chat_jid, agent_name: branch.agent_name };
+    } catch {}
+    const active = this.listActiveChats().find((chat) => chat.agent_name === normalized) ?? null;
+    return active ? { chat_jid: active.chat_jid, agent_name: active.agent_name } : null;
   }
 
   getAgentHandleForChat(chatJid: string): string {
-    return getChatBranchByChatJid(chatJid)?.agent_name ?? deriveAgentHandle(chatJid);
+    try {
+      return getChatBranchByChatJid(chatJid)?.agent_name ?? deriveAgentHandle(chatJid);
+    } catch {
+      return deriveAgentHandle(chatJid);
+    }
   }
 
   async queueStreamingMessage(

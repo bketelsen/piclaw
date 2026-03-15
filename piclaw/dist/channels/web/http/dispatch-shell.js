@@ -35,7 +35,7 @@ export async function handleShellRoutes(channel, req, pathname, flags, serveStat
         return channel.serveDocsStatic(rel);
     }
     if (pathname === "/sse/stream") {
-        return channel.handleSse();
+        return channel.handleSse(req);
     }
     if (req.method === "GET" && pathname === "/terminal/session") {
         return channel.handleTerminalSession(req);

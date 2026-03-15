@@ -98,6 +98,52 @@ describe("AgentQueue", () => {
     await queue.shutdown(100);
   });
 
+  test("runs different lanes in parallel while preserving per-lane order", async () => {
+    const queue = new AgentQueue();
+    const order: string[] = [];
+    let releaseLaneA!: () => void;
+    const laneAGate = new Promise<void>((resolve) => {
+      releaseLaneA = resolve;
+    });
+
+    queue.enqueue(async () => {
+      order.push("lane-a:start");
+      await laneAGate;
+      order.push("lane-a:end");
+    }, "job-a", "chat:web:a");
+
+    queue.enqueue(async () => {
+      order.push("lane-b:run");
+    }, "job-b", "chat:web:b");
+
+    await Bun.sleep(30);
+    expect(order).toEqual(["lane-a:start", "lane-b:run"]);
+
+    releaseLaneA();
+    await Bun.sleep(30);
+    expect(order).toEqual(["lane-a:start", "lane-b:run", "lane-a:end"]);
+    await queue.shutdown(100);
+  });
+
+  test("keeps tasks in the same lane sequential", async () => {
+    const queue = new AgentQueue();
+    const order: string[] = [];
+
+    queue.enqueue(async () => {
+      order.push("first:start");
+      await Bun.sleep(20);
+      order.push("first:end");
+    }, "job-1", "chat:web:shared");
+
+    queue.enqueue(async () => {
+      order.push("second");
+    }, "job-2", "chat:web:shared");
+
+    await Bun.sleep(80);
+    expect(order).toEqual(["first:start", "first:end", "second"]);
+    await queue.shutdown(100);
+  });
+
   test("retries are appended after unrelated tasks", async () => {
     const queue = new AgentQueue();
     const order: string[] = [];

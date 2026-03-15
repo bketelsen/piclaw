@@ -18,6 +18,7 @@ This document covers all `piclaw` configuration options: environment variables, 
 | `PICLAW_WEB_PORT` | `8080` | Web UI port |
 | `PICLAW_WEB_HOST` | `0.0.0.0` | Bind address |
 | `PICLAW_WEB_IDLE_TIMEOUT` | `0` (disabled) | Drop idle clients after this many seconds |
+| `PICLAW_WEB_TERMINAL_ENABLED` | `0` | Enable the authenticated web terminal backend/pane; disabled by default for security |
 | `PICLAW_WEB_TLS_CERT` | _(empty)_ | Path to TLS certificate; enables HTTPS |
 | `PICLAW_WEB_TLS_KEY` | _(empty)_ | Path to TLS private key; enables HTTPS |
 | `PICLAW_WEB_MAX_CONTENT_CHARS` | `262144` | Max message size in characters; oversized messages are truncated with metadata |

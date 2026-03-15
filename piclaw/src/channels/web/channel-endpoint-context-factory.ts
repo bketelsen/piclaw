@@ -95,7 +95,7 @@ export function createWebChannelEndpointContexts(
       setPanelExpanded: (turnId, panel, expanded) => {
         channel.setPanelExpanded(turnId, panel, expanded);
       },
-      handleUiResponse: (requestId, outcome) => channel.uiBridge.handleUiResponse(requestId, outcome),
+      handleUiResponse: (requestId, outcome, chatJid) => channel.uiBridge.handleUiResponse(requestId, outcome, chatJid),
     }),
 
     agents: () => createAgentsEndpointContext({

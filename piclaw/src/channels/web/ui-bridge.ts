@@ -58,6 +58,7 @@ interface PendingUiRequest {
   reject: (err: Error) => void;
   timeoutId: ReturnType<typeof setTimeout>;
   kind: string;
+  chatJid: string;
 }
 
 /** Bridges extension UI prompts (confirm/input) to SSE events and API responses. */
@@ -110,7 +111,10 @@ export class UiBridge {
       },
       onError: (error) => {
         console.error("[web] Extension error:", error);
-        this.channel.broadcastEvent("extension_ui_error", error);
+        this.channel.broadcastEvent("extension_ui_error", {
+          chat_jid: chatJid,
+          error: error instanceof Error ? error.message : String(error),
+        });
       },
     });
   }
@@ -129,7 +133,7 @@ export class UiBridge {
           resolve(undefined);
         }, timeoutMs);
 
-        this.pendingUiRequests.set(requestId, { resolve, reject, timeoutId, kind });
+        this.pendingUiRequests.set(requestId, { resolve, reject, timeoutId, kind, chatJid });
         this.channel.broadcastEvent("extension_ui_request", {
           request_id: requestId,
           kind,
@@ -219,9 +223,13 @@ export class UiBridge {
     };
   }
 
-  handleUiResponse(requestId: string, outcome: unknown): { status: "ok" | "unknown_request" } {
+  handleUiResponse(requestId: string, outcome: unknown, chatJid?: string | null): { status: "ok" | "unknown_request" } {
     const pending = this.pendingUiRequests.get(requestId);
     if (!pending) return { status: "unknown_request" };
+    const normalizedChatJid = typeof chatJid === "string" && chatJid.trim() ? chatJid.trim() : null;
+    if (normalizedChatJid && pending.chatJid !== normalizedChatJid) {
+      return { status: "unknown_request" };
+    }
     clearTimeout(pending.timeoutId);
     this.pendingUiRequests.delete(requestId);
     pending.resolve(outcome);

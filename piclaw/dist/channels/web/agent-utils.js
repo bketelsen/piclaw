@@ -7,10 +7,11 @@
  * Consumers: web/agent-events.ts, web/agent-message-store.ts.
  */
 import { buildPreviewLines, countSoftLines, splitLines } from "../../utils/preview.js";
-/** Create a profile builder from the current agent name and avatar config. */
-export function createAgentProfileBuilder(agentName, agentAvatar, userName, userAvatar, userAvatarBackground) {
+/** Create a profile builder from the current chat, agent name, and avatar config. */
+export function createAgentProfileBuilder(chatJid, agentName, agentAvatar, userName, userAvatar, userAvatarBackground) {
     return (payload) => ({
         ...payload,
+        chat_jid: chatJid,
         agent_name: agentName,
         agent_avatar: agentAvatar ?? null,
         user_name: userName ?? null,
