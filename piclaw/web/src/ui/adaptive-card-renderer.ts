@@ -1,0 +1,152 @@
+/**
+ * ui/adaptive-card-renderer.ts – Render Adaptive Card JSON payloads in the web timeline.
+ *
+ * Lazy-loads the vendored adaptivecards SDK on first use, builds a HostConfig
+ * from the current theme, and renders cards into container elements.
+ *
+ * Consumers:
+ *   - web/src/components/post.ts calls renderAdaptiveCard() when a post
+ *     contains an adaptive_card content block.
+ */
+
+import { buildHostConfig } from "./adaptive-card-host-config.js";
+
+/** Shape of an adaptive_card content block in a message's content_blocks. */
+export interface AdaptiveCardBlock {
+  type: "adaptive_card";
+  card_id: string;
+  schema_version: string;
+  state: "active" | "completed" | "cancelled" | "failed";
+  payload: Record<string, unknown>;
+  fallback_text?: string;
+}
+
+/** Supported Adaptive Card schema versions. */
+const SUPPORTED_VERSIONS = new Set(["1.0", "1.1", "1.2", "1.3", "1.4", "1.5", "1.6"]);
+
+let sdkLoaded = false;
+let sdkLoadPromise: Promise<void> | null = null;
+
+/** Lazy-load the vendored adaptivecards SDK. */
+async function ensureSdk(): Promise<void> {
+  if (sdkLoaded) return;
+  if (sdkLoadPromise) return sdkLoadPromise;
+
+  sdkLoadPromise = new Promise<void>((resolve, reject) => {
+    const script = document.createElement("script");
+    script.src = "/js/vendor/adaptivecards.min.js";
+    script.onload = () => {
+      sdkLoaded = true;
+      resolve();
+    };
+    script.onerror = () => reject(new Error("Failed to load adaptivecards SDK"));
+    document.head.appendChild(script);
+  });
+
+  return sdkLoadPromise;
+}
+
+/** Get the global AdaptiveCards namespace after SDK is loaded. */
+function getAC(): typeof import("adaptivecards") {
+  return (globalThis as any).AdaptiveCards;
+}
+
+/**
+ * Check whether a content block is a renderable adaptive card.
+ */
+export function isAdaptiveCardBlock(block: unknown): block is AdaptiveCardBlock {
+  if (!block || typeof block !== "object") return false;
+  const b = block as Record<string, unknown>;
+  return (
+    b.type === "adaptive_card" &&
+    typeof b.card_id === "string" &&
+    typeof b.schema_version === "string" &&
+    typeof b.payload === "object" &&
+    b.payload !== null
+  );
+}
+
+/**
+ * Check whether a schema version is supported.
+ */
+export function isSupportedVersion(version: string): boolean {
+  return SUPPORTED_VERSIONS.has(version);
+}
+
+/**
+ * Extract adaptive card blocks from a message's content_blocks.
+ */
+export function extractCardBlocks(contentBlocks: unknown): AdaptiveCardBlock[] {
+  if (!Array.isArray(contentBlocks)) return [];
+  return contentBlocks.filter(isAdaptiveCardBlock);
+}
+
+/**
+ * Render an Adaptive Card into a container element.
+ *
+ * Returns true if the card was rendered successfully, false on failure.
+ * On failure, the caller should fall back to text rendering.
+ */
+export async function renderAdaptiveCard(
+  container: HTMLElement,
+  block: AdaptiveCardBlock,
+  options?: {
+    /** Called when a card action is executed (Phase 2). */
+    onAction?: (action: unknown) => void;
+  },
+): Promise<boolean> {
+  if (!isSupportedVersion(block.schema_version)) {
+    console.warn(
+      `[adaptive-card] Unsupported schema version ${block.schema_version} for card ${block.card_id}`,
+    );
+    return false;
+  }
+
+  try {
+    await ensureSdk();
+  } catch (err) {
+    console.error("[adaptive-card] Failed to load SDK:", err);
+    return false;
+  }
+
+  try {
+    const AC = getAC();
+    const card = new AC.AdaptiveCard();
+
+    // Apply HostConfig from current theme
+    card.hostConfig = new AC.HostConfig(buildHostConfig());
+
+    // Parse the card payload
+    card.parse(block.payload);
+
+    // Wire up action handler (Phase 2 — currently logs only)
+    card.onExecuteAction = (action: any) => {
+      if (options?.onAction) {
+        options.onAction(action);
+      } else {
+        console.log("[adaptive-card] Action executed (not wired yet):", action);
+      }
+    };
+
+    // Render
+    const rendered = card.render();
+    if (!rendered) {
+      console.warn(`[adaptive-card] Card ${block.card_id} rendered to null`);
+      return false;
+    }
+
+    // Style the container
+    container.classList.add("adaptive-card-container");
+
+    // For completed/cancelled/failed cards, disable interactions
+    if (block.state !== "active") {
+      container.classList.add("adaptive-card-finished");
+    }
+
+    container.appendChild(rendered);
+    return true;
+  } catch (err) {
+    console.error(`[adaptive-card] Failed to render card ${block.card_id}:`, err);
+    return false;
+  }
+}

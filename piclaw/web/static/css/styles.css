@@ -3064,6 +3064,41 @@ body {
     cursor: zoom-in;
 }
 
+/* Adaptive Cards */
+.post-adaptive-cards {
+    margin-top: 8px;
+}
+.adaptive-card-container {
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    padding: 12px;
+    background: var(--bg-secondary);
+    margin-bottom: 8px;
+    overflow: hidden;
+}
+.adaptive-card-container .ac-textBlock {
+    color: var(--text-color) !important;
+}
+.adaptive-card-container .ac-pushButton {
+    background: var(--accent-color) !important;
+    color: var(--bg-primary) !important;
+    border: none !important;
+    border-radius: var(--radius-sm) !important;
+    padding: 6px 16px !important;
+    cursor: pointer !important;
+    font-size: 13px !important;
+}
+.adaptive-card-container .ac-pushButton:hover {
+    opacity: 0.9;
+}
+.adaptive-card-finished {
+    opacity: 0.7;
+    pointer-events: none;
+}
+.adaptive-card-finished .ac-pushButton {
+    display: none !important;
+}
+
 /* Hashtags */
 .hashtag {
     color: var(--accent-color);

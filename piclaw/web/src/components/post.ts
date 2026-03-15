@@ -5,6 +5,7 @@ import { renderMarkdown, renderMermaidDiagrams, sanitizeUrl } from '../markdown.
 import { formatCount, formatFileSize, formatTime, formatTimestamp } from '../utils/format.js';
 import { DEFAULT_AGENT_NAME, getAvatarInfo } from '../ui/agent-utils.js';
 import { getAttachmentPreviewKind } from '../ui/attachment-preview.js';
+import { extractCardBlocks, renderAdaptiveCard } from '../ui/adaptive-card-renderer.js';
 import { AttachmentPreviewModal } from './attachment-preview-modal.js';
 import { ImageModal } from './image-modal.js';
 import { FilePill } from './file-pill.js';
@@ -717,12 +718,31 @@ export function Post({ post, onClick, onHashtagClick, onMessageRef, onScrollToMe
             label: entry.name || `attachment-${idx + 1}`,
         }));
 
+    // Extract adaptive card blocks from content_blocks
+    const cardBlocks = useMemo(() => extractCardBlocks(blocks), [blocks]);
+
     // Render mermaid diagrams and enhance code blocks after content is mounted
     useEffect(() => {
         if (!contentRef.current) return undefined;
         renderMermaidDiagrams(contentRef.current);
         return enhanceCodeBlocks(contentRef.current);
     }, [renderedHtml]);
+
+    // Render adaptive cards into their containers
+    const cardContainerRef = useRef(null);
+    useEffect(() => {
+        if (!cardContainerRef.current || cardBlocks.length === 0) return;
+        const container = cardContainerRef.current;
+        container.innerHTML = '';
+        for (const block of cardBlocks) {
+            const cardEl = document.createElement('div');
+            container.appendChild(cardEl);
+            renderAdaptiveCard(cardEl, block).catch((err) => {
+                console.error('[post] adaptive card render error:', err);
+                cardEl.textContent = block.fallback_text || 'Card failed to render.';
+            });
+        }
+    }, [cardBlocks]);
 
     return html`
         <div id=${`post-${post.id}`} class="post ${isAgent ? 'agent-post' : ''} ${isThreadReply ? 'thread-reply' : ''} ${isThreadPrev ? 'thread-prev' : ''} ${isThreadNext ? 'thread-next' : ''} ${isRemoving ? 'removing' : ''}" onClick=${onClick}>
@@ -833,6 +853,9 @@ export function Post({ post, onClick, onHashtagClick, onMessageRef, onScrollToMe
                             }
                         }}
                     />
+                `}
+                ${cardBlocks.length > 0 && html`
+                    <div ref=${cardContainerRef} class="post-adaptive-cards" />
                 `}
                 ${textAnnotations.length > 0 && html`
                     ${textAnnotations.map((annotations, idx) => html`
