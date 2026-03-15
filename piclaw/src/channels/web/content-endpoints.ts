@@ -17,41 +17,44 @@ export interface ContentEndpointsContext {
   getBuffer(turnId: string, panel: "thought" | "draft"): WebAgentBufferEntry | undefined;
 }
 
-/** Return the timeline response for the default web chat. */
+/** Return the timeline response for the requested web chat (defaults to the main web chat). */
 export function handleTimelineRequest(
   limit: number,
   before: number | undefined,
+  chatJid: string | undefined,
   ctx: ContentEndpointsContext
 ): Response {
-  const result = getTimelineResponse(ctx.defaultChatJid, limit, before);
+  const result = getTimelineResponse(chatJid || ctx.defaultChatJid, limit, before);
   return ctx.json(result.body, result.status);
 }
 
-/** Return posts for a hashtag in the default web chat. */
+/** Return posts for a hashtag in the requested web chat (defaults to the main web chat). */
 export function handleHashtagRequest(
   tag: string,
   limit: number,
   offset: number,
+  chatJid: string | undefined,
   ctx: ContentEndpointsContext
 ): Response {
-  const result = getHashtagResponse(ctx.defaultChatJid, tag, limit, offset);
+  const result = getHashtagResponse(chatJid || ctx.defaultChatJid, tag, limit, offset);
   return ctx.json(result.body, result.status);
 }
 
-/** Return search results for a query in the default web chat. */
+/** Return search results for a query in the requested web chat (defaults to the main web chat). */
 export function handleSearchRequest(
   query: string,
   limit: number,
   offset: number,
+  chatJid: string | undefined,
   ctx: ContentEndpointsContext
 ): Response {
-  const result = getSearchResponse(ctx.defaultChatJid, query, limit, offset);
+  const result = getSearchResponse(chatJid || ctx.defaultChatJid, query, limit, offset);
   return ctx.json(result.body, result.status);
 }
 
 /** Return a thread payload rooted at the provided interaction id. */
-export function handleThreadRequest(id: number | null, ctx: ContentEndpointsContext): Response {
-  const result = getThreadResponse(ctx.defaultChatJid, id);
+export function handleThreadRequest(id: number | null, chatJid: string | undefined, ctx: ContentEndpointsContext): Response {
+  const result = getThreadResponse(chatJid || ctx.defaultChatJid, id);
   return ctx.json(result.body, result.status);
 }
 

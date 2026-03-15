@@ -42,6 +42,17 @@ test("web channel timeline and search endpoints", async () => {
   db.storeMessage(makeMessage("hello #world", "2024-01-01T00:00:00.000Z"));
   db.storeMessage(makeMessage("another message", "2024-01-01T00:01:00.000Z"));
   db.storeMessage(makeMessage("#world hello", "2024-01-01T00:02:00.000Z"));
+  db.storeChatMetadata("web:branch", new Date().toISOString(), "Branch");
+  db.storeMessage({
+    id: `msg-${Math.random()}`,
+    chat_jid: "web:branch",
+    sender: "user",
+    sender_name: "User",
+    content: "branch only hello",
+    timestamp: "2024-01-01T00:03:00.000Z",
+    is_from_me: false,
+    is_bot_message: false,
+  });
 
   const webMod = await import("../../../src/channels/web.js");
   const web = new (webMod.WebChannel as any)({
@@ -60,6 +71,21 @@ test("web channel timeline and search endpoints", async () => {
   const hashtagRes = await (web as any).handleRequest(new Request("http://test/hashtag/world?limit=10&offset=0"));
   const hashtagJson = await hashtagRes.json();
   expect(hashtagJson.posts.length).toBe(2);
+
+  const branchTimelineRes = await (web as any).handleRequest(new Request("http://test/timeline?limit=10&chat_jid=web%3Abranch"));
+  const branchTimelineJson = await branchTimelineRes.json();
+  expect(branchTimelineJson.posts).toHaveLength(1);
+  expect(branchTimelineJson.posts[0]?.data?.content).toBe("branch only hello");
+
+  const branchSearchRes = await (web as any).handleRequest(new Request("http://test/search?q=branch&limit=10&offset=0&chat_jid=web%3Abranch"));
+  const branchSearchJson = await branchSearchRes.json();
+  expect(branchSearchJson.results).toHaveLength(1);
+  expect(branchSearchJson.results[0]?.data?.content).toBe("branch only hello");
+
+  const branchThreadRes = await (web as any).handleRequest(new Request(`http://test/thread/${branchTimelineJson.posts[0]?.id}?chat_jid=web%3Abranch`));
+  const branchThreadJson = await branchThreadRes.json();
+  expect(branchThreadJson.thread).toHaveLength(1);
+  expect(branchThreadJson.thread[0]?.data?.content).toBe("branch only hello");
 });
 
 test("web channel can create a post", async () => {

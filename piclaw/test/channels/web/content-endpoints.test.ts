@@ -25,16 +25,16 @@ describe("web content endpoint helpers", () => {
     initDatabase();
     const ctx = createContext();
 
-    const timeline = handleTimelineRequest(20, undefined, ctx);
+    const timeline = handleTimelineRequest(20, undefined, undefined, ctx);
     expect(timeline.status).toBe(200);
 
-    const hashtag = handleHashtagRequest("dev", 20, 0, ctx);
+    const hashtag = handleHashtagRequest("dev", 20, 0, undefined, ctx);
     expect(hashtag.status).toBe(200);
 
-    const searchBad = handleSearchRequest("", 20, 0, ctx);
+    const searchBad = handleSearchRequest("", 20, 0, undefined, ctx);
     expect(searchBad.status).toBe(400);
 
-    const threadMissing = handleThreadRequest(null, ctx);
+    const threadMissing = handleThreadRequest(null, undefined, ctx);
     expect(threadMissing.status).toBe(404);
   });
 

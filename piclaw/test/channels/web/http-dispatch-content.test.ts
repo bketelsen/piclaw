@@ -16,22 +16,22 @@ describe("web http content dispatch", () => {
     const channel = {
       clampInt: (_value: string | null, fallback: number) => fallback,
       parseOptionalInt: () => 7,
-      handleTimeline: (limit: number, before?: number) => new Response(`timeline:${limit}:${String(before)}`),
-      handleHashtag: (tag: string) => new Response(`hashtag:${tag}`),
-      handleSearch: (query: string) => new Response(`search:${query}`),
-      handleThread: (id: number | null) => new Response(`thread:${String(id)}`),
+      handleTimeline: (limit: number, before?: number, chatJid?: string) => new Response(`timeline:${limit}:${String(before)}:${String(chatJid ?? '')}`),
+      handleHashtag: (tag: string, _limit?: number, _offset?: number, chatJid?: string) => new Response(`hashtag:${tag}:${String(chatJid ?? '')}`),
+      handleSearch: (query: string, _limit?: number, _offset?: number, chatJid?: string) => new Response(`search:${query}:${String(chatJid ?? '')}`),
+      handleThread: (id: number | null, chatJid?: string) => new Response(`thread:${String(id)}:${String(chatJid ?? '')}`),
       handlePost: async (_req: Request, isReply: boolean) => new Response(isReply ? "reply" : "post"),
       handleUpdatePost: async (_req: Request, id: number | null) => new Response(`patch:${String(id)}`),
     } as any;
 
-    const timelineReq = new Request("https://example.com/timeline", { method: "GET" });
-    expect(await (await handleContentPrimaryRoutes(channel, timelineReq, "/timeline", new URL(timelineReq.url)))?.text()).toBe("timeline:10:7");
+    const timelineReq = new Request("https://example.com/timeline?chat_jid=web%3Abranch", { method: "GET" });
+    expect(await (await handleContentPrimaryRoutes(channel, timelineReq, "/timeline", new URL(timelineReq.url)))?.text()).toBe("timeline:10:7:web:branch");
 
-    const hashtagReq = new Request("https://example.com/hashtag/demo", { method: "GET" });
-    expect(await (await handleContentPrimaryRoutes(channel, hashtagReq, "/hashtag/demo", new URL(hashtagReq.url)))?.text()).toBe("hashtag:demo");
+    const hashtagReq = new Request("https://example.com/hashtag/demo?chat_jid=web%3Abranch", { method: "GET" });
+    expect(await (await handleContentPrimaryRoutes(channel, hashtagReq, "/hashtag/demo", new URL(hashtagReq.url)))?.text()).toBe("hashtag:demo:web:branch");
 
-    const searchReq = new Request("https://example.com/search?q=hello", { method: "GET" });
-    expect(await (await handleContentPrimaryRoutes(channel, searchReq, "/search", new URL(searchReq.url)))?.text()).toBe("search:hello");
+    const searchReq = new Request("https://example.com/search?q=hello&chat_jid=web%3Abranch", { method: "GET" });
+    expect(await (await handleContentPrimaryRoutes(channel, searchReq, "/search", new URL(searchReq.url)))?.text()).toBe("search:hello:web:branch");
 
     const postReq = new Request("https://example.com/post", { method: "POST" });
     expect(await (await handleContentPrimaryRoutes(channel, postReq, "/post", new URL(postReq.url)))?.text()).toBe("post");
@@ -42,8 +42,8 @@ describe("web http content dispatch", () => {
     const patchReq = new Request("https://example.com/post/7", { method: "PATCH" });
     expect(await (await handleContentPrimaryRoutes(channel, patchReq, "/post/7", new URL(patchReq.url)))?.text()).toBe("patch:7");
 
-    const threadReq = new Request("https://example.com/thread/7", { method: "GET" });
-    expect(await (await handleContentPrimaryRoutes(channel, threadReq, "/thread/7", new URL(threadReq.url)))?.text()).toBe("thread:7");
+    const threadReq = new Request("https://example.com/thread/7?chat_jid=web%3Abranch", { method: "GET" });
+    expect(await (await handleContentPrimaryRoutes(channel, threadReq, "/thread/7", new URL(threadReq.url)))?.text()).toBe("thread:7:web:branch");
   });
 
   test("secondary handles delete/internal routes", async () => {
