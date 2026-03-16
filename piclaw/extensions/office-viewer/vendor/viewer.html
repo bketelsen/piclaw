@@ -7,6 +7,8 @@
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
   html, body { width: 100%; height: 100%; overflow: hidden; background: #1e1e1e; color: #e0e0e0; font-family: system-ui, -apple-system, sans-serif; }
+
+  /* Loading / error overlays */
   #loading { display: flex; align-items: center; justify-content: center; width: 100%; height: 100%; }
   #loading .spinner { font-size: 15px; color: #888; }
   #error { display: none; align-items: center; justify-content: center; width: 100%; height: 100%; }
@@ -15,38 +17,85 @@
   #error .msg .title { font-size: 15px; font-weight: 600; margin-bottom: 8px; }
   #error .msg .detail { font-size: 13px; color: #999; line-height: 1.6; }
 
-  /* docx container */
-  #docx-container { width: 100%; height: 100%; overflow: auto; display: none; background: #fff; }
-  #docx-container .docx-wrapper { padding: 20px; }
+  /* Floating toolbar — appears on hover/tap at top-right */
+  #toolbar {
+    position: fixed; top: 0; right: 0; z-index: 100;
+    display: none; /* hidden until a viewer sets it up */
+    gap: 4px; padding: 6px 8px;
+    background: rgba(30,30,30,0.92); border-bottom-left-radius: 6px;
+    backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
+    opacity: 0; transition: opacity 0.2s;
+  }
+  #toolbar.visible { display: flex; }
+  #toolbar:hover, #toolbar.pinned { opacity: 1; }
+  /* Show on parent hover — the entire top edge is a hover target */
+  #toolbar-trigger {
+    position: fixed; top: 0; right: 0; width: 120px; height: 24px; z-index: 99;
+  }
+  #toolbar-trigger:hover + #toolbar, #toolbar:hover { opacity: 1; }
+  #toolbar label {
+    display: flex; align-items: center; gap: 4px;
+    font-size: 11px; color: #bbb; cursor: pointer; white-space: nowrap;
+    padding: 3px 6px; border-radius: 3px; user-select: none;
+  }
+  #toolbar label:hover { background: rgba(255,255,255,0.08); color: #e0e0e0; }
+  #toolbar input[type="checkbox"] { width: 13px; height: 13px; accent-color: #1d9bf0; }
 
-  /* xlsx container */
-  #xlsx-container { width: 100%; height: 100%; overflow: auto; display: none; background: #fff; color: #222; font-size: 13px; }
-  #xlsx-tabs { display: flex; gap: 0; background: #f0f0f0; border-bottom: 1px solid #ccc; padding: 0 8px; overflow-x: auto; flex-shrink: 0; }
-  #xlsx-tabs button { padding: 6px 16px; border: none; background: transparent; cursor: pointer; font-size: 12px; color: #555; border-bottom: 2px solid transparent; white-space: nowrap; }
-  #xlsx-tabs button.active { color: #1d9bf0; border-bottom-color: #1d9bf0; font-weight: 600; }
+  /* docx — full-bleed document, no extra padding */
+  #docx-container { width: 100%; height: 100%; overflow: auto; display: none; background: #fff; }
+
+  /* xlsx — sheet tabs at bottom, table fills rest */
+  #xlsx-container { width: 100%; height: 100%; display: none; flex-direction: column; background: #fff; color: #222; }
   #xlsx-table-wrap { overflow: auto; flex: 1; }
   #xlsx-table-wrap table { border-collapse: collapse; width: max-content; min-width: 100%; }
-  #xlsx-table-wrap th, #xlsx-table-wrap td { border: 1px solid #ddd; padding: 4px 8px; text-align: left; white-space: nowrap; font-size: 12px; }
+  #xlsx-table-wrap td, #xlsx-table-wrap th { border: 1px solid #ddd; padding: 3px 8px; font-size: 12px; white-space: nowrap; }
   #xlsx-table-wrap th { background: #f5f5f5; font-weight: 600; position: sticky; top: 0; z-index: 1; }
   #xlsx-table-wrap tr:nth-child(even) { background: #fafafa; }
+  /* comment indicators */
+  #xlsx-table-wrap td[title] { position: relative; }
+  #xlsx-table-wrap td[title]::after {
+    content: ''; position: absolute; top: 0; right: 0;
+    border-width: 0 6px 6px 0; border-style: solid;
+    border-color: transparent #f59e0b transparent transparent;
+  }
+  #xlsx-tabs {
+    display: flex; gap: 0; background: #f0f0f0; border-top: 1px solid #ccc;
+    padding: 0 8px; overflow-x: auto; flex-shrink: 0;
+  }
+  #xlsx-tabs button {
+    padding: 5px 14px; border: none; background: transparent; cursor: pointer;
+    font-size: 11px; color: #555; border-top: 2px solid transparent; white-space: nowrap;
+  }
+  #xlsx-tabs button.active { color: #1d9bf0; border-top-color: #1d9bf0; font-weight: 600; }
 
-  /* pptx container */
+  /* pptx — canvas centered, nav bar at bottom */
   #pptx-container { width: 100%; height: 100%; display: none; flex-direction: column; align-items: center; background: #2a2a2a; }
   #pptx-canvas-wrap { flex: 1; display: flex; align-items: center; justify-content: center; overflow: hidden; width: 100%; }
   #pptx-canvas { max-width: 100%; max-height: 100%; }
-  #pptx-nav { display: flex; align-items: center; gap: 12px; padding: 10px 16px; background: #1e1e1e; width: 100%; justify-content: center; }
-  #pptx-nav button { padding: 6px 16px; border: none; border-radius: 4px; background: #333; color: #e0e0e0; cursor: pointer; font-size: 13px; }
+  #pptx-nav {
+    display: flex; align-items: center; gap: 12px; padding: 8px 16px;
+    background: #1e1e1e; width: 100%; justify-content: center;
+  }
+  #pptx-nav button {
+    padding: 5px 14px; border: none; border-radius: 4px;
+    background: #333; color: #e0e0e0; cursor: pointer; font-size: 12px;
+  }
   #pptx-nav button:hover { background: #444; }
   #pptx-nav button:disabled { opacity: 0.3; cursor: default; }
-  #pptx-nav .status { font-size: 13px; color: #999; min-width: 80px; text-align: center; }
+  #pptx-nav .status { font-size: 12px; color: #999; min-width: 60px; text-align: center; }
 </style>
 </head>
 <body>
-<div id="loading"><div class="spinner">Loading document…</div></div>
+<div id="loading"><div class="spinner">Loading…</div></div>
 <div id="error"><div class="msg"><div class="icon">⚠️</div><div class="title" id="err-title">Error</div><div class="detail" id="err-detail"></div></div></div>
+
+<!-- Hover trigger + floating toolbar (populated per viewer) -->
+<div id="toolbar-trigger"></div>
+<div id="toolbar"></div>
+
 <div id="docx-container"></div>
-<div id="xlsx-container" style="display:none;flex-direction:column"><div id="xlsx-tabs"></div><div id="xlsx-table-wrap"></div></div>
-<div id="pptx-container"><div id="pptx-canvas-wrap"><canvas id="pptx-canvas"></canvas></div><div id="pptx-nav"><button id="pptx-prev">◀ Prev</button><span class="status" id="pptx-status">–</span><button id="pptx-next">Next ▶</button></div></div>
+<div id="xlsx-container"><div id="xlsx-table-wrap"></div><div id="xlsx-tabs"></div></div>
+<div id="pptx-container"><div id="pptx-canvas-wrap"><canvas id="pptx-canvas"></canvas></div><div id="pptx-nav"><button id="pptx-prev">◀</button><span class="status" id="pptx-status">–</span><button id="pptx-next">▶</button></div></div>
 
 <script src="jszip.min.js"></script>
 <script src="docx-preview.min.js"></script>
@@ -54,125 +103,187 @@
 <script src="PptxViewJS.min.js"></script>
 <script>
 (function() {
-  const params = new URLSearchParams(location.search);
-  const url = params.get('url');
-  const name = params.get('name') || 'document';
-
+  var params = new URLSearchParams(location.search);
+  var url = params.get('url');
+  var name = params.get('name') || 'document';
   if (!url) return showError('No document URL', 'Pass ?url=... to load a document.');
 
-  const ext = (name.match(/\.[^.]+$/) || [''])[0].toLowerCase();
+  var ext = (name.match(/\.[^.]+$/) || [''])[0].toLowerCase();
 
   fetch(url)
-    .then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.arrayBuffer(); })
-    .then(buf => render(ext, buf))
-    .catch(err => showError('Failed to load', err.message));
+    .then(function(r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.arrayBuffer(); })
+    .then(function(buf) { render(ext, buf); })
+    .catch(function(err) { showError('Failed to load', err.message); });
 
+  // ── Toolbar helpers ─────────────────────────────────────────
+  var toolbar = document.getElementById('toolbar');
+
+  function addToggle(label, defaultOn, onChange) {
+    var lbl = document.createElement('label');
+    var cb = document.createElement('input');
+    cb.type = 'checkbox';
+    cb.checked = defaultOn;
+    lbl.appendChild(cb);
+    lbl.appendChild(document.createTextNode(label));
+    toolbar.appendChild(lbl);
+    cb.addEventListener('change', function() { onChange(cb.checked); });
+    return cb;
+  }
+
+  function showToolbar() { toolbar.classList.add('visible'); }
+
+  // ── Routing ─────────────────────────────────────────────────
   function render(ext, buf) {
     document.getElementById('loading').style.display = 'none';
-    if (['.docx', '.doc', '.odt', '.rtf'].includes(ext)) return renderDocx(buf);
-    if (['.xlsx', '.xls', '.ods', '.csv'].includes(ext)) return renderXlsx(buf, ext);
-    if (['.pptx', '.ppt', '.odp'].includes(ext)) return renderPptx(buf);
+    if (['.docx','.doc','.odt','.rtf'].includes(ext)) return renderDocx(buf);
+    if (['.xlsx','.xls','.ods','.csv'].includes(ext)) return renderXlsx(buf);
+    if (['.pptx','.ppt','.odp'].includes(ext)) return renderPptx(buf);
     showError('Unsupported format', 'File type ' + ext + ' is not supported.');
   }
 
+  // ── DOCX ────────────────────────────────────────────────────
   function renderDocx(buf) {
-    const el = document.getElementById('docx-container');
+    var el = document.getElementById('docx-container');
     el.style.display = 'block';
-    docx.renderAsync(buf, el, null, {
-      className: 'docx',
-      inWrapper: true,
-      ignoreWidth: false,
-      ignoreHeight: false,
-      ignoreFonts: false,
-      breakPages: true,
-      ignoreLastRenderedPageBreak: true,
-      experimental: true,
-    }).catch(err => showError('DOCX render failed', err.message));
+
+    var opts = {
+      className: 'docx', inWrapper: true,
+      ignoreWidth: false, ignoreHeight: false, ignoreFonts: false,
+      breakPages: true, ignoreLastRenderedPageBreak: true, experimental: true,
+      renderHeaders: true, renderFooters: true,
+      renderFootnotes: true, renderEndnotes: true,
+      renderChanges: false, renderComments: false,
+    };
+
+    function rerender() {
+      el.innerHTML = '';
+      docx.renderAsync(buf, el, null, opts)
+        .catch(function(err) { showError('DOCX render failed', err.message); });
+    }
+
+    showToolbar();
+    addToggle('Track changes', false, function(on) { opts.renderChanges = on; rerender(); });
+    addToggle('Comments', false, function(on) { opts.renderComments = on; rerender(); });
+
+    rerender();
   }
 
-  function renderXlsx(buf, ext) {
-    const container = document.getElementById('xlsx-container');
+  // ── XLSX ────────────────────────────────────────────────────
+  function renderXlsx(buf) {
+    var container = document.getElementById('xlsx-container');
     container.style.display = 'flex';
-    let wb;
-    try {
-      wb = XLSX.read(buf, { type: 'array' });
-    } catch(err) {
-      showError('Spreadsheet parse failed', err.message);
-      return;
-    }
-    const tabBar = document.getElementById('xlsx-tabs');
-    const tableWrap = document.getElementById('xlsx-table-wrap');
+    var wb;
+    try { wb = XLSX.read(buf, { type: 'array', cellStyles: true }); }
+    catch(err) { return showError('Spreadsheet parse failed', err.message); }
+
+    var tabBar = document.getElementById('xlsx-tabs');
+    var tableWrap = document.getElementById('xlsx-table-wrap');
+    var showComments = false;
 
     function showSheet(sheetName) {
-      const ws = wb.Sheets[sheetName];
+      var ws = wb.Sheets[sheetName];
       if (!ws) return;
-      const html = XLSX.utils.sheet_to_html(ws, { editable: false });
+      var html = XLSX.utils.sheet_to_html(ws, { editable: false });
       tableWrap.innerHTML = html;
-      // style the generated table
-      const tbl = tableWrap.querySelector('table');
+
+      // Style the table inline (iframe has no external stylesheets)
+      var tbl = tableWrap.querySelector('table');
       if (tbl) { tbl.style.borderCollapse = 'collapse'; tbl.style.width = 'max-content'; tbl.style.minWidth = '100%'; }
-      tableWrap.querySelectorAll('td,th').forEach(cell => {
+      tableWrap.querySelectorAll('td,th').forEach(function(cell) {
         cell.style.border = '1px solid #ddd';
-        cell.style.padding = '4px 8px';
+        cell.style.padding = '3px 8px';
         cell.style.fontSize = '12px';
         cell.style.whiteSpace = 'nowrap';
       });
-      tableWrap.querySelectorAll('th').forEach(th => {
+      tableWrap.querySelectorAll('th').forEach(function(th) {
         th.style.background = '#f5f5f5';
         th.style.fontWeight = '600';
         th.style.position = 'sticky';
         th.style.top = '0';
       });
-      // update active tab
-      tabBar.querySelectorAll('button').forEach(b => b.classList.toggle('active', b.textContent === sheetName));
+
+      // Overlay cell comments as title tooltips + corner marker
+      if (showComments && ws['!ref']) {
+        var range = XLSX.utils.decode_range(ws['!ref']);
+        var rows = tableWrap.querySelectorAll('tr');
+        for (var R = range.s.r; R <= range.e.r; R++) {
+          var tr = rows[R + 1]; // +1 for header row
+          if (!tr) continue;
+          for (var C = range.s.c; C <= range.e.c; C++) {
+            var addr = XLSX.utils.encode_cell({r: R, c: C});
+            var cell = ws[addr];
+            if (cell && cell.c && cell.c.length) {
+              var td = tr.children[C];
+              if (td) {
+                var text = cell.c.map(function(cm) {
+                  return (cm.a ? cm.a + ': ' : '') + (cm.t || '');
+                }).join('\n');
+                td.setAttribute('title', text);
+                td.style.position = 'relative';
+              }
+            }
+          }
+        }
+      }
+
+      tabBar.querySelectorAll('button').forEach(function(b) {
+        b.classList.toggle('active', b.textContent === sheetName);
+      });
     }
 
-    wb.SheetNames.forEach((sn, i) => {
-      const btn = document.createElement('button');
+    var activeSheet = wb.SheetNames[0];
+    wb.SheetNames.forEach(function(sn, i) {
+      var btn = document.createElement('button');
       btn.textContent = sn;
-      btn.addEventListener('click', () => showSheet(sn));
+      btn.addEventListener('click', function() { activeSheet = sn; showSheet(sn); });
       if (i === 0) btn.className = 'active';
       tabBar.appendChild(btn);
     });
 
-    if (wb.SheetNames.length > 0) showSheet(wb.SheetNames[0]);
+    showToolbar();
+    addToggle('Comments', false, function(on) { showComments = on; showSheet(activeSheet); });
+
+    if (activeSheet) showSheet(activeSheet);
   }
 
+  // ── PPTX ────────────────────────────────────────────────────
   function renderPptx(buf) {
-    const container = document.getElementById('pptx-container');
+    var container = document.getElementById('pptx-container');
     container.style.display = 'flex';
-    const canvas = document.getElementById('pptx-canvas');
-    const status = document.getElementById('pptx-status');
-    const prevBtn = document.getElementById('pptx-prev');
-    const nextBtn = document.getElementById('pptx-next');
+    var canvas = document.getElementById('pptx-canvas');
+    var status = document.getElementById('pptx-status');
+    var prevBtn = document.getElementById('pptx-prev');
+    var nextBtn = document.getElementById('pptx-next');
 
-    const PPTXViewer = window.PptxViewJS?.PPTXViewer;
-    if (!PPTXViewer) { showError('PPTX library not loaded', 'PptxViewJS failed to initialize.'); return; }
+    var PPTXViewer = window.PptxViewJS && window.PptxViewJS.PPTXViewer;
+    if (!PPTXViewer) return showError('PPTX library not loaded', 'PptxViewJS failed to initialize.');
 
-    const viewer = new PPTXViewer({ canvas: canvas });
-    const blob = new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.presentationml.presentation' });
-    const file = new File([blob], name, { type: blob.type });
+    var viewer = new PPTXViewer({ canvas: canvas });
+    var blob = new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.presentationml.presentation' });
+    var file = new File([blob], name, { type: blob.type });
 
-    viewer.loadFile(file).then(() => {
+    viewer.loadFile(file).then(function() {
       viewer.render();
       updateNav();
-    }).catch(err => showError('PPTX render failed', err.message));
+    }).catch(function(err) { showError('PPTX render failed', err.message); });
 
     function updateNav() {
-      const cur = viewer.getCurrentSlideIndex() + 1;
-      const total = viewer.getSlideCount();
+      var cur = viewer.getCurrentSlideIndex() + 1;
+      var total = viewer.getSlideCount();
       status.textContent = cur + ' / ' + total;
       prevBtn.disabled = cur <= 1;
       nextBtn.disabled = cur >= total;
     }
 
-    prevBtn.addEventListener('click', () => { viewer.previousSlide().then(() => { viewer.render(); updateNav(); }); });
-    nextBtn.addEventListener('click', () => { viewer.nextSlide().then(() => { viewer.render(); updateNav(); }); });
+    prevBtn.addEventListener('click', function() { viewer.previousSlide().then(function() { viewer.render(); updateNav(); }); });
+    nextBtn.addEventListener('click', function() { viewer.nextSlide().then(function() { viewer.render(); updateNav(); }); });
+    // No toolbar toggles for PPTX — PptxViewJS doesn't expose notes/comments
   }
 
+  // ── Error ───────────────────────────────────────────────────
   function showError(title, detail) {
     document.getElementById('loading').style.display = 'none';
-    const el = document.getElementById('error');
+    var el = document.getElementById('error');
     el.style.display = 'flex';
     document.getElementById('err-title').textContent = title;
     document.getElementById('err-detail').textContent = detail || '';
