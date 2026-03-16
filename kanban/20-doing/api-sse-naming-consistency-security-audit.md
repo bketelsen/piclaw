@@ -222,6 +222,13 @@ fixes or follow-up tickets.
   - exposed matching `ok(...)` / `error(...)` helpers from `ResponseService`
   - switched `src/channels/web/ui-endpoints.ts` and `src/channels/web/handlers/workspace.ts` to use the shared helpers for lightweight success/error envelopes
   - extended regression coverage in `test/channels/web/web-utils.test.ts` and `test/channels/web/web-response-service.test.ts`
+- Extended the response-format consistency slice into older post mutation helpers:
+  - `PATCH /post/:id`
+  - `POST /internal/post`
+- Those endpoints now return compatibility-preserving envelopes of the form:
+  - `{ status: "ok", ok: true, id }`
+  so older callers still see `ok: true` while the newer lightweight status convention is also present.
+- Updated regression coverage in `test/channels/web/post-mutations.test.ts` and documented the compatibility category in `docs/web-api-endpoint-inventory.md`.
 - Remaining work is still broader response-format consistency analysis plus deciding whether that browser-event bridge is sufficient or whether a richer first-class extension-UI surface is warranted.
 - This ticket remains the active umbrella for that work rather than being closed after incremental guardrail slices.
 

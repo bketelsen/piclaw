@@ -67,7 +67,7 @@ export async function handleUpdatePostRequest(
   }
 
   ctx.broadcastInteractionUpdated(updated);
-  return ctx.json({ ok: true, id: updated.id });
+  return ctx.json({ status: "ok", ok: true, id: updated.id });
 }
 
 /** POST /internal/post orchestration. */
@@ -96,5 +96,5 @@ export async function handleInternalPostRequest(req: Request, ctx: PostMutations
   if (!interaction) return ctx.json({ error: "Failed to store" }, 500);
 
   ctx.broadcastAgentResponse(interaction);
-  return ctx.json({ ok: true, id: interaction.id }, 201);
+  return ctx.json({ status: "ok", ok: true, id: interaction.id }, 201);
 }

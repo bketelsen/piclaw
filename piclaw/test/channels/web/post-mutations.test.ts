@@ -78,7 +78,7 @@ describe("web post mutation helpers", () => {
 
     const res = await handleUpdatePostRequest(req, 44, ctx);
     expect(res.status).toBe(200);
-    expect(await res.json()).toEqual({ ok: true, id: 44 });
+    expect(await res.json()).toEqual({ status: "ok", ok: true, id: 44 });
     expect(usedChatJid).toBe("web:branch");
     expect(setThread).toEqual({ messageId: 44, threadId: 7 });
     expect(broadcasted).toBeTrue();
@@ -117,7 +117,7 @@ describe("web post mutation helpers", () => {
     const okRes = await handleInternalPostRequest(okReq, ctx);
 
     expect(okRes.status).toBe(201);
-    expect(await okRes.json()).toEqual({ ok: true, id: 55 });
+    expect(await okRes.json()).toEqual({ status: "ok", ok: true, id: 55 });
     expect(usedChatJid).toBe("web:branch");
     expect(usedThreadId).toBe(99);
     expect(broadcasted).toBeTrue();

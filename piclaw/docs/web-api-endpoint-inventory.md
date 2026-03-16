@@ -172,10 +172,13 @@ web endpoint helpers (`ui-endpoints.ts`, `handlers/workspace.ts`).
 2. **simple mutations**
    - `{ status: "ok" }` or `{ status: "ok", ...extraFields }`
    - examples: `/agent/respond`, `/workspace/visibility`
-3. **resource-creating mutations**
+3. **compatibility simple mutations**
+   - legacy callers may still expect `ok: true`, but the preferred envelope now also includes `status: "ok"`
+   - examples: `PATCH /post/:id`, `POST /internal/post`
+4. **resource-creating mutations**
    - created entity / richer payload rather than a bare status
    - examples: `/post`, `/reply`, `/media/upload`, `/agent/branch-fork`
-4. **binary/streaming**
+5. **binary/streaming**
    - raw file/media/SSE/WebSocket
 
 ### Inconsistencies worth noting
@@ -185,7 +188,7 @@ These are not urgent breakages, but they are visible:
 - `/reply` is a verb-style sibling beside noun-style `/post`
 - `/agents` is still present as a legacy compatibility route, but the preferred family path is now `/agent/roster`
 - `/workspace/file` multiplexes create/read/update/delete by method, while posts use separate resource/action paths
-- some mutations return `{ status: "ok" }`, while others return full resource payloads; both are reasonable, but the style is not formally documented elsewhere
+- some mutations return `{ status: "ok" }`, some return `{ status: "ok", ok: true, ... }` for compatibility, and others return full resource payloads; that split is now documented but is still not fully unified
 
 ## Security posture observations
 
