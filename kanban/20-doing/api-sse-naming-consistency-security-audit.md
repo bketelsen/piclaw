@@ -197,6 +197,7 @@ fixes or follow-up tickets.
   - kept legacy `POST /reply` working
   - switched the web client to use `/post/reply`
   - extended rate-limit and dispatch coverage in tests
+  - added browser-side API helper regression coverage in `test/web/api-routing.test.ts`
 - Landed one compatibility-preserving naming cleanup from that inventory:
   - added preferred `GET /agent/roster`
   - kept legacy `GET /agents` working
