@@ -41,6 +41,7 @@ export const keychainTools = (pi) => {
         name: "keychain",
         label: "keychain",
         description: "List keychain entries, retrieve values, store/update entries, or delete entries.",
+        promptSnippet: "keychain: list/get/set/delete secure keychain entries by name.",
         parameters: KeychainToolSchema,
         async execute(_toolCallId, params) {
             if (params.action === "list") {

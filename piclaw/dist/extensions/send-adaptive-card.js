@@ -46,6 +46,7 @@ export const sendAdaptiveCard = (pi) => {
         name: "send_adaptive_card",
         label: "send_adaptive_card",
         description: "Post a PiClaw web Adaptive Card as an agent message.",
+        promptSnippet: "send_adaptive_card: post an agent-owned adaptive_card content block to web timeline.",
         parameters: SendAdaptiveCardSchema,
         async execute(_toolCallId, params) {
             const content = params.content?.trim();
