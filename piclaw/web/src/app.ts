@@ -2688,6 +2688,7 @@ function MainApp({ locationParams }) {
                     onSwitchChat=${handleBranchPickerChange}
                     onRenameSession=${handleRenameCurrentBranch}
                     onCreateSession=${handleCreateSessionFromCompose}
+                    onDeleteSession=${handlePruneCurrentBranch}
                     activeEditorPath=${chatOnlyMode ? null : tabStripActiveId}
                     onAttachEditorFile=${chatOnlyMode ? undefined : attachActiveEditorFile}
                     onOpenFilePill=${openFileFromPill}

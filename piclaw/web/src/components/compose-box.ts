@@ -152,6 +152,7 @@ export function ComposeBox({
     onSwitchChat,
     onRenameSession,
     onCreateSession,
+    onDeleteSession,
 }) {
     const [content, setContent] = useState('');
     const [searchText, setSearchText] = useState('');
@@ -253,7 +254,8 @@ export function ComposeBox({
     const canSwitchSession = hasSwitchableChatAgents && typeof onSwitchChat === 'function';
     const canRenameSession = !searchMode && typeof onRenameSession === 'function';
     const canCreateSession = !searchMode && typeof onCreateSession === 'function';
-    const showSessionSwitcherButton = !searchMode && (canSwitchSession || canRenameSession || canCreateSession);
+    const canDeleteSession = !searchMode && typeof onDeleteSession === 'function';
+    const showSessionSwitcherButton = !searchMode && (canSwitchSession || canRenameSession || canCreateSession || canDeleteSession);
     const modelHintLabel = activeModel || '';
     const modelHintSuffix = supportsThinking && thinkingLevel ? ` (${thinkingLevel})` : '';
     const modelThinkingLabel = modelHintSuffix.trim() ? `${thinkingLevel}` : '';
@@ -460,7 +462,7 @@ export function ComposeBox({
     const toggleSessionPopup = (event) => {
         event?.preventDefault?.();
         event?.stopPropagation?.();
-        if (searchMode || (!canSwitchSession && !canRenameSession && !canCreateSession)) return;
+        if (searchMode || (!canSwitchSession && !canRenameSession && !canCreateSession && !canDeleteSession)) return;
 
         setShowModelPopup(false);
         setShowSlash(false);
@@ -478,6 +480,15 @@ export function ComposeBox({
             return;
         }
         onSwitchChat?.(nextChatJid);
+    };
+
+    const handleAgentChipClick = (agent) => {
+        const nextChatJid = typeof agent?.chat_jid === 'string' ? agent.chat_jid.trim() : '';
+        if (nextChatJid && typeof onSwitchChat === 'function') {
+            onSwitchChat(nextChatJid);
+            return;
+        }
+        acceptMention(agent);
     };
 
     const handleRenameSession = async () => {
@@ -498,6 +509,17 @@ export function ComposeBox({
             await onCreateSession();
         } catch (error) {
             console.warn('Failed to create session:', error);
+        }
+        requestAnimationFrame(() => textareaRef.current?.focus());
+    };
+
+    const handleDeleteSession = async () => {
+        if (typeof onDeleteSession !== 'function') return;
+        setShowSessionPopup(false);
+        try {
+            await onDeleteSession();
+        } catch (error) {
+            console.warn('Failed to delete session:', error);
         }
         requestAnimationFrame(() => textareaRef.current?.focus());
     };
@@ -1352,7 +1374,7 @@ export function ComposeBox({
                                     </button>
                                 `)}
                             </div>
-                            ${(canCreateSession || canRenameSession) && html`
+                            ${(canCreateSession || canRenameSession || canDeleteSession) && html`
                                 <div class="compose-model-popup-actions">
                                     ${canCreateSession && html`
                                         <button
@@ -1372,6 +1394,16 @@ export function ComposeBox({
                                             title="Rename current branch name and agent handle"
                                         >
                                             Rename current…
+                                        </button>
+                                    `}
+                                    ${canDeleteSession && html`
+                                        <button
+                                            type="button"
+                                            class="compose-model-popup-btn danger"
+                                            onClick=${() => { void handleDeleteSession(); }}
+                                            title="Delete (prune) current agent/session branch"
+                                        >
+                                            Delete current…
                                         </button>
                                     `}
                                 </div>
@@ -1415,8 +1447,8 @@ export function ComposeBox({
                                     key=${agent.chat_jid || agent.agent_name}
                                     type="button"
                                     class=${`compose-agent-chip${agent.is_active ? ' active' : ''}`}
-                                    onClick=${() => acceptMention(agent)}
-                                    title=${`${agent.display_name || agent.chat_jid || 'Active agent'} — insert @${agent.agent_name}`}
+                                    onClick=${() => handleAgentChipClick(agent)}
+                                    title=${`${agent.display_name || agent.chat_jid || 'Active agent'} — switch to @${agent.agent_name}`}
                                 >
                                     <span class="compose-agent-chip-handle">@${agent.agent_name}</span>
                                 </button>
@@ -1432,8 +1464,8 @@ export function ComposeBox({
                             type="button"
                             class=${`icon-btn compose-mention-btn${showSessionPopup ? ' active' : ''}`}
                             onClick=${toggleSessionPopup}
-                            title=${showSessionPopup ? 'Hide active sessions' : 'Switch active session/agent'}
-                            aria-label="Switch active session/agent"
+                            title=${showSessionPopup ? 'Hide session manager' : 'Manage Sessions/Agents'}
+                            aria-label="Manage Sessions/Agents"
                             aria-expanded=${showSessionPopup ? 'true' : 'false'}
                         >
                             <svg class="compose-mention-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
