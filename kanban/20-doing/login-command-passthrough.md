@@ -53,6 +53,49 @@ It is not about piclaw's own web/TOTP/passkey session login.
 
 ## Updates
 
+### 2026-03-18 — Refinement complete (8 questions)
+
+**Batch 1–5: Core flow**
+
+| # | Question | Decision |
+|---|----------|----------|
+| 1 | Provider selection UI | **Hardcoded adaptive card via internal route** (no agent needed) |
+| 2 | OAuth callback handling | **Always manual paste** — show auth URL, user pastes redirect URL back |
+| 3 | Auth URL presentation | **Card with clickable link + text input field for pasting redirect URL** |
+| 4 | Intercept point | **Command parser** (same level as /model, /passkey — server-side, pre-agent) |
+| 5 | Progress/error feedback | **Update the existing card in-place** with progress/error state |
+
+**Batch 6–8: API key auth + display**
+
+| # | Question | Decision |
+|---|----------|----------|
+| 6 | API key entry flow | **Unified card** — same /login card offers both OAuth providers + API key entry |
+| 7 | API key security | **Password-masked input field in card** — key sent via card submission, never shown in timeline text |
+| 8 | Auth success display | **Update card to completed state** showing provider + auth type (no secrets) |
+
+**Design spec:**
+
+1. `/login` intercepted in piclaw command parser (pre-agent, works without a model)
+2. Posts a hardcoded adaptive card via internal route listing:
+   - Available OAuth providers (from `authStorage.getOAuthProviders()`)
+   - API key entry option per known provider (Anthropic, OpenAI, Azure, etc.)
+3. User picks a provider:
+   - **OAuth path:** Card updates to show auth URL (clickable) + text input for pasting redirect URL. `authStorage.login(providerId, { onAuth, onManualCodeInput })` called with always-manual callbacks.
+   - **API key path:** Card shows password-masked input field. On submit, key stored via `authStorage.set(provider, { type: "api_key", key })`.
+4. On success: card transitions to completed state showing provider name + auth type.
+5. On error: card shows error state with message.
+6. Entire flow is hardcoded cards/messages — no LLM involvement.
+
+**Key pi SDK surface used:**
+- `session.modelRegistry.authStorage.getOAuthProviders()` — list OAuth providers
+- `session.modelRegistry.authStorage.login(providerId, callbacks)` — OAuth flow
+- `session.modelRegistry.authStorage.set(provider, credential)` — store credentials
+- `session.modelRegistry.authStorage.get(provider)` — check current auth
+- `session.modelRegistry.authStorage.setRuntimeApiKey(provider, key)` — in-memory override
+
+Quality: ★★★★☆ 9/10 (problem: 2, scope: 2, test: 2, deps: 2, risk: 1)
+- Ready for implementation.
+
 ### 2026-03-18
 - Lane update confirmed via `triage-doing-blocked` (`loginPassthrough: doing`).
 
