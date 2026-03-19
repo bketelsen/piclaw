@@ -56,6 +56,48 @@ describe("web agent message handler", () => {
     expect(sentMessages).toHaveLength(0);
   });
 
+  test("shows the themed /theme list table when command is used without a theme name", async () => {
+    const queuedFollowups: Array<{ chatJid: string; content: string }> = [];
+    const broadcasts: Array<{ event: string; payload: unknown }> = [];
+
+    const channel = {
+      agentPool: {
+        isStreaming: () => true,
+      },
+      json: (payload: unknown, status = 200) =>
+        new Response(JSON.stringify(payload), {
+          status,
+          headers: { "Content-Type": "application/json" },
+        }),
+      enqueueQueuedFollowupItem: (chatJid: string, _rowId: number, content: string) => {
+        queuedFollowups.push({ chatJid, content });
+        return 999;
+      },
+      getQueuedFollowupCount: () => 0,
+      broadcastEvent: (event: string, payload: unknown) => {
+        broadcasts.push({ event, payload });
+      },
+      storeMessage: () => null,
+      sendMessage: async () => {},
+    } as any;
+
+    const req = new Request("https://example.com/agent/default/message", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ content: "/theme" }),
+    });
+
+    const response = await handleAgentMessage(channel, req, "/agent/default/message", "web:default", "default");
+    expect(response.status).toBe(200);
+
+    const body = await response.json();
+    expect(body.ui_only).toBe(true);
+    expect(body.command?.status).toBe("success");
+    expect(body.command?.message).toContain("| Theme | Mode | bgPrimary");
+    expect(body.command?.message).toContain("data:image/svg+xml;base64,");
+    expect(queuedFollowups).toHaveLength(0);
+  });
+
   test("does not defer /session-rotate while streaming and returns the command error immediately", async () => {
     initDatabase();
 

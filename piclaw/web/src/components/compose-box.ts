@@ -15,7 +15,7 @@ const SLASH_COMMANDS = [
   { name: "/cycle-model", description: "Cycle to the next available model" },
   { name: "/thinking", description: "Show or set thinking level" },
   { name: "/cycle-thinking", description: "Cycle thinking level" },
-  { name: "/theme", description: "Set UI theme (use /theme list for options)" },
+  { name: "/theme", description: "Set UI theme (no name to show available themes)" },
   { name: "/tint", description: "Tint default light/dark UI (usage: /tint #hex or /tint off)" },
   { name: "/btw", description: "Open a side conversation panel without interrupting the main chat" },
   { name: "/state", description: "Show current session state" },
@@ -61,13 +61,15 @@ const SLASH_COMMANDS = [
  * Tiny SVG pie chart showing context window usage.
  * Green when <75%, amber 75–90%, red >90%. Tooltip shows exact numbers.
  */
-function ContextPie({ usage }) {
+function ContextPie({ usage, onCompact }) {
     const pct = Math.min(100, Math.max(0, usage.percent || 0));
     const tokens = usage.tokens;
     const window = usage.contextWindow;
+    const compactLabel = `Compact context`;
     const label = tokens != null
         ? `Context: ${formatK(tokens)} / ${formatK(window)} tokens (${pct.toFixed(0)}%)`
         : `Context: ${pct.toFixed(0)}%`;
+    const title = `${label} — ${compactLabel}`;
 
     // Pie arc: SVG circle with stroke-dasharray trick.
     // Circle circumference = 2πr = 2π×9 ≈ 56.55
@@ -80,8 +82,18 @@ function ContextPie({ usage }) {
                 : 'var(--context-green, #22c55e)';
 
     return html`
-        <span class="compose-context-pie icon-btn" title=${label}>
-            <svg width="22" height="22" viewBox="0 0 24 24">
+        <button
+            class="compose-context-pie icon-btn"
+            type="button"
+            title=${title}
+            aria-label="Compact context"
+            onClick=${(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                onCompact?.();
+            }}
+        >
+            <svg width="22" height="22" viewBox="0 0 24 24" aria-hidden="true">
                 <circle cx="12" cy="12" r=${r}
                     fill="none"
                     stroke="var(--context-track, rgba(128,128,128,0.2))"
@@ -94,7 +106,7 @@ function ContextPie({ usage }) {
                     stroke-linecap="round"
                     transform="rotate(-90 12 12)" />
             </svg>
-        </span>
+        </button>
     `;
 }
 
@@ -128,6 +140,7 @@ export function ComposeBox({
     thinkingLevel = null,
     supportsThinking = false,
     contextUsage = null,
+    onContextCompact,
     notificationsEnabled = false,
     notificationPermission = 'default',
     onToggleNotifications,
@@ -625,6 +638,18 @@ export function ComposeBox({
         event.stopPropagation();
         setShowSessionPopup(false);
         setShowModelPopup((prev) => !prev);
+    };
+
+    const handleContextCompact = async () => {
+        if (searchMode) return;
+        onContextCompact?.();
+        await handleSubmit('/compact', null, {
+            includeMedia: false,
+            includeFileRefs: false,
+            includeMessageRefs: false,
+            clearAfterSubmit: false,
+            recordHistory: false,
+        });
     };
 
     const resolveSubmitMode = (mode) => {
@@ -1513,7 +1538,7 @@ export function ComposeBox({
                             </div>
                         `}
                         ${!searchMode && contextUsage && contextUsage.percent != null && html`
-                            <${ContextPie} usage=${contextUsage} />
+                            <${ContextPie} usage=${contextUsage} onCompact=${handleContextCompact} />
                         `}
                     </div>
                     `}
