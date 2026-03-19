@@ -32,6 +32,7 @@ import { dedupePosts } from './ui/timeline-utils.js';
 import { useAgentState } from './ui/use-agent-state.js';
 import { useSplitters } from './ui/use-splitters.js';
 import { useEditorState } from './ui/use-editor-state.js';
+import { hasSpeechRecognition, isIOS, isRecognizing, isStandaloneWebApp, speakTerse, startRecognition, stopRecognition, stopSpeaking } from './ui/voice-mode.js';
 import { initTheme, applyThemeFromEvent } from './ui/theme.js';
 import {
     LAST_ACTIVITY_TTL_MS,
@@ -314,47 +315,70 @@ function MainApp({ locationParams }) {
         setVoiceEnabled(next);
         try { localStorage.setItem('piclaw-voice-mode', next ? '1' : '0'); } catch {}
         if (!next) {
-            // Turning off — stop everything
-            import('./ui/voice-mode.js').then((vm) => { vm.stopRecognition(); vm.stopSpeaking(); });
+            stopRecognition();
+            stopSpeaking();
             setVoiceListening(false);
         }
     }, [voiceEnabled]);
 
     const handleMicClick = useCallback(() => {
         if (!voiceEnabled) {
-            // First click enables voice mode + starts listening
             setVoiceEnabled(true);
             try { localStorage.setItem('piclaw-voice-mode', '1'); } catch {}
         }
-        import('./ui/voice-mode.js').then((vm) => {
-            if (vm.isRecognizing()) {
-                vm.stopRecognition();
+
+        const composeEl = document.querySelector('.compose-input') as HTMLTextAreaElement | null;
+        const syncFocusCompose = () => {
+            try {
+                composeEl?.focus();
+                const length = composeEl?.value?.length ?? 0;
+                composeEl?.setSelectionRange?.(length, length);
+            } catch {}
+        };
+        const applyComposeText = (text) => {
+            if (!composeEl) return;
+            composeEl.value = text;
+            composeEl.dispatchEvent(new Event('input', { bubbles: true }));
+        };
+
+        // Keep the fallback inside the original tap gesture for iOS/PWA keyboard dictation.
+        syncFocusCompose();
+
+        if (isRecognizing()) {
+            stopRecognition();
+            setVoiceListening(false);
+            return;
+        }
+
+        stopSpeaking();
+
+        // iOS standalone/PWA mode is unreliable for SpeechRecognition.
+        // Focus the compose box and let the user use keyboard dictation instead.
+        if (isIOS() && isStandaloneWebApp()) {
+            voiceLastInputWasVoiceRef.current = false;
+            setVoiceListening(false);
+            return;
+        }
+
+        if (!hasSpeechRecognition()) {
+            setVoiceListening(false);
+            return;
+        }
+
+        const started = startRecognition({
+            onInterim: (text) => applyComposeText(text),
+            onFinal: (text) => applyComposeText(text),
+            onEnd: () => setVoiceListening(false),
+            onError: (error) => {
+                console.warn('[voice]', error);
+                syncFocusCompose();
                 setVoiceListening(false);
-                return;
-            }
-            vm.stopSpeaking();
-            const composeEl = document.querySelector('.compose-input');
-            const started = vm.startRecognition({
-                onInterim: (text) => {
-                    if (composeEl) (composeEl as HTMLTextAreaElement).value = text;
-                },
-                onFinal: (text) => {
-                    if (composeEl) {
-                        (composeEl as HTMLTextAreaElement).value = text;
-                        (composeEl as HTMLTextAreaElement).dispatchEvent(new Event('input', { bubbles: true }));
-                    }
-                },
-                onEnd: () => setVoiceListening(false),
-                onError: (error) => {
-                    console.warn('[voice]', error);
-                    setVoiceListening(false);
-                },
-            });
-            if (started) {
-                setVoiceListening(true);
-                voiceLastInputWasVoiceRef.current = true;
-            }
+            },
         });
+        if (started) {
+            setVoiceListening(true);
+            voiceLastInputWasVoiceRef.current = true;
+        }
     }, [voiceEnabled]);
 
     // Mount/dispose editor extension instance when active tab changes
@@ -2296,9 +2320,7 @@ function MainApp({ locationParams }) {
             // Auto-speak terse summary when voice mode is on and last input was voice
             if (voiceEnabled && voiceLastInputWasVoiceRef.current && data?.content) {
                 voiceLastInputWasVoiceRef.current = false;
-                import('./ui/voice-mode.js').then((vm) => {
-                    vm.speakTerse(data.content);
-                });
+                speakTerse(data.content);
             }
         }
         if (!activeHashtag && !activeSearch && !activeSearchOpen && isCurrentChatEvent && (eventType === 'new_post' || eventType === 'new_reply' || eventType === 'agent_response')) {

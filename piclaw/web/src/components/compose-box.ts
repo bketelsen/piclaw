@@ -590,9 +590,17 @@ export function ComposeBox({
     const runModelCommand = async (commandText) => {
         if (searchMode || switchingModel) return;
 
+        setSubmitError(null);
         setSwitchingModel(true);
         try {
             const response = await sendAgentMessage('default', commandText, null, [], null, currentChatJid);
+            const cmdResult = response?.command;
+            if (cmdResult?.status === 'error') {
+                const message = cmdResult.message || 'Command failed.';
+                setSubmitError(message);
+                onSubmitError?.(message);
+                return false;
+            }
             const nextModel = extractCurrentModel(response);
             emitModelState({
                 model: nextModel ?? activeModel ?? null,
@@ -603,11 +611,12 @@ export function ComposeBox({
                 const latest = await getAgentModels(currentChatJid);
                 if (latest) emitModelState(latest);
             } catch {}
-            onPost?.();
             return true;
         } catch (error) {
             console.error('Failed to switch model:', error);
-            alert('Failed to switch model: ' + error.message);
+            const message = error?.message || 'Failed to switch model.';
+            setSubmitError(message);
+            onSubmitError?.(message);
             return false;
         } finally {
             setSwitchingModel(false);
@@ -743,6 +752,15 @@ export function ComposeBox({
                 onMessageResponse?.(response);
 
                 if (response?.command) {
+                    if (response.command.status === 'error') {
+                        const message = response.command.message || 'Command failed.';
+                        if (clearAfterSubmit) {
+                            restoreDraft();
+                        }
+                        setSubmitError(message);
+                        onSubmitError?.(message);
+                        return;
+                    }
                     emitModelState({
                         model: response.command.model_label ?? activeModel ?? null,
                         thinking_level: response.command.thinking_level,
@@ -754,7 +772,9 @@ export function ComposeBox({
                     } catch {}
                 }
 
-                onPost?.();
+                if (!response?.ui_only) {
+                    onPost?.();
+                }
             } catch (error) {
                 if (clearAfterSubmit) {
                     restoreDraft();
@@ -1315,6 +1335,7 @@ export function ComposeBox({
                     `}
                     <textarea
                         ref=${textareaRef}
+                        class="compose-input"
                         placeholder=${searchMode ? "Search (Enter to run)..." : "Message (Enter to send, Shift+Enter for newline)..."}
                         value=${searchMode ? searchText : content}
                         onInput=${handleInput}

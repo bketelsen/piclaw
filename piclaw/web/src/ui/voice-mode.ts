@@ -35,6 +35,12 @@ export function isIOS(): boolean {
     (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
 }
 
+export function isStandaloneWebApp(): boolean {
+  if (typeof window === "undefined") return false;
+  return window.matchMedia?.('(display-mode: standalone)')?.matches === true ||
+    (navigator as any)?.standalone === true;
+}
+
 // ── Speech Recognition (input) ──────────────────────────────────
 
 type RecognitionCallbacks = {
