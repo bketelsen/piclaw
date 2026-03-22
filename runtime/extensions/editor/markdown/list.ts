@@ -80,12 +80,18 @@ function isTaskListItem(node: SyntaxNode): boolean {
 }
 
 function firstNestedListStart(node: SyntaxNode): number | null {
-    for (let child = node.firstChild; child; child = child.nextSibling) {
-        if (child.type.name === 'BulletList' || child.type.name === 'OrderedList') {
-            return child.from;
+    const visit = (current: SyntaxNode): number | null => {
+        for (let child = current.firstChild; child; child = child.nextSibling) {
+            if ((child.type.name === 'BulletList' || child.type.name === 'OrderedList') && child.from > node.from) {
+                return child.from;
+            }
+            const nested = visit(child);
+            if (nested != null) return nested;
         }
-    }
-    return null;
+        return null;
+    };
+
+    return visit(node);
 }
 
 /** Pixels of left padding per nesting level. */
@@ -97,6 +103,16 @@ function listItemDecorator(node: SyntaxNode, view: EditorView): DecorationEntry[
     const doc = view.state.doc;
     const depth = nestingDepth(node);
     const taskItem = isTaskListItem(node);
+
+    // Add line-level alignment classes for this item's own content lines.
+    // Do NOT include nested child lists (they get their own indentation pass).
+    const firstLine = doc.lineAt(node.from);
+    const nestedStart = firstNestedListStart(node);
+    const contentTo = nestedStart != null ? doc.lineAt(nestedStart).from : node.to;
+    const endAnchor = Math.max(firstLine.from, Math.min(doc.length, contentTo) - 1);
+    const endLineNo = doc.lineAt(endAnchor).number;
+    const cursorLineNo = doc.lineAt(view.state.selection.main.head).number;
+    const cursorOwnLines = cursorLineNo >= firstLine.number && cursorLineNo <= endLineNo;
 
     // Find ListMark child.
     for (let child = node.firstChild; child; child = child.nextSibling) {
@@ -120,43 +136,37 @@ function listItemDecorator(node: SyntaxNode, view: EditorView): DecorationEntry[
             markerEnd++;
         }
 
-        if (markerText === '-' || markerText === '*' || markerText === '+') {
-            if (taskItem) {
-                // Task lists should show only checkbox + text (no extra bullet marker).
-                entries.push({
-                    from: child.from,
-                    to: markerEnd,
-                    decoration: Decoration.replace({}),
-                });
-            } else {
+        if (!cursorOwnLines) {
+            if (markerText === '-' || markerText === '*' || markerText === '+') {
+                if (taskItem) {
+                    // Task lists should show only checkbox + text (no extra bullet marker).
+                    entries.push({
+                        from: child.from,
+                        to: markerEnd,
+                        decoration: Decoration.replace({}),
+                    });
+                } else {
+                    entries.push({
+                        from: child.from,
+                        to: markerEnd,
+                        decoration: Decoration.replace({
+                            widget: new BulletWidget(),
+                        }),
+                    });
+                }
+            } else if (/^\d+\.$/.test(markerText)) {
                 entries.push({
                     from: child.from,
                     to: markerEnd,
                     decoration: Decoration.replace({
-                        widget: new BulletWidget(),
+                        widget: new OrderedMarkerWidget(markerText),
                     }),
                 });
             }
-        } else if (/^\d+\.$/.test(markerText)) {
-            entries.push({
-                from: child.from,
-                to: markerEnd,
-                decoration: Decoration.replace({
-                    widget: new OrderedMarkerWidget(markerText),
-                }),
-            });
         }
 
         break;
     }
-
-    // Add line-level alignment classes for this item's own content lines.
-    // Do NOT include nested child lists (they get their own indentation pass).
-    const firstLine = doc.lineAt(node.from);
-    const nestedStart = firstNestedListStart(node);
-    const contentTo = nestedStart ?? node.to;
-    const endAnchor = Math.max(firstLine.from, Math.min(doc.length, contentTo) - 1);
-    const endLineNo = doc.lineAt(endAnchor).number;
 
     const baseStyle = `--cm-md-list-indent: ${depth * INDENT_PX}px; --cm-md-list-continuation: ${CONTINUATION_OFFSET_PX}px;`;
 

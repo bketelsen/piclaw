@@ -58,6 +58,7 @@ import {
   getMessageByRowId,
   getMessageThreadRootIdById,
   getDeferredQueuedFollowups,
+  purgeExpiredLinkPreviewImageCache,
   setDeferredQueuedFollowups,
 } from "../db.js";
 import type { DeferredQueuedFollowupRecord, InteractionRow } from "../db.js";
@@ -73,6 +74,7 @@ import {
   type MessageWriteContext,
   type SendMessageOptions,
 } from "./web/message-write-flows.js";
+import { postDashboardWidget as postDashboardWidgetMessage } from "./web/dashboard-widget.js";
 import { deletePostResponse } from "./web/timeline-service.js";
 import { ensureAvatarCache, resolveAvatarUrl } from "./web/avatar-service.js";
 import {
@@ -137,6 +139,7 @@ import { RemoteInteropService } from "../remote/service.js";
 const DEFAULT_CHAT_JID = "web:default";
 const DEFAULT_AGENT_ID = "default";
 const STATE_KEY = "last_agent_timestamp_web";
+const LINK_PREVIEW_CACHE_PURGE_INTERVAL_MS = 12 * 60 * 60 * 1000;
 
 function formatSseEvent(eventType: string, data: unknown): string {
   return `event: ${eventType}\ndata: ${JSON.stringify(data)}\n\n`;
@@ -186,6 +189,7 @@ export class WebChannel implements WebChannelLike {
   agentBuffers = new AgentBuffers();
   authGateway: WebAuthGateway;
   terminalService = new TerminalSessionService();
+  linkPreviewCachePurgeTimer: ReturnType<typeof setInterval> | null = null;
 
   constructor(opts: WebChannelOpts) {
     this.queue = opts.queue;
@@ -254,6 +258,14 @@ export class WebChannel implements WebChannelLike {
       ...(tls ? { tls } : {}),
     });
     this.workspaceWatcher = startWorkspaceWatcher(this);
+    const purgeNow = () => {
+      const result = purgeExpiredLinkPreviewImageCache(new Date().toISOString(), 256);
+      if (result.purgedEntries > 0) {
+        console.log(`[web] Purged ${result.purgedEntries} expired link-preview cache entr${result.purgedEntries === 1 ? "y" : "ies"} (${result.purgedMedia} media blobs)`);
+      }
+    };
+    purgeNow();
+    this.linkPreviewCachePurgeTimer = setInterval(purgeNow, LINK_PREVIEW_CACHE_PURGE_INTERVAL_MS);
     const scheme = tls ? "https" : "http";
     console.log(`[web] UI listening on ${scheme}://${WEB_HOST}:${WEB_PORT}`);
   }
@@ -262,6 +274,10 @@ export class WebChannel implements WebChannelLike {
     this.sse.closeAll();
     this.uiBridge.stop();
     this.terminalService.shutdown();
+    if (this.linkPreviewCachePurgeTimer) {
+      clearInterval(this.linkPreviewCachePurgeTimer);
+      this.linkPreviewCachePurgeTimer = null;
+    }
     this.server?.stop(true);
     this.server = null;
     if (this.workspaceWatcher) {
@@ -295,6 +311,18 @@ export class WebChannel implements WebChannelLike {
 
   async sendMessage(chatJid: string, text: string, options?: SendMessageOptions): Promise<void> {
     sendWebMessage(chatJid, text, options, this.getMessageWriteContext());
+  }
+
+  async postDashboardWidget(
+    chatJid: string,
+    options?: { threadId?: number | null; text?: string; widgetId?: string }
+  ): Promise<void> {
+    await postDashboardWidgetMessage(this, {
+      chatJid,
+      threadId: options?.threadId,
+      text: options?.text,
+      widgetId: options?.widgetId,
+    });
   }
 
   queueFollowupPlaceholder(chatJid: string, text: string, threadId?: number, queuedContent?: string): InteractionRow | null {

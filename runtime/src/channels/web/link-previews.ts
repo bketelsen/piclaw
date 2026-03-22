@@ -10,8 +10,18 @@
  *            a new user message is stored.
  */
 
-import { getMessageByRowId, updateMessageLinkPreviews } from "../../db.js";
+import {
+  createMedia,
+  deleteUnreferencedMedia,
+  getLinkPreviewImageCache,
+  getMessageByRowId,
+  purgeExpiredLinkPreviewImageCache,
+  touchLinkPreviewImageCache,
+  updateMessageLinkPreviews,
+  upsertLinkPreviewImageCache,
+} from "../../db.js";
 import { lookup } from "dns/promises";
+import { extname } from "path";
 import { isIP } from "net";
 
 /** OpenGraph metadata for a URL: title, description, image, site name. */
@@ -32,6 +42,8 @@ export interface LinkPreviewChannel {
 const MAX_URLS = 3;
 const FETCH_TIMEOUT_MS = 8000;
 const MAX_HTML_CHARS = 200_000;
+const PREVIEW_IMAGE_CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+const MAX_PREVIEW_IMAGE_BYTES = 5 * 1024 * 1024;
 
 const URL_REGEX = /https?:\/\/[\w\d#%/.:?@\[\]-]+/gi;
 const BLOCKED_HOSTNAMES = new Set([
@@ -187,6 +199,108 @@ function normalizeImage(url: string, baseUrl: string): string {
   }
 }
 
+function getCachedMediaPath(mediaId: number): string {
+  return `/media/${mediaId}`;
+}
+
+function getCacheExpiry(nowIso: string): string {
+  const now = Date.parse(nowIso);
+  return new Date((Number.isFinite(now) ? now : Date.now()) + PREVIEW_IMAGE_CACHE_TTL_MS).toISOString();
+}
+
+function inferImageExtension(contentType: string): string {
+  const normalized = contentType.toLowerCase().split(";")[0].trim();
+  const map: Record<string, string> = {
+    "image/png": ".png",
+    "image/jpeg": ".jpg",
+    "image/gif": ".gif",
+    "image/webp": ".webp",
+    "image/svg+xml": ".svg",
+    "image/bmp": ".bmp",
+    "image/x-icon": ".ico",
+  };
+  return map[normalized] || "";
+}
+
+function buildCachedPreviewFilename(imageUrl: string, contentType: string): string {
+  try {
+    const parsed = new URL(imageUrl);
+    const rawName = parsed.pathname.split("/").filter(Boolean).pop() || "link-preview-image";
+    const cleanName = rawName.replace(/[^a-zA-Z0-9._-]+/g, "-").replace(/^-+|-+$/g, "") || "link-preview-image";
+    const extension = extname(cleanName) || inferImageExtension(contentType) || ".img";
+    if (extname(cleanName)) return cleanName;
+    return `${cleanName}${extension}`;
+  } catch {
+    return `link-preview-image${inferImageExtension(contentType) || ".img"}`;
+  }
+}
+
+async function cachePreviewImage(imageUrl: string): Promise<string | undefined> {
+  const nowIso = new Date().toISOString();
+  purgeExpiredLinkPreviewImageCache(nowIso);
+
+  const cached = getLinkPreviewImageCache(imageUrl);
+  if (cached) {
+    if (Date.parse(cached.expires_at) > Date.now()) {
+      touchLinkPreviewImageCache(imageUrl, nowIso);
+      return getCachedMediaPath(cached.media_id);
+    }
+  }
+
+  const allowed = await isSafeUrl(imageUrl);
+  if (!allowed) return undefined;
+
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+  try {
+    const response = await fetch(imageUrl, {
+      headers: {
+        "User-Agent": "piclaw/1.0",
+        Accept: "image/*",
+      },
+      signal: controller.signal,
+    });
+    if (!response.ok) return undefined;
+
+    const contentType = (response.headers.get("content-type") || "").toLowerCase();
+    if (!contentType.startsWith("image/")) return undefined;
+
+    const declaredLength = Number(response.headers.get("content-length") || "0");
+    if (Number.isFinite(declaredLength) && declaredLength > MAX_PREVIEW_IMAGE_BYTES) return undefined;
+
+    const bytes = new Uint8Array(await response.arrayBuffer());
+    if (bytes.byteLength === 0 || bytes.byteLength > MAX_PREVIEW_IMAGE_BYTES) return undefined;
+
+    const mediaId = createMedia(
+      buildCachedPreviewFilename(imageUrl, contentType),
+      contentType.split(";")[0] || "application/octet-stream",
+      bytes,
+      null,
+      {
+        size: bytes.byteLength,
+        source_url: imageUrl,
+        cache_kind: "link_preview_image",
+        ttl_ms: PREVIEW_IMAGE_CACHE_TTL_MS,
+      }
+    );
+    const replacedMediaIds = upsertLinkPreviewImageCache(
+      imageUrl,
+      mediaId,
+      nowIso,
+      getCacheExpiry(nowIso),
+      nowIso,
+    );
+    if (replacedMediaIds.length > 0) {
+      deleteUnreferencedMedia(replacedMediaIds);
+    }
+    return getCachedMediaPath(mediaId);
+  } catch {
+    return undefined;
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
+
 /** Fetch OpenGraph metadata for a single URL. */
 export async function fetchLinkPreview(url: string): Promise<LinkPreview | null> {
   const allowed = await isSafeUrl(url);
@@ -225,7 +339,8 @@ export async function fetchLinkPreview(url: string): Promise<LinkPreview | null>
     const description = decodeHtmlEntities(descriptionRaw)?.trim();
     const siteName = decodeHtmlEntities(siteNameRaw)?.trim();
     const imageDecoded = decodeHtmlEntities(imageRaw)?.trim();
-    const image = imageDecoded ? normalizeImage(imageDecoded, url) : undefined;
+    const imageUrl = imageDecoded ? normalizeImage(imageDecoded, url) : undefined;
+    const image = imageUrl ? (await cachePreviewImage(imageUrl)) || imageUrl : undefined;
 
     if (!title && !description && !image) return null;
 

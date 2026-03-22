@@ -33,6 +33,11 @@ const CHAT_SCOPED_EVENT_TYPES = new Set([
     "extension_ui_title",
     "extension_ui_editor_text",
     "extension_ui_error",
+    "generated_widget_open",
+    "generated_widget_delta",
+    "generated_widget_final",
+    "generated_widget_close",
+    "generated_widget_error",
 ]);
 export function requiresChatScopedDelivery(eventType) {
     return CHAT_SCOPED_EVENT_TYPES.has(String(eventType || "").trim());

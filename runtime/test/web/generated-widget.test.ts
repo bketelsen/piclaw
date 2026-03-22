@@ -159,6 +159,9 @@ describe("generated widget helpers", () => {
     expect(srcdoc).toContain("window.piclawWidget");
     expect(srcdoc).toContain("widget.ready");
     expect(srcdoc).toContain("window.name");
+    expect(srcdoc).toContain("requestAnimationFrame");
+    expect(srcdoc).toContain("lastDispatchedEnvelopeKey");
+    expect(srcdoc).toContain("runtimeState: previous?.runtimeState ?? null");
   });
 
   test("timeline widgets keep the stricter no-script sandbox by default", () => {

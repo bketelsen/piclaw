@@ -46,6 +46,9 @@ export interface InflightRun {
   startedAt: string;
 }
 
+/** Possible persisted assistant-output states seen after an inflight start. */
+export type AgentReplyState = "none" | "partial" | "terminal";
+
 /** Shape of a permanently-failed run record stored in chat_cursors. */
 export interface FailedRunRecord {
   prevTs: string;
@@ -395,20 +398,35 @@ export function clearInflightMarker(chatJid: string): void {
 }
 
 /**
- * Check whether a terminal bot (agent) message exists after a given timestamp
- * for a chat. Recovery must not treat partial/intermediate assistant turns as
- * proof that the run fully completed, otherwise reloads can strand the final
- * response after a multi-turn/tool-using run.
+ * Return whether assistant output after an inflight start is absent, partial,
+ * or terminal.
+ *
+ * Recovery uses this to distinguish true no-output crashes (safe to roll back
+ * and replay) from interrupted runs that already committed visible assistant
+ * timeline output. Once partial output is persisted it is part of user-visible
+ * history and must not be deleted/replayed away on restart.
  */
-export function hasAgentRepliesAfter(chatJid: string, afterTs: string): boolean {
+export function getAgentReplyStateAfter(chatJid: string, afterTs: string): AgentReplyState {
   const db = getDb();
   const row = db.prepare(`
-    SELECT 1 FROM messages
+    SELECT
+      MAX(CASE WHEN is_bot_message = 1 THEN 1 ELSE 0 END) AS has_any_bot,
+      MAX(CASE WHEN is_bot_message = 1 AND COALESCE(is_terminal_agent_reply, 0) = 1 THEN 1 ELSE 0 END) AS has_terminal_bot
+    FROM messages
     WHERE chat_jid = ?
       AND timestamp > ?
-      AND is_bot_message = 1
-      AND COALESCE(is_terminal_agent_reply, 0) = 1
-    LIMIT 1
-  `).get(chatJid, afterTs);
-  return row != null;
+  `).get(chatJid, afterTs) as { has_any_bot?: number | null; has_terminal_bot?: number | null } | undefined;
+
+  if ((row?.has_terminal_bot ?? 0) > 0) return "terminal";
+  if ((row?.has_any_bot ?? 0) > 0) return "partial";
+  return "none";
+}
+
+/**
+ * Check whether a terminal bot (agent) message exists after a given timestamp.
+ * Kept for compatibility with callers/tests that only care about terminal
+ * completion semantics.
+ */
+export function hasAgentRepliesAfter(chatJid: string, afterTs: string): boolean {
+  return getAgentReplyStateAfter(chatJid, afterTs) === "terminal";
 }

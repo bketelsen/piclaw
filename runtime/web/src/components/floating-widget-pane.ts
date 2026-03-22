@@ -46,17 +46,10 @@ export function FloatingWidgetPane({ widget, onClose, onWidgetEvent }) {
             const payload = type === 'widget.init'
                 ? getGeneratedWidgetInitPayload(widget)
                 : getGeneratedWidgetHostPayload(widget);
-            console.debug('[widget-host] postToFrame', {
-                type,
-                widgetId: widget?.widgetId || null,
-                runtimeState: payload?.runtimeState || null,
-            });
 
             try {
                 iframe.name = hostName;
-            } catch (error) {
-                console.debug('[widget-host] iframe.name fallback failed', { type, error: error?.message || String(error) });
-            }
+            } catch {}
 
             try {
                 iframe.contentWindow?.postMessage({
@@ -67,9 +60,7 @@ export function FloatingWidgetPane({ widget, onClose, onWidgetEvent }) {
                     turnId: widget?.turnId || null,
                     payload,
                 }, '*');
-            } catch (error) {
-                console.debug('[widget-host] postToFrame failed', { type, error: error?.message || String(error) });
-            }
+            } catch {}
         };
 
         const syncHostState = () => {
@@ -102,16 +93,10 @@ export function FloatingWidgetPane({ widget, onClose, onWidgetEvent }) {
         if (!iframe?.contentWindow) return undefined;
         const hostName = getGeneratedWidgetHostWindowName(widget);
         const payload = getGeneratedWidgetHostPayload(widget);
-        console.debug('[widget-host] direct update effect', {
-            widgetId: widget?.widgetId || null,
-            runtimeState: payload?.runtimeState || null,
-        });
 
         try {
             iframe.name = hostName;
-        } catch (error) {
-            console.debug('[widget-host] direct update iframe.name fallback failed', { error: error?.message || String(error) });
-        }
+        } catch {}
 
         try {
             iframe.contentWindow.postMessage({
@@ -122,11 +107,20 @@ export function FloatingWidgetPane({ widget, onClose, onWidgetEvent }) {
                 turnId: widget?.turnId || null,
                 payload,
             }, '*');
-        } catch (error) {
-            console.debug('[widget-host] direct update effect failed', { error: error?.message || String(error) });
-        }
+        } catch {}
         return undefined;
-    }, [widget]);
+    }, [
+        widget?.widgetId,
+        widget?.toolCallId,
+        widget?.turnId,
+        widget?.status,
+        widget?.subtitle,
+        widget?.description,
+        widget?.error,
+        widget?.width,
+        widget?.height,
+        widget?.runtimeState,
+    ]);
 
     useEffect(() => {
         if (!widget) return undefined;

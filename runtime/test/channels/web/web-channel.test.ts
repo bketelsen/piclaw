@@ -2447,7 +2447,7 @@ test("recoverInflightRuns rolls back cursor and retries the run", async () => {
   expect(timeline.length).toBeGreaterThanOrEqual(2); // user + agent response
 });
 
-test("recoverInflightRuns replays runs with only non-terminal assistant output", async () => {
+test("recoverInflightRuns preserves persisted non-terminal assistant output without replay", async () => {
   const ws = createTempWorkspace("piclaw-web-channel-");
   cleanupWorkspace = ws.cleanup;
   restoreEnv = setEnv({ PICLAW_WORKSPACE: ws.workspace, PICLAW_STORE: ws.store, PICLAW_DATA: ws.data });
@@ -2504,13 +2504,14 @@ test("recoverInflightRuns replays runs with only non-terminal assistant output",
 
   web.recoverInflightRuns();
   await Bun.sleep(20);
-  expect(ran).toBe(1);
+  expect(ran).toBe(0);
   expect(db.getInflightRuns().filter((r: any) => r.chatJid === "web:default").length).toBe(0);
+  expect(db.getChatCursor("web:default")).toBe(ts);
 
   const timeline = db.getTimeline("web:default", 10);
   const contents = timeline.map((item: any) => item.data.content);
-  expect(contents).not.toContain("partial reply");
-  expect(contents).toContain("final reply");
+  expect(contents).toContain("partial reply");
+  expect(contents).not.toContain("final reply");
 });
 
 test("recoverInflightRuns ignores older terminal replies before the inflight start", async () => {

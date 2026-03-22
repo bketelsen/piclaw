@@ -24,13 +24,14 @@ import { handleAgentMessage as handleAgentMessageRequest, processChat as process
 import { SseHub } from "./web/sse-hub.js";
 import { UiBridge } from "./web/ui-bridge.js";
 import { ResponseService } from "./web/http/response-service.js";
-import { deleteMessageByRowId, replaceMessageContent, getChatBranchByChatJid, getChatCursor, getDb, getInflightMessageId, getMessageByRowId, getMessageThreadRootIdById, getDeferredQueuedFollowups, setDeferredQueuedFollowups, } from "../db.js";
+import { deleteMessageByRowId, replaceMessageContent, getChatBranchByChatJid, getChatCursor, getDb, getInflightMessageId, getMessageByRowId, getMessageThreadRootIdById, getDeferredQueuedFollowups, purgeExpiredLinkPreviewImageCache, setDeferredQueuedFollowups, } from "../db.js";
 import { WebChannelState } from "./web/channel-state.js";
 import { AgentStatusStore } from "./web/agent-status-store.js";
 import { FollowupPlaceholderStore } from "./web/followup-placeholders.js";
 import { PendingSteeringStore } from "./web/pending-steering.js";
 import { storeWebMessage } from "./web/message-store.js";
 import { queueFollowupPlaceholderMessage, replaceQueuedFollowupPlaceholderMessage, sendWebMessage, } from "./web/message-write-flows.js";
+import { postDashboardWidget as postDashboardWidgetMessage } from "./web/dashboard-widget.js";
 import { deletePostResponse } from "./web/timeline-service.js";
 import { ensureAvatarCache, resolveAvatarUrl } from "./web/avatar-service.js";
 import { handleAgentContextRequest, handleAgentModelsRequest, handleAgentStatusRequest, } from "./web/agent-status.js";
@@ -53,6 +54,7 @@ import { RemoteInteropService } from "../remote/service.js";
 const DEFAULT_CHAT_JID = "web:default";
 const DEFAULT_AGENT_ID = "default";
 const STATE_KEY = "last_agent_timestamp_web";
+const LINK_PREVIEW_CACHE_PURGE_INTERVAL_MS = 12 * 60 * 60 * 1000;
 function formatSseEvent(eventType, data) {
     return `event: ${eventType}\ndata: ${JSON.stringify(data)}\n\n`;
 }
@@ -89,6 +91,7 @@ export class WebChannel {
     agentBuffers = new AgentBuffers();
     authGateway;
     terminalService = new TerminalSessionService();
+    linkPreviewCachePurgeTimer = null;
     constructor(opts) {
         this.queue = opts.queue;
         this.agentPool = opts.agentPool;
@@ -153,6 +156,14 @@ export class WebChannel {
             ...(tls ? { tls } : {}),
         });
         this.workspaceWatcher = startWorkspaceWatcher(this);
+        const purgeNow = () => {
+            const result = purgeExpiredLinkPreviewImageCache(new Date().toISOString(), 256);
+            if (result.purgedEntries > 0) {
+                console.log(`[web] Purged ${result.purgedEntries} expired link-preview cache entr${result.purgedEntries === 1 ? "y" : "ies"} (${result.purgedMedia} media blobs)`);
+            }
+        };
+        purgeNow();
+        this.linkPreviewCachePurgeTimer = setInterval(purgeNow, LINK_PREVIEW_CACHE_PURGE_INTERVAL_MS);
         const scheme = tls ? "https" : "http";
         console.log(`[web] UI listening on ${scheme}://${WEB_HOST}:${WEB_PORT}`);
     }
@@ -160,6 +171,10 @@ export class WebChannel {
         this.sse.closeAll();
         this.uiBridge.stop();
         this.terminalService.shutdown();
+        if (this.linkPreviewCachePurgeTimer) {
+            clearInterval(this.linkPreviewCachePurgeTimer);
+            this.linkPreviewCachePurgeTimer = null;
+        }
         this.server?.stop(true);
         this.server = null;
         if (this.workspaceWatcher) {
@@ -188,6 +203,14 @@ export class WebChannel {
     }
     async sendMessage(chatJid, text, options) {
         sendWebMessage(chatJid, text, options, this.getMessageWriteContext());
+    }
+    async postDashboardWidget(chatJid, options) {
+        await postDashboardWidgetMessage(this, {
+            chatJid,
+            threadId: options?.threadId,
+            text: options?.text,
+            widgetId: options?.widgetId,
+        });
     }
     queueFollowupPlaceholder(chatJid, text, threadId, queuedContent) {
         return queueFollowupPlaceholderMessage(chatJid, text, threadId, (queuedContent || "").trim() || text, this.getMessageWriteContext());

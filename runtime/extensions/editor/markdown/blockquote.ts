@@ -12,6 +12,7 @@
  */
 import { registerDecorator, Decoration, WidgetType } from './live-preview.js';
 import type { DecorationEntry, SyntaxNode, EditorView } from './live-preview.js';
+import { parseBlockquoteLead, shouldDecorateBlockquote } from './blockquote-utils.js';
 
 /** Widget that renders a callout SVG icon + optional title prefix. */
 class CalloutIconWidget extends WidgetType {
@@ -225,17 +226,18 @@ function blockquoteDecorator(node: SyntaxNode, view: EditorView): DecorationEntr
     const firstLine = doc.lineAt(node.from);
     const lineText = firstLine.text;
 
-    // Strip leading `> ` to get content
-    const contentMatch = lineText.match(/^>\s*(.*)$/);
-    const content = contentMatch ? contentMatch[1] : '';
-
-    // Check for callout pattern: [!type][+|-]? optional title
-    // `+` = expanded, `-` = collapsed (Obsidian-compatible marker syntax)
-    // Type allows letters, numbers, underscores, and dashes.
-    const calloutMatch = content.match(/^\[!([A-Za-z0-9_-]+)\]([+-])?\s*(.*)?$/i);
+    // Detect whether the first quoted line is an Obsidian-style callout.
+    const { calloutMatch } = parseBlockquoteLead(lineText);
 
     // Collect all QuoteMark nodes in the subtree
     const quoteMarks = collectQuoteMarks(node);
+    const lastLineNo = doc.lineAt(Math.max(node.from, node.to - 1)).number;
+    const cursorLineNo = doc.lineAt(view.state.selection.main.head).number;
+    const cursorInsideBlock = cursorLineNo >= firstLine.number && cursorLineNo <= lastLineNo;
+
+    if (!shouldDecorateBlockquote(lineText, cursorInsideBlock)) {
+        return entries;
+    }
 
     if (calloutMatch) {
         const type = calloutMatch[1].toLowerCase();
@@ -252,7 +254,6 @@ function blockquoteDecorator(node: SyntaxNode, view: EditorView): DecorationEntr
 
         // Style callouts with line decorations (not inline marks) so
         // background + left border stay aligned to full editor line width.
-        const lastLineNo = doc.lineAt(Math.max(node.from, node.to - 1)).number;
         for (let ln = firstLine.number; ln <= lastLineNo; ln++) {
             const line = doc.line(ln);
             const isFirst = ln === firstLine.number;
@@ -368,7 +369,6 @@ function blockquoteDecorator(node: SyntaxNode, view: EditorView): DecorationEntr
     } else {
         // Regular blockquote — style each line so the quote bar/background stay
         // contiguous and nested list indentation composes correctly.
-        const lastLineNo = doc.lineAt(Math.max(node.from, node.to - 1)).number;
         for (let ln = firstLine.number; ln <= lastLineNo; ln++) {
             const line = doc.line(ln);
             let cls = 'cm-md-blockquote-line';

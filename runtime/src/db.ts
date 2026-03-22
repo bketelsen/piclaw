@@ -43,7 +43,15 @@ export {
   createMedia,
   getMediaById,
   getMediaInfoById,
+  deleteUnreferencedMedia,
 } from "./db/media.js";
+export {
+  getLinkPreviewImageCache,
+  upsertLinkPreviewImageCache,
+  touchLinkPreviewImageCache,
+  purgeExpiredLinkPreviewImageCache,
+} from "./db/link-preview-image-cache.js";
+export type { LinkPreviewImageCacheRecord } from "./db/link-preview-image-cache.js";
 export {
   createTask,
   getTaskById,
@@ -75,11 +83,12 @@ export {
   getInflightRuns,
   rollbackInflightRun,
   clearInflightMarker,
+  getAgentReplyStateAfter,
   hasAgentRepliesAfter,
   getDeferredQueuedFollowups,
   setDeferredQueuedFollowups,
 } from "./db/chat-cursors.js";
-export type { InflightRun, DeferredQueuedFollowupRecord } from "./db/chat-cursors.js";
+export type { InflightRun, DeferredQueuedFollowupRecord, AgentReplyState } from "./db/chat-cursors.js";
 export {
   storeTokenUsage,
   getTokenUsageTotals,

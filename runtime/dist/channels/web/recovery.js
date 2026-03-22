@@ -1,7 +1,7 @@
 /**
  * channels/web/recovery.ts – crash recovery and pending-resume orchestration.
  */
-import { clearInflightMarker, getAllChatCursors, getDb, getDeferredQueuedFollowups, getInflightRuns, getMessagesSince, hasAgentRepliesAfter, rollbackInflightRun, } from "../../db.js";
+import { clearInflightMarker, getAgentReplyStateAfter, getAllChatCursors, getDb, getDeferredQueuedFollowups, getInflightRuns, getMessagesSince, rollbackInflightRun, } from "../../db.js";
 function getKnownChatJids() {
     const rows = getDb().prepare(`
     SELECT chat_jid FROM chat_cursors
@@ -19,7 +19,7 @@ const defaultStore = {
     transaction: (run) => {
         getDb().transaction(run)();
     },
-    hasAgentRepliesAfter,
+    getAgentReplyStateAfter,
     clearInflightMarker,
     rollbackInflightRun,
     getAllChatCursors,
@@ -40,21 +40,27 @@ export function recoverInflightRuns(ctx, store = defaultStore) {
     if (inflights.length === 0)
         return;
     const now = typeof ctx.now === "function" ? ctx.now() : Date.now();
+    const decisions = inflights.map((inflight) => ({
+        inflight,
+        replyState: store.getAgentReplyStateAfter(inflight.chatJid, inflight.startedAt),
+    }));
     try {
         store.transaction(() => {
-            for (const inflight of inflights) {
-                // Check if a terminal assistant reply already landed after this
-                // inflight run started. Partial/intermediate assistant output is not
-                // enough — those runs must be rolled back and replayed so restart
-                // recovery does not strand the final response.
-                //
-                // If a terminal reply exists, the run completed successfully but
-                // endChatRun() wasn't reached before the process was killed. In that
-                // case, just clear the inflight marker — do NOT roll back the cursor,
-                // as that would cause the same user message to be re-processed.
-                if (store.hasAgentRepliesAfter(inflight.chatJid, inflight.startedAt)) {
+            for (const { inflight, replyState } of decisions) {
+                // If assistant output was already persisted after this inflight start,
+                // preserve it as committed history. Terminal output means the run fully
+                // completed; partial output means the run was interrupted after already
+                // publishing visible timeline content. In both cases, clearing the
+                // inflight marker without rollback avoids replaying the same user turn.
+                if (replyState === "terminal") {
                     console.log(`[web] Inflight run for ${inflight.chatJid} (started ${inflight.startedAt}) ` +
-                        "already has agent replies — clearing marker without rollback");
+                        "already has a terminal agent reply — clearing marker without rollback");
+                    store.clearInflightMarker(inflight.chatJid);
+                    continue;
+                }
+                if (replyState === "partial") {
+                    console.log(`[web] Inflight run for ${inflight.chatJid} (started ${inflight.startedAt}) ` +
+                        "already has persisted partial agent output — clearing marker without rollback");
                     store.clearInflightMarker(inflight.chatJid);
                     continue;
                 }
@@ -72,11 +78,11 @@ export function recoverInflightRuns(ctx, store = defaultStore) {
         console.error("[web] Failed to roll back inflight runs; will retry on next startup:", err);
         return;
     }
-    for (const inflight of inflights) {
-        // Re-enqueue a processChat task unless the run already completed
-        // (terminal agent reply exists). For rolled-back inflights, this retries
-        // the same pending message from the restored cursor frontier.
-        if (!store.hasAgentRepliesAfter(inflight.chatJid, inflight.startedAt)) {
+    for (const { inflight, replyState } of decisions) {
+        // Re-enqueue a processChat task only when no assistant output was
+        // persisted after the inflight start. Partial/terminal output is preserved
+        // in place, so replaying the same user turn would duplicate history.
+        if (replyState === "none") {
             console.log(`[web] Recovering interrupted run for ${inflight.chatJid} (started ${inflight.startedAt})`);
             // Reuse the same stable resume key used by resume_pending IPC so
             // immediate startup recovery and later IPC-driven recovery collapse to a

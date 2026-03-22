@@ -172,7 +172,7 @@ paneRegistry.register(terminalPaneExtension);
 // Terminal can also be opened as a full tab via a synthetic path.
 paneRegistry.register(terminalTabPaneExtension);
 
-function MainApp({ locationParams }) {
+function MainApp({ locationParams, navigate }) {
     const currentChatJid = useMemo(() => {
         const raw = locationParams.get('chat_jid');
         return raw && raw.trim() ? raw.trim() : 'web:default';
@@ -1947,7 +1947,6 @@ function MainApp({ locationParams }) {
 
     useEffect(() => {
         let cancelled = false;
-        setPosts(null);
 
         const safeScrollToBottom = () => {
             if (cancelled) return;
@@ -2605,8 +2604,8 @@ function MainApp({ locationParams }) {
         const normalized = String(nextChatJid || '').trim();
         if (!normalized || normalized === currentChatJid) return;
         const url = buildChatWindowUrl(window.location.href, normalized, { chatOnly: chatOnlyMode });
-        window.location.assign(url);
-    }, [chatOnlyMode, currentChatJid]);
+        navigate?.(url);
+    }, [chatOnlyMode, currentChatJid, navigate]);
 
     const handleRenameCurrentBranch = useCallback(async () => {
         if (typeof window === 'undefined' || !currentBranchRecord?.chat_jid) return;
@@ -2710,12 +2709,12 @@ function MainApp({ locationParams }) {
             const fallbackChatJid = branch?.root_chat_jid || 'web:default';
             showIntentToast('Branch pruned', `${label} has been archived.`, 'info', 3000);
             const nextUrl = buildChatWindowUrl(window.location.href, fallbackChatJid, { chatOnly: chatOnlyMode });
-            window.location.assign(nextUrl);
+            navigate?.(nextUrl);
         } catch (error) {
             const message = error instanceof Error ? error.message : String(error || 'Could not prune branch.');
             showIntentToast('Could not prune branch', message || 'Could not prune branch.', 'warning', 5000);
         }
-    }, [activeChatAgents, chatOnlyMode, currentBranchRecord, currentChatBranches, currentChatJid, refreshActiveChatAgents, refreshCurrentChatBranches, showIntentToast]);
+    }, [activeChatAgents, chatOnlyMode, currentBranchRecord, currentChatBranches, currentChatJid, navigate, refreshActiveChatAgents, refreshCurrentChatBranches, showIntentToast]);
 
     const handleRestoreBranch = useCallback(async (targetChatJid) => {
         const normalized = typeof targetChatJid === 'string' ? targetChatJid.trim() : '';
@@ -2736,12 +2735,12 @@ function MainApp({ locationParams }) {
                 : nextChatJid;
             showIntentToast('Branch restored', `Restored ${resolvedHandle}.`, 'info', 3200);
             const nextUrl = buildChatWindowUrl(window.location.href, nextChatJid, { chatOnly: chatOnlyMode });
-            window.location.assign(nextUrl);
+            navigate?.(nextUrl);
         } catch (error) {
             const message = error instanceof Error ? error.message : String(error || 'Could not restore branch.');
             showIntentToast('Could not restore branch', message || 'Could not restore branch.', 'warning', 5000);
         }
-    }, [chatOnlyMode, refreshActiveChatAgents, refreshCurrentChatBranches, showIntentToast]);
+    }, [chatOnlyMode, navigate, refreshActiveChatAgents, refreshCurrentChatBranches, showIntentToast]);
 
     useEffect(() => {
         if (!branchLoaderMode || typeof window === 'undefined') return;
@@ -2758,7 +2757,7 @@ function MainApp({ locationParams }) {
                     throw new Error('Branch fork did not return a chat id.');
                 }
                 const url = buildChatWindowUrl(window.location.href, nextChatJid, { chatOnly: true });
-                window.location.replace(url);
+                navigate?.(url, { replace: true });
             } catch (error) {
                 if (cancelled) return;
                 setBranchLoaderState({
@@ -2771,7 +2770,7 @@ function MainApp({ locationParams }) {
         return () => {
             cancelled = true;
         };
-    }, [branchLoaderMode, branchLoaderSourceChatJid]);
+    }, [branchLoaderMode, branchLoaderSourceChatJid, navigate]);
 
     const handleOpenFloatingWidget = useCallback((widget) => {
         if (!widget || typeof widget !== 'object') return;
@@ -2798,7 +2797,6 @@ function MainApp({ locationParams }) {
     const handleFloatingWidgetEvent = useCallback((event, widget) => {
         const kind = typeof event?.kind === 'string' ? event.kind : '';
         const sessionKey = getGeneratedWidgetSessionKey(widget);
-        console.debug('[widget-host] handleFloatingWidgetEvent', { kind, sessionKey, widgetId: widget?.widgetId || null, payload: event?.payload || null });
         if (!kind || !sessionKey) return;
 
         if (kind === 'widget.close') {
@@ -2977,39 +2975,6 @@ function MainApp({ locationParams }) {
     }, [buildFloatingWidgetDashboardSnapshot, currentChatJid, handleCloseFloatingWidget, handleMessageResponse, isComposeBoxAgentActive, showIntentToast]);
 
     useEffect(() => {
-        if (typeof window === 'undefined') return undefined;
-        window.__piclawFloatingWidget = floatingWidget || null;
-        console.debug('[widget-host] floatingWidget state', floatingWidget ? {
-            widgetId: floatingWidget?.widgetId || null,
-            runtimeState: floatingWidget?.runtimeState || null,
-        } : null);
-        return undefined;
-    }, [floatingWidget]);
-
-    useEffect(() => {
-        if (!floatingWidget || typeof window === 'undefined') return undefined;
-
-        const handleWindowWidgetRefresh = (event) => {
-            const data = event?.data;
-            if (!data || data.__piclawGeneratedWidget !== true) return;
-            if (data.kind !== 'widget.request_refresh') return;
-
-            const currentKey = getGeneratedWidgetSessionKey(floatingWidget);
-            const incomingKey = getGeneratedWidgetSessionKey({
-                widgetId: data.widgetId,
-                toolCallId: data.toolCallId,
-            });
-            console.debug('[widget-host] window message', { currentKey, incomingKey, kind: data.kind, widgetId: data.widgetId || null, payload: data.payload || null });
-            if (incomingKey && currentKey && incomingKey !== currentKey) return;
-
-            handleFloatingWidgetEvent(data, floatingWidget);
-        };
-
-        window.addEventListener('message', handleWindowWidgetRefresh);
-        return () => window.removeEventListener('message', handleWindowWidgetRefresh);
-    }, [floatingWidget, handleFloatingWidgetEvent]);
-
-    useEffect(() => {
         dismissedLiveWidgetKeysRef.current.clear();
         setFloatingWidget(null);
     }, [currentChatJid]);
@@ -3033,11 +2998,11 @@ function MainApp({ locationParams }) {
             const label = branch?.agent_name ? `@${branch.agent_name}` : nextChatJid;
             showIntentToast('New branch created', `Switched to ${label}.`, 'info', 2500);
             const url = buildChatWindowUrl(window.location.href, nextChatJid, { chatOnly: chatOnlyMode });
-            window.location.assign(url);
+            navigate?.(url);
         } catch (error) {
             showIntentToast('Could not create branch', describeBranchOpenError(error), 'warning', 5000);
         }
-    }, [chatOnlyMode, currentChatJid, refreshActiveChatAgents, refreshCurrentChatBranches, showIntentToast]);
+    }, [chatOnlyMode, currentChatJid, navigate, refreshActiveChatAgents, refreshCurrentChatBranches, showIntentToast]);
 
     const handlePopOutChat = useCallback(async () => {
         if (typeof window === 'undefined' || isWebAppMode) return;
@@ -3393,10 +3358,31 @@ function MainApp({ locationParams }) {
 }
 
 function App() {
-    const locationParams = typeof window === 'undefined'
-        ? new URLSearchParams()
-        : new URL(window.location.href).searchParams;
-    return html`<${MainApp} locationParams=${locationParams} />`;
+    const [locationHref, setLocationHref] = useState(() =>
+        typeof window === 'undefined' ? 'http://localhost/' : window.location.href
+    );
+
+    useEffect(() => {
+        if (typeof window === 'undefined') return undefined;
+        const handlePopState = () => setLocationHref(window.location.href);
+        window.addEventListener('popstate', handlePopState);
+        return () => window.removeEventListener('popstate', handlePopState);
+    }, []);
+
+    const navigate = useCallback((nextUrl, options = {}) => {
+        if (typeof window === 'undefined') return;
+        const { replace = false } = options || {};
+        const resolved = new URL(String(nextUrl || ''), window.location.href).toString();
+        if (replace) {
+            window.history.replaceState(null, '', resolved);
+        } else {
+            window.history.pushState(null, '', resolved);
+        }
+        setLocationHref(window.location.href);
+    }, []);
+
+    const locationParams = useMemo(() => new URL(locationHref).searchParams, [locationHref]);
+    return html`<${MainApp} locationParams=${locationParams} navigate=${navigate} />`;
 }
 
 // Mount the app

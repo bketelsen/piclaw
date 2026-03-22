@@ -572,12 +572,13 @@ describe("idempotency", () => {
     expect(db.getChatCursor(chatJid)).toBe(cursorTs);
   });
 
-  test("hasAgentRepliesAfter returns false when no agent messages exist", () => {
+  test("getAgentReplyStateAfter returns none when no agent messages exist", () => {
     const chatJid = jid("no-agent-replies-" + Date.now());
+    expect(db.getAgentReplyStateAfter(chatJid, "2025-01-01T00:00:00.000Z")).toBe("none");
     expect(db.hasAgentRepliesAfter(chatJid, "2025-01-01T00:00:00.000Z")).toBe(false);
   });
 
-  test("hasAgentRepliesAfter returns true only for terminal agent replies after timestamp", () => {
+  test("getAgentReplyStateAfter distinguishes partial vs terminal replies after timestamp", () => {
     const chatJid = jid("has-agent-replies-" + Date.now());
     const dbConn = db.getDb();
     dbConn.prepare(`
@@ -589,6 +590,7 @@ describe("idempotency", () => {
       VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     `).run("agent-msg-har-1", chatJid, "agent", "Agent", "partial", "2025-01-01T00:01:00.000Z", 1, 0);
 
+    expect(db.getAgentReplyStateAfter(chatJid, "2025-01-01T00:00:00.000Z")).toBe("partial");
     expect(db.hasAgentRepliesAfter(chatJid, "2025-01-01T00:00:00.000Z")).toBe(false);
 
     dbConn.prepare(`
@@ -596,7 +598,9 @@ describe("idempotency", () => {
       VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     `).run("agent-msg-har-2", chatJid, "agent", "Agent", "final", "2025-01-01T00:02:00.000Z", 1, 1);
 
+    expect(db.getAgentReplyStateAfter(chatJid, "2025-01-01T00:00:00.000Z")).toBe("terminal");
     expect(db.hasAgentRepliesAfter(chatJid, "2025-01-01T00:00:00.000Z")).toBe(true);
+    expect(db.getAgentReplyStateAfter(chatJid, "2025-01-01T00:03:00.000Z")).toBe("none");
     expect(db.hasAgentRepliesAfter(chatJid, "2025-01-01T00:03:00.000Z")).toBe(false);
   });
 

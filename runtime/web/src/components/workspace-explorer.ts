@@ -32,6 +32,19 @@ const isHiddenNode = (node) => {
     return node.name.startsWith('.');
 };
 
+const LIKELY_EDITABLE_FILE_EXTENSIONS = [
+    '.md', '.markdown', '.txt', '.ts', '.tsx', '.js', '.jsx', '.json', '.jsonl',
+    '.css', '.scss', '.html', '.htm', '.yaml', '.yml', '.sql', '.sqlite', '.xml',
+    '.svg', '.plist', '.sh', '.bash', '.zsh', '.py', '.go', '.toml', '.ini',
+    '.conf', '.cfg', '.env', '.gitignore', '.dockerignore', '.editorconfig',
+];
+
+function isLikelyEditableWorkspacePath(path) {
+    const normalized = String(path || '').trim().toLowerCase();
+    if (!normalized || normalized.endsWith('/')) return false;
+    return LIKELY_EDITABLE_FILE_EXTENSIONS.some((suffix) => normalized.endsWith(suffix));
+}
+
 // ── Tree data helpers ─────────────────────────────────────────────────────────
 
 function flattenTree(node, expanded, showHidden, depth = 0, rows = []) {
@@ -633,7 +646,6 @@ export function WorkspaceExplorer({
     const selectedPathRef = useRef(selectedPath);
     const renamingPathRef = useRef(renamingPath);
     const pendingProgrammaticFileClickRef = useRef(null);
-    const renameTimerRef = useRef(null);
     const previewRef      = useRef(preview);
 
     // Sync mutable refs each render
@@ -1345,19 +1357,18 @@ export function WorkspaceExplorer({
         return Boolean(targetEl?.closest?.('.workspace-node-icon, .workspace-label-text'));
     };
 
-    // ── Double-click to open file in editor ────────────────────────────────
+    // ── Double-click to rename selected workspace entry ────────────────────
     const handleTreeDblClick = useRef((e) => {
-        // Cancel pending rename from single-click
-        if (renameTimerRef.current) { clearTimeout(renameTimerRef.current); renameTimerRef.current = null; }
         const targetEl = getEventTargetElement(e);
         const rowEl = targetEl?.closest?.('[data-path]');
         if (!rowEl) return;
         const clickedPath = rowEl.dataset.path;
-        const clickedType = rowEl.dataset.type;
-        if (clickedType === 'dir' || !clickedPath) return;
-        // Cancel any rename that single-click may have started
-        if (renamingPathRef.current === clickedPath) cancelRename();
-        onOpenEditorRef.current?.(clickedPath);
+        if (!clickedPath || clickedPath === '.') return;
+        const isActionClick = Boolean(targetEl?.closest?.('button')) || Boolean(targetEl?.closest?.('a')) || Boolean(targetEl?.closest?.('input'));
+        const isCaretClick = Boolean(targetEl?.closest?.('.workspace-caret'));
+        if (isActionClick || isCaretClick) return;
+        if (renamingPathRef.current === clickedPath) return;
+        beginRename(clickedPath);
     }).current;
 
     // ── Single stable click handler via event delegation ──────────────────────
@@ -1388,16 +1399,6 @@ export function WorkspaceExplorer({
             && !isCaretClick
             && !isActionClick;
 
-        if (isSelected && !isCaretClick && !isActionClick && clickedPath !== '.' && !allowFirstProgrammaticFileClick) {
-            // Delay rename to allow double-click to fire first
-            if (renameTimerRef.current) clearTimeout(renameTimerRef.current);
-            renameTimerRef.current = setTimeout(() => {
-                renameTimerRef.current = null;
-                beginRename(clickedPath);
-            }, 350);
-            return;
-        }
-
         if (clickedType === 'dir') {
             pendingProgrammaticFileClickRef.current = null;
             setSelectedPath(clickedPath);
@@ -1418,7 +1419,12 @@ export function WorkspaceExplorer({
             setSelectedPath(clickedPath);
             const node = nodeMapRef.current.get(clickedPath);
             if (node) onFileSelectRef.current?.(node.path, node);
-            loadPreviewRef.current?.(clickedPath);
+            const shouldOpenEditor = !isActionClick && !isCaretClick && isLikelyEditableWorkspacePath(clickedPath);
+            if (shouldOpenEditor) {
+                onOpenEditorRef.current?.(clickedPath, previewRef.current);
+            } else {
+                loadPreviewRef.current?.(clickedPath);
+            }
         }
     }).current;
 

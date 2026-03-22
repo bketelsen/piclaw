@@ -73,6 +73,7 @@ export interface WebChannelLike
   ): InteractionRow | null;
 
   sendMessage(chatJid: string, text: string, options?: SendMessageOptions): Promise<void>;
+  postDashboardWidget(chatJid: string, options?: { threadId?: number | null; text?: string; widgetId?: string }): Promise<void>;
   updateAgentStatus(chatJid: string, status: Record<string, unknown>): void;
   getAgentStatus(chatJid: string): Record<string, unknown> | null;
   getBuffer(turnId: string, panel: "thought" | "draft"): WebAgentBufferEntry | undefined;

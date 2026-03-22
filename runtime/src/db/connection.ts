@@ -143,6 +143,17 @@ function createSchema(database: Database): void {
     );
     CREATE INDEX IF NOT EXISTS idx_media_created_at ON media(created_at);
 
+    CREATE TABLE IF NOT EXISTS link_preview_image_cache (
+      source_url TEXT PRIMARY KEY,
+      media_id INTEGER NOT NULL UNIQUE,
+      fetched_at TEXT NOT NULL,
+      expires_at TEXT NOT NULL,
+      last_used_at TEXT NOT NULL,
+      FOREIGN KEY (media_id) REFERENCES media(id)
+    );
+    CREATE INDEX IF NOT EXISTS idx_link_preview_image_cache_expires_at ON link_preview_image_cache(expires_at);
+    CREATE INDEX IF NOT EXISTS idx_link_preview_image_cache_last_used_at ON link_preview_image_cache(last_used_at);
+
     -- Join table linking message rows to their media attachments.
     CREATE TABLE IF NOT EXISTS message_media (
       message_rowid INTEGER NOT NULL,

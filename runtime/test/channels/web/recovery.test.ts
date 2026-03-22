@@ -8,11 +8,12 @@ import {
 import { AgentQueue } from "../../../src/queue.js";
 
 describe("web recovery helpers", () => {
-  test("recoverInflightRuns clears or rolls back and enqueues retries", async () => {
+  test("recoverInflightRuns preserves terminal/partial output and replays only no-output runs", async () => {
     const now = new Date("2026-01-01T00:05:00Z");
     const inflights = [
       { chatJid: "web:1", prevTs: "t1", messageId: "m1", startedAt: "2026-01-01T00:04:00Z" },
-      { chatJid: "web:2", prevTs: "t2", messageId: "m2", startedAt: "2026-01-01T00:04:30Z" },
+      { chatJid: "web:2", prevTs: "t2", messageId: "m2", startedAt: "2026-01-01T00:04:15Z" },
+      { chatJid: "web:3", prevTs: "t3", messageId: "m3", startedAt: "2026-01-01T00:04:30Z" },
     ];
 
     const cleared: string[] = [];
@@ -36,9 +37,11 @@ describe("web recovery helpers", () => {
     const store: WebRecoveryStore = {
       getInflightRuns: () => inflights,
       transaction: (run) => run(),
-      hasAgentRepliesAfter: (chatJid, afterTs) => {
+      getAgentReplyStateAfter: (chatJid, afterTs) => {
         replyChecks.push({ chatJid, afterTs });
-        return chatJid === "web:1";
+        if (chatJid === "web:1") return "terminal";
+        if (chatJid === "web:2") return "partial";
+        return "none";
       },
       clearInflightMarker: (chatJid) => {
         cleared.push(chatJid);
@@ -56,22 +59,21 @@ describe("web recovery helpers", () => {
 
     expect(replyChecks).toEqual([
       { chatJid: "web:1", afterTs: "2026-01-01T00:04:00Z" },
-      { chatJid: "web:2", afterTs: "2026-01-01T00:04:30Z" },
-      { chatJid: "web:1", afterTs: "2026-01-01T00:04:00Z" },
-      { chatJid: "web:2", afterTs: "2026-01-01T00:04:30Z" },
+      { chatJid: "web:2", afterTs: "2026-01-01T00:04:15Z" },
+      { chatJid: "web:3", afterTs: "2026-01-01T00:04:30Z" },
     ]);
-    expect(cleared).toEqual(["web:1"]);
-    expect(rolledBack).toEqual([{ chatJid: "web:2", prevTs: "t2" }]);
+    expect(cleared).toEqual(["web:1", "web:2"]);
+    expect(rolledBack).toEqual([{ chatJid: "web:3", prevTs: "t3" }]);
     expect(enqueued).toHaveLength(1);
-    expect(enqueued[0].key).toBe("resume:web:2");
+    expect(enqueued[0].key).toBe("resume:web:3");
 
     await enqueued[0].task();
-    expect(processed).toEqual([{ chatJid: "web:2", agentId: "default" }]);
+    expect(processed).toEqual([{ chatJid: "web:3", agentId: "default" }]);
   });
 
   test("recoverInflightRuns rolls back stale inflight markers to preserve pending turns", () => {
     const staleStartedAt = "2026-01-01T00:00:00Z";
-    const now = new Date("2026-01-01T01:00:00Z").getTime(); // 1 hour later — well past stale warning threshold
+    const now = new Date("2026-01-01T01:00:00Z").getTime();
 
     const inflights = [
       { chatJid: "web:stale", prevTs: "t0", messageId: "m1", startedAt: staleStartedAt },
@@ -92,7 +94,7 @@ describe("web recovery helpers", () => {
     const store: WebRecoveryStore = {
       getInflightRuns: () => inflights,
       transaction: (run) => run(),
-      hasAgentRepliesAfter: () => false,
+      getAgentReplyStateAfter: () => "none",
       clearInflightMarker: (chatJid) => { cleared.push(chatJid); },
       rollbackInflightRun: (chatJid, prevTs) => { rolledBack.push({ chatJid, prevTs }); },
       getAllChatCursors: () => ({}),
@@ -103,7 +105,6 @@ describe("web recovery helpers", () => {
 
     recoverInflightRuns(ctx, store);
 
-    // Stale inflight markers are replayed (rollback + resume), not skipped.
     expect(cleared).toEqual([]);
     expect(rolledBack).toEqual([{ chatJid: "web:stale", prevTs: "t0" }]);
     expect(enqueued).toEqual(["resume:web:stale"]);
@@ -126,7 +127,7 @@ describe("web recovery helpers", () => {
       transaction: () => {
         throw new Error("boom");
       },
-      hasAgentRepliesAfter: () => false,
+      getAgentReplyStateAfter: () => "none",
       clearInflightMarker: () => {},
       rollbackInflightRun: () => {},
       getAllChatCursors: () => ({}),
@@ -157,7 +158,7 @@ describe("web recovery helpers", () => {
     const store: WebRecoveryStore = {
       getInflightRuns: () => [],
       transaction: (run) => run(),
-      hasAgentRepliesAfter: () => false,
+      getAgentReplyStateAfter: () => "none",
       clearInflightMarker: () => {},
       rollbackInflightRun: () => {},
       getAllChatCursors: () => ({ "web:1": "t1", "web:2": "t2" }),
@@ -189,7 +190,7 @@ describe("web recovery helpers", () => {
     const store: WebRecoveryStore = {
       getInflightRuns: () => [],
       transaction: (run) => run(),
-      hasAgentRepliesAfter: () => false,
+      getAgentReplyStateAfter: () => "none",
       clearInflightMarker: () => {},
       rollbackInflightRun: () => {},
       getAllChatCursors: () => ({ "web:known": "t1" }),
@@ -222,7 +223,7 @@ describe("web recovery helpers", () => {
     const store: WebRecoveryStore = {
       getInflightRuns: () => [],
       transaction: (run) => run(),
-      hasAgentRepliesAfter: () => false,
+      getAgentReplyStateAfter: () => "none",
       clearInflightMarker: () => {},
       rollbackInflightRun: () => {},
       getAllChatCursors: () => ({ "web:queue-only": "" }),
@@ -259,7 +260,7 @@ describe("web recovery helpers", () => {
     const store: WebRecoveryStore = {
       getInflightRuns: () => [{ chatJid: "web:1", prevTs: "t0", messageId: "m1", startedAt: "s1" }],
       transaction: (run) => run(),
-      hasAgentRepliesAfter: () => false,
+      getAgentReplyStateAfter: () => "none",
       clearInflightMarker: () => {},
       rollbackInflightRun: () => {},
       getAllChatCursors: () => ({ "web:1": "t0" }),

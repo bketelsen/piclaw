@@ -21,6 +21,7 @@ import {
 import type { DecorationSet, ViewUpdate } from '@codemirror/view';
 import type { Range } from '@codemirror/state';
 import type { SyntaxNode } from '@lezer/common';
+import { isAlwaysDecoratedNode, usesBlockCursorGate } from './cursor-gating.js';
 
 // ── Types ───────────────────────────────────────────────────────
 
@@ -96,7 +97,7 @@ class LivePreviewPlugin {
                     if (!decorator) return;
 
                     const isFrontmatter = node.type.name === 'FrontMatter';
-                    const isBlock = isBlockNode(node.type.name);
+                    const isBlock = usesBlockCursorGate(node.type.name);
                     const alwaysDecorate = isAlwaysDecoratedNode(node.type.name);
 
                     if (!isFrontmatter && !alwaysDecorate) {
@@ -145,29 +146,6 @@ class LivePreviewPlugin {
 
         return RangeSet.of(ranges, true);
     }
-}
-
-/** Node types that should use block-level cursor detection. */
-const BLOCK_NODES = new Set([
-    'FencedCode', 'CodeBlock', 'Table', 'HTMLBlock',
-    'Blockquote', // callouts are blockquotes
-]);
-
-const ALWAYS_DECORATED_NODES = new Set([
-    'ATXHeading1',
-    'ATXHeading2',
-    'ATXHeading3',
-    'ATXHeading4',
-    'ATXHeading5',
-    'ATXHeading6',
-]);
-
-function isBlockNode(name: string): boolean {
-    return BLOCK_NODES.has(name);
-}
-
-function isAlwaysDecoratedNode(name: string): boolean {
-    return ALWAYS_DECORATED_NODES.has(name);
 }
 
 /**

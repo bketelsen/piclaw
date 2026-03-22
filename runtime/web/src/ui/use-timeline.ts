@@ -23,11 +23,12 @@ export function useTimeline({ preserveTimelineScroll, preserveTimelineScrollTop,
 
   useEffect(() => {
     chatTokenRef.current += 1;
-    postsRef.current = null;
+    // Preserve currently visible posts while the next chat loads so session
+    // switching feels instant and the compose box stays visually anchored.
+    // Stale fetches are ignored via chatTokenRef.
     lastBeforeIdRef.current = null;
     loadingMoreRef.current = false;
     hasMoreRef.current = false;
-    setPosts(null);
     setHasMore(false);
   }, [chatJid]);
 

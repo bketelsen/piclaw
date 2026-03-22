@@ -1,5 +1,6 @@
 // @ts-nocheck
-import { html, useRef, useState, useEffect, useCallback } from '../vendor/preact-htm.js';
+import { html, useRef, useState, useEffect, useCallback, useMemo } from '../vendor/preact-htm.js';
+import { findPopupTypeaheadMatch, isPopupTypeaheadKey, resolvePopupTypeaheadMatch, updatePopupTypeaheadBuffer } from '../ui/popup-typeahead.js';
 import { getAgentModels, sendAgentMessage, uploadMedia } from '../api.js';
 import { getLocalStorageItem, setLocalStorageItem } from '../utils/storage.js';
 import { buildMentionValue, filterMentionAgents, getVisibleMentionAgents, parseMentionAutocompleteQuery } from '../ui/agent-mentions.js';
@@ -183,6 +184,8 @@ export function ComposeBox({
     const [showModelPopup, setShowModelPopup] = useState(false);
     const [showSessionPopup, setShowSessionPopup] = useState(false);
     const [modelOptions, setModelOptions] = useState([]);
+    const [modelPopupIndex, setModelPopupIndex] = useState(0);
+    const [sessionPopupIndex, setSessionPopupIndex] = useState(0);
     const [loadingModels, setLoadingModels] = useState(false);
     const [footerWidth, setFooterWidth] = useState(0);
     const [submitError, setSubmitError] = useState(null);
@@ -194,6 +197,7 @@ export function ComposeBox({
     const sessionPopupRef = useRef(null);
     const sessionButtonRef = useRef(null);
     const footerRef = useRef(null);
+    const popupTypeaheadRef = useRef({ value: '', updatedAt: 0 });
     const dragCounterRef = useRef(0);
     const renameSessionInProgressRef = useRef(false);
     const historyMax = 200;
@@ -266,7 +270,7 @@ export function ComposeBox({
         currentSessionAgent
         && currentSessionAgent.chat_jid === (currentSessionAgent.root_chat_jid || currentSessionAgent.chat_jid)
     );
-    const switchableChatAgents = (() => {
+    const switchableChatAgents = useMemo(() => {
         const seen = new Set();
         const chats = [];
         for (const chat of Array.isArray(activeChatAgents) ? activeChatAgents : []) {
@@ -278,7 +282,7 @@ export function ComposeBox({
             chats.push(chat);
         }
         return chats;
-    })();
+    }, [activeChatAgents, currentChatJid]);
     const hasSwitchableChatAgents = switchableChatAgents.length > 0;
     const canSwitchSession = hasSwitchableChatAgents && typeof onSwitchChat === 'function';
     const canRestoreSession = hasSwitchableChatAgents && typeof onRestoreSession === 'function';
@@ -495,6 +499,7 @@ export function ComposeBox({
         event?.stopPropagation?.();
         if (searchMode || (!canSwitchSession && !canRestoreSession && !canRenameSession && !canCreateSession && !canDeleteSession)) return;
 
+        popupTypeaheadRef.current = { value: '', updatedAt: 0 };
         setShowModelPopup(false);
         setShowSlash(false);
         setSlashMatches([]);
@@ -536,6 +541,39 @@ export function ComposeBox({
         }
         acceptMention(agent);
     };
+
+    const findFirstEnabledPopupIndex = (items) => {
+        const list = Array.isArray(items) ? items : [];
+        const index = list.findIndex((item) => !item?.disabled);
+        return index >= 0 ? index : 0;
+    };
+
+    const sessionPopupEntries = useMemo(() => {
+        const entries = [];
+        for (const chat of switchableChatAgents) {
+            const archived = Boolean(chat?.archived_at);
+            const agentName = typeof chat?.agent_name === 'string' ? chat.agent_name.trim() : '';
+            const chatJid = typeof chat?.chat_jid === 'string' ? chat.chat_jid.trim() : '';
+            if (!agentName || !chatJid) continue;
+            entries.push({
+                type: 'session',
+                key: `session:${chatJid}`,
+                label: `@${agentName} — ${chatJid}${chat?.is_active ? ' active' : ''}${archived ? ' archived' : ''}`,
+                chat,
+                disabled: archived ? !canRestoreSession : !canSwitchSession,
+            });
+        }
+        if (canCreateSession) {
+            entries.push({ type: 'action', key: 'action:new', label: 'New session', action: 'new', disabled: false });
+        }
+        if (canRenameSession) {
+            entries.push({ type: 'action', key: 'action:rename', label: 'Rename current session', action: 'rename', disabled: renameInProgress });
+        }
+        if (canDeleteSession) {
+            entries.push({ type: 'action', key: 'action:delete', label: 'Delete current session', action: 'delete', disabled: false });
+        }
+        return entries;
+    }, [switchableChatAgents, canRestoreSession, canSwitchSession, canCreateSession, canRenameSession, canDeleteSession, renameInProgress]);
 
     const handleRenameSession = async (event) => {
         if (event?.preventDefault) event.preventDefault();
@@ -642,9 +680,36 @@ export function ComposeBox({
         if (ok) setShowModelPopup(false);
     };
 
+    const runSessionPopupEntry = (entry) => {
+        if (!entry || entry.disabled) return;
+        if (entry.type === 'session') {
+            const chat = entry.chat;
+            if (chat?.archived_at) {
+                void handleRestoreSession(chat.chat_jid);
+            } else {
+                handleSessionSwitch(chat.chat_jid);
+            }
+            return;
+        }
+        if (entry.type === 'action') {
+            if (entry.action === 'new') {
+                void handleCreateSession();
+                return;
+            }
+            if (entry.action === 'rename') {
+                void handleRenameSession();
+                return;
+            }
+            if (entry.action === 'delete') {
+                void handleDeleteSession();
+            }
+        }
+    };
+
     const toggleModelPopup = (event) => {
         event.preventDefault();
         event.stopPropagation();
+        popupTypeaheadRef.current = { value: '', updatedAt: 0 };
         setShowSessionPopup(false);
         setShowModelPopup((prev) => !prev);
     };
@@ -805,6 +870,90 @@ export function ComposeBox({
         onInjectQueuedFollowup?.(queuedItem);
     };
 
+    const handlePopupKeyboardEvent = useCallback((e) => {
+        if (searchMode || (!showModelPopup && !showSessionPopup) || e?.isComposing) return false;
+        const consume = () => {
+            e.preventDefault?.();
+            e.stopPropagation?.();
+        };
+        const resetPopupTypeahead = () => {
+            popupTypeaheadRef.current = { value: '', updatedAt: 0 };
+        };
+        if (e.key === 'Escape') {
+            consume();
+            resetPopupTypeahead();
+            if (showModelPopup) setShowModelPopup(false);
+            if (showSessionPopup) setShowSessionPopup(false);
+            return true;
+        }
+        if (showModelPopup) {
+            if (e.key === 'ArrowDown') {
+                consume();
+                resetPopupTypeahead();
+                if (modelOptions.length > 0) setModelPopupIndex((idx) => (idx + 1) % modelOptions.length);
+                return true;
+            }
+            if (e.key === 'ArrowUp') {
+                consume();
+                resetPopupTypeahead();
+                if (modelOptions.length > 0) setModelPopupIndex((idx) => (idx - 1 + modelOptions.length) % modelOptions.length);
+                return true;
+            }
+            if ((e.key === 'Enter' || e.key === 'Tab') && modelOptions.length > 0) {
+                consume();
+                resetPopupTypeahead();
+                void handleSelectModel(modelOptions[Math.max(0, Math.min(modelPopupIndex, modelOptions.length - 1))]);
+                return true;
+            }
+            if (isPopupTypeaheadKey(e) && modelOptions.length > 0) {
+                consume();
+                const nextBuffer = updatePopupTypeaheadBuffer(popupTypeaheadRef.current, e.key);
+                popupTypeaheadRef.current = nextBuffer;
+                const match = resolvePopupTypeaheadMatch(modelOptions, nextBuffer.value, modelPopupIndex, (item) => item);
+                if (match >= 0) setModelPopupIndex(match);
+                return true;
+            }
+        }
+        if (showSessionPopup) {
+            if (e.key === 'ArrowDown') {
+                consume();
+                resetPopupTypeahead();
+                if (sessionPopupEntries.length > 0) setSessionPopupIndex((idx) => (idx + 1) % sessionPopupEntries.length);
+                return true;
+            }
+            if (e.key === 'ArrowUp') {
+                consume();
+                resetPopupTypeahead();
+                if (sessionPopupEntries.length > 0) setSessionPopupIndex((idx) => (idx - 1 + sessionPopupEntries.length) % sessionPopupEntries.length);
+                return true;
+            }
+            if ((e.key === 'Enter' || e.key === 'Tab') && sessionPopupEntries.length > 0) {
+                consume();
+                resetPopupTypeahead();
+                runSessionPopupEntry(sessionPopupEntries[Math.max(0, Math.min(sessionPopupIndex, sessionPopupEntries.length - 1))]);
+                return true;
+            }
+            if (isPopupTypeaheadKey(e) && sessionPopupEntries.length > 0) {
+                consume();
+                const nextBuffer = updatePopupTypeaheadBuffer(popupTypeaheadRef.current, e.key);
+                popupTypeaheadRef.current = nextBuffer;
+                const match = resolvePopupTypeaheadMatch(sessionPopupEntries, nextBuffer.value, sessionPopupIndex, (item) => item.label);
+                if (match >= 0) setSessionPopupIndex(match);
+                return true;
+            }
+        }
+        return false;
+    }, [
+        searchMode,
+        showModelPopup,
+        showSessionPopup,
+        modelOptions,
+        modelPopupIndex,
+        sessionPopupEntries,
+        sessionPopupIndex,
+        handleSelectModel,
+    ]);
+
     const handleKeyDown = (e) => {
         if (e.isComposing) return;
         if (searchMode && e.key === 'Escape') {
@@ -813,9 +962,7 @@ export function ComposeBox({
             onExitSearch?.();
             return;
         }
-        if (!searchMode && showSessionPopup && e.key === 'Escape') {
-            e.preventDefault();
-            setShowSessionPopup(false);
+        if (handlePopupKeyboardEvent(e)) {
             return;
         }
         // @agent autocomplete navigation
@@ -1060,6 +1207,7 @@ export function ComposeBox({
     useEffect(() => {
         if (!showModelPopup) return;
 
+        popupTypeaheadRef.current = { value: '', updatedAt: 0 };
         setLoadingModels(true);
         getAgentModels(currentChatJid)
             .then((payload) => {
@@ -1098,6 +1246,18 @@ export function ComposeBox({
 
     useEffect(() => {
         if (!showModelPopup) return;
+        const activeIndex = modelOptions.findIndex((model) => model === activeModel);
+        setModelPopupIndex(activeIndex >= 0 ? activeIndex : 0);
+    }, [showModelPopup, modelOptions, activeModel]);
+
+    useEffect(() => {
+        if (!showSessionPopup) return;
+        setSessionPopupIndex(findFirstEnabledPopupIndex(sessionPopupEntries));
+        popupTypeaheadRef.current = { value: '', updatedAt: 0 };
+    }, [showSessionPopup, currentChatJid]);
+
+    useEffect(() => {
+        if (!showModelPopup) return;
 
         const onPointerDown = (event) => {
             const popup = modelPopupRef.current;
@@ -1127,6 +1287,31 @@ export function ComposeBox({
         document.addEventListener('pointerdown', onPointerDown);
         return () => document.removeEventListener('pointerdown', onPointerDown);
     }, [showSessionPopup]);
+
+    useEffect(() => {
+        if (searchMode || (!showModelPopup && !showSessionPopup)) return;
+        const onKeyDown = (event) => {
+            handlePopupKeyboardEvent(event);
+        };
+        document.addEventListener('keydown', onKeyDown, true);
+        return () => document.removeEventListener('keydown', onKeyDown, true);
+    }, [searchMode, showModelPopup, showSessionPopup, handlePopupKeyboardEvent]);
+
+    useEffect(() => {
+        if (!showModelPopup) return;
+        const popup = modelPopupRef.current;
+        popup?.focus?.();
+        const active = popup?.querySelector?.('.compose-model-popup-item.active');
+        active?.scrollIntoView?.({ block: 'nearest' });
+    }, [showModelPopup, modelPopupIndex, modelOptions]);
+
+    useEffect(() => {
+        if (!showSessionPopup) return;
+        const popup = sessionPopupRef.current;
+        popup?.focus?.();
+        const active = popup?.querySelector?.('.compose-model-popup-item.active');
+        active?.scrollIntoView?.({ block: 'nearest' });
+    }, [showSessionPopup, sessionPopupIndex, sessionPopupEntries.length]);
 
     useEffect(() => {
         const updateFooterWidth = () => {
@@ -1385,7 +1570,7 @@ export function ComposeBox({
                         </div>
                     `}
                     ${showModelPopup && !searchMode && html`
-                        <div class="compose-model-popup" ref=${modelPopupRef}>
+                        <div class="compose-model-popup" ref=${modelPopupRef} tabIndex="-1" onKeyDown=${handlePopupKeyboardEvent}>
                             <div class="compose-model-popup-title">Select model</div>
                             <div class="compose-model-popup-menu" role="menu" aria-label="Model picker">
                                 ${loadingModels && html`
@@ -1394,12 +1579,12 @@ export function ComposeBox({
                                 ${!loadingModels && modelOptions.length === 0 && html`
                                     <div class="compose-model-popup-empty">No models available.</div>
                                 `}
-                                ${!loadingModels && modelOptions.map((modelLabel) => html`
+                                ${!loadingModels && modelOptions.map((modelLabel, index) => html`
                                     <button
                                         key=${modelLabel}
                                         type="button"
                                         role="menuitem"
-                                        class=${`compose-model-popup-item${activeModel === modelLabel ? ' active' : ''}`}
+                                        class=${`compose-model-popup-item${modelPopupIndex === index ? ' active' : ''}${activeModel === modelLabel ? ' current-model' : ''}`}
                                         onClick=${() => { void handleSelectModel(modelLabel); }}
                                         disabled=${switchingModel}
                                     >
@@ -1420,7 +1605,7 @@ export function ComposeBox({
                         </div>
                     `}
                     ${showSessionPopup && !searchMode && html`
-                        <div class="compose-model-popup" ref=${sessionPopupRef}>
+                        <div class="compose-model-popup" ref=${sessionPopupRef} tabIndex="-1" onKeyDown=${handlePopupKeyboardEvent}>
                             <div class="compose-model-popup-title">Manage sessions & agents</div>
                             <div class="compose-model-popup-menu" role="menu" aria-label="Sessions and agents">
                                 ${html`
@@ -1439,7 +1624,7 @@ export function ComposeBox({
                                 ${!hasSwitchableChatAgents && html`
                                     <div class="compose-model-popup-empty">No other sessions yet.</div>
                                 `}
-                                ${hasSwitchableChatAgents && switchableChatAgents.map((chat) => {
+                                ${hasSwitchableChatAgents && switchableChatAgents.map((chat, listIndex) => {
                                     const archived = Boolean(chat.archived_at);
                                     const isRoot = chat.chat_jid === (chat.root_chat_jid || chat.chat_jid);
                                     const canPrune = !isRoot && !chat.is_active && !archived && typeof onDeleteSession === 'function';
@@ -1449,7 +1634,7 @@ export function ComposeBox({
                                             <button
                                                 type="button"
                                                 role="menuitem"
-                                                class=${`compose-model-popup-item${archived ? ' archived' : ''}`}
+                                                class=${`compose-model-popup-item${archived ? ' archived' : ''}${sessionPopupIndex === listIndex ? ' active' : ''}`}
                                                 onClick=${() => {
                                                     if (archived) {
                                                         void handleRestoreSession(chat.chat_jid);
@@ -1489,7 +1674,7 @@ export function ComposeBox({
                                     ${canCreateSession && html`
                                         <button
                                             type="button"
-                                            class="compose-model-popup-btn primary"
+                                            class=${`compose-model-popup-btn primary${sessionPopupEntries.findIndex((entry) => entry.key === 'action:new') === sessionPopupIndex ? ' active' : ''}`}
                                             onClick=${() => { void handleCreateSession(); }}
                                             title="Create a new agent/session branch from this chat"
                                         >
@@ -1499,7 +1684,7 @@ export function ComposeBox({
                                     ${canRenameSession && html`
                                         <button
                                             type="button"
-                                            class="compose-model-popup-btn"
+                                            class=${`compose-model-popup-btn${sessionPopupEntries.findIndex((entry) => entry.key === 'action:rename') === sessionPopupIndex ? ' active' : ''}`}
                                             onClick=${(e) => { void handleRenameSession(e); }}
                                             title="Rename current branch name and agent handle"
                                             disabled=${renameInProgress}
@@ -1510,7 +1695,7 @@ export function ComposeBox({
                                     ${canDeleteSession && html`
                                         <button
                                             type="button"
-                                            class="compose-model-popup-btn danger"
+                                            class=${`compose-model-popup-btn danger${sessionPopupEntries.findIndex((entry) => entry.key === 'action:delete') === sessionPopupIndex ? ' active' : ''}`}
                                             onClick=${() => { void handleDeleteSession(); }}
                                             title="Delete (prune) current agent/session branch"
                                         >
@@ -1555,23 +1740,25 @@ export function ComposeBox({
                     <div class="compose-actions ${searchMode ? 'search-mode' : ''}">
                     ${showAgentAffordance && html`
                         <div class="compose-agent-hints compose-agent-hints-inline" title="Active chat agents you can mention with @name">
-                            ${visibleMentionAgents.map((agent) => html`
+                            ${visibleMentionAgents.map((agent) => {
+                                const isCurrentAgent = Boolean(agent?.chat_jid && agent.chat_jid === currentChatJid);
+                                return html`
                                 <button
                                     key=${agent.chat_jid || agent.agent_name}
                                     type="button"
-                                    class="compose-agent-chip"
+                                    class=${`compose-agent-chip${isCurrentAgent ? ' active' : ''}`}
                                     onClick=${() => handleAgentChipClick(agent)}
                                     title=${`${agent.chat_jid || 'Active agent'} — switch to @${agent.agent_name}`}
                                 >
                                     <span class="compose-agent-chip-handle">@${agent.agent_name}</span>
                                 </button>
-                            `)}
+                            `;})}
                         </div>
                     `}
                     ${showSessionSwitcherButton && html`
                         ${currentSessionAgent?.agent_name && html`
                             <span
-                                class="compose-current-agent-label"
+                                class="compose-current-agent-label active"
                                 title=${currentSessionAgent.chat_jid || currentChatJid}
                                 onClick=${toggleSessionPopup}
                             >@${currentSessionAgent.agent_name}</span>

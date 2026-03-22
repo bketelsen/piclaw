@@ -18,7 +18,72 @@ export function createAgentEventEmitter(channel, withAgentProfile) {
         draft: (payload) => channel.broadcastEvent("agent_draft", withAgentProfile(payload)),
         draftDelta: (payload) => channel.broadcastEvent("agent_draft_delta", withAgentProfile(payload)),
         response: (payload) => channel.broadcastEvent("agent_response", withAgentProfile(payload)),
+        generatedWidgetOpen: (payload) => channel.broadcastEvent("generated_widget_open", withAgentProfile(payload)),
+        generatedWidgetDelta: (payload) => channel.broadcastEvent("generated_widget_delta", withAgentProfile(payload)),
+        generatedWidgetFinal: (payload) => channel.broadcastEvent("generated_widget_final", withAgentProfile(payload)),
+        generatedWidgetClose: (payload) => channel.broadcastEvent("generated_widget_close", withAgentProfile(payload)),
+        generatedWidgetError: (payload) => channel.broadcastEvent("generated_widget_error", withAgentProfile(payload)),
     };
+}
+function readJsonRecord(value) {
+    if (!value)
+        return null;
+    if (typeof value === "string") {
+        try {
+            const parsed = JSON.parse(value);
+            return parsed && typeof parsed === "object" ? parsed : null;
+        }
+        catch {
+            return null;
+        }
+    }
+    return typeof value === "object" ? value : null;
+}
+function readWidgetString(...values) {
+    for (const value of values) {
+        if (typeof value === "string" && value.trim())
+            return value;
+    }
+    return null;
+}
+function readWidgetNumber(value) {
+    return typeof value === "number" && Number.isFinite(value) ? value : null;
+}
+function buildGeneratedWidgetPayload(args, base, defaults) {
+    const record = readJsonRecord(args) ?? {};
+    const artifactRecord = readJsonRecord(record.artifact) ?? {};
+    const svg = readWidgetString(artifactRecord.svg, record.svg);
+    const html = readWidgetString(artifactRecord.html, record.html, record.w, record.content);
+    const requestedKind = readWidgetString(artifactRecord.kind, record.kind);
+    const kind = requestedKind === "svg" || (!!svg && requestedKind !== "html") ? "svg" : "html";
+    const title = readWidgetString(record.title, record.name) || "Generated widget";
+    const subtitle = readWidgetString(record.subtitle) || "";
+    const description = readWidgetString(record.description) || subtitle;
+    const toolCallId = readWidgetString(record.tool_call_id, record.toolCallId, defaults?.toolCallId) || null;
+    const widgetId = readWidgetString(record.widget_id, record.widgetId, defaults?.widgetId, toolCallId) || null;
+    const status = readWidgetString(record.status, defaults?.status) || (html || svg ? "streaming" : "loading");
+    const payload = {
+        ...base,
+        tool_call_id: toolCallId,
+        widget_id: widgetId,
+        title,
+        subtitle,
+        description,
+        status,
+        artifact: {
+            kind,
+            ...(kind === "svg" ? (svg ? { svg } : {}) : (html ? { html } : {})),
+        },
+    };
+    const width = readWidgetNumber(record.width);
+    const height = readWidgetNumber(record.height);
+    if (width !== null)
+        payload.width = width;
+    if (height !== null)
+        payload.height = height;
+    if (defaults?.error)
+        payload.error = defaults.error;
+    return payload;
 }
 /** Create an event handler that translates agent session events to SSE broadcasts. */
 export function createStreamingEventHandler(options) {
@@ -31,6 +96,7 @@ export function createStreamingEventHandler(options) {
     let thoughtDeltaActive = false;
     let draftDeltaActive = false;
     const { remember, lookup, forget } = createToolTitleTracker();
+    const widgetStreams = new Map();
     const base = {
         thread_id: options.threadId,
         agent_id: options.agentId,
@@ -141,8 +207,56 @@ export function createStreamingEventHandler(options) {
                     thoughtDeltaActive = false;
                 }
             }
+            if (messageEvent.type === "toolcall_start") {
+                const partial = messageEvent.partial;
+                const block = partial?.content?.[messageEvent.contentIndex];
+                if (block?.type === "toolCall" && block?.name === "show_widget") {
+                    const toolCallId = readWidgetString(block?.id) || null;
+                    const payload = buildGeneratedWidgetPayload(block?.arguments, base, {
+                        toolCallId,
+                        widgetId: `widget-${options.turnId}-${messageEvent.contentIndex}`,
+                    });
+                    widgetStreams.set(messageEvent.contentIndex, {
+                        toolCallId: readWidgetString(payload.tool_call_id) || toolCallId,
+                        widgetId: readWidgetString(payload.widget_id),
+                    });
+                    options.emitter.generatedWidgetOpen(payload);
+                }
+            }
+            if (messageEvent.type === "toolcall_delta") {
+                const partial = messageEvent.partial;
+                const block = partial?.content?.[messageEvent.contentIndex];
+                const prior = widgetStreams.get(messageEvent.contentIndex);
+                if ((block?.type === "toolCall" && block?.name === "show_widget") || prior) {
+                    const toolCallId = readWidgetString(block?.id, prior?.toolCallId) || null;
+                    const payload = buildGeneratedWidgetPayload(block?.arguments, base, {
+                        toolCallId,
+                        widgetId: prior?.widgetId || `widget-${options.turnId}-${messageEvent.contentIndex}`,
+                        status: "streaming",
+                    });
+                    widgetStreams.set(messageEvent.contentIndex, {
+                        toolCallId: readWidgetString(payload.tool_call_id) || toolCallId,
+                        widgetId: readWidgetString(payload.widget_id) || prior?.widgetId || null,
+                    });
+                    options.emitter.generatedWidgetDelta(payload);
+                }
+            }
             if (messageEvent.type === "toolcall_end") {
                 const title = remember(messageEvent.toolCall.id, messageEvent.toolCall.name, messageEvent.toolCall.arguments);
+                if (messageEvent.toolCall.name === "show_widget") {
+                    const payload = buildGeneratedWidgetPayload(messageEvent.toolCall.arguments, base, {
+                        toolCallId: messageEvent.toolCall.id,
+                        widgetId: messageEvent.toolCall.id,
+                        status: "final",
+                    });
+                    options.emitter.generatedWidgetFinal(payload);
+                    for (const [contentIndex, state] of widgetStreams.entries()) {
+                        if (state.toolCallId === messageEvent.toolCall.id) {
+                            widgetStreams.delete(contentIndex);
+                            break;
+                        }
+                    }
+                }
                 options.emitter.status({
                     ...base,
                     type: "tool_call",
@@ -219,6 +333,27 @@ export function createStreamingEventHandler(options) {
         }
         if (event.type === "tool_execution_end") {
             const title = lookup(event.toolCallId, event.toolName);
+            if (event.toolName === "show_widget" && event.isError) {
+                let matchedState = null;
+                for (const [contentIndex, state] of widgetStreams.entries()) {
+                    if (state.toolCallId === event.toolCallId) {
+                        matchedState = state;
+                        widgetStreams.delete(contentIndex);
+                        break;
+                    }
+                }
+                options.emitter.generatedWidgetError({
+                    ...base,
+                    tool_call_id: event.toolCallId,
+                    widget_id: matchedState?.widgetId || event.toolCallId,
+                    title: "Generated widget",
+                    subtitle: "",
+                    description: "",
+                    status: "error",
+                    error: "Widget generation failed.",
+                    artifact: { kind: "html" },
+                });
+            }
             forget(event.toolCallId);
             options.emitter.status({
                 ...base,

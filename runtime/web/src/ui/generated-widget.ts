@@ -262,8 +262,30 @@ function buildWidgetBootstrapScript(widget: any): string {
 
   const windowNamePrefix = ${escapeJsonForInlineScript(GENERATED_WIDGET_WINDOW_NAME_PREFIX)};
   let lastWindowName = null;
-  function applyHostEnvelope(data) {
+  let pendingHostEnvelope = null;
+  let pendingHostEnvelopeFrame = 0;
+  let lastDispatchedEnvelopeKey = null;
+
+  function getEnvelopeKey(data) {
+    try {
+      return JSON.stringify([
+        data?.type || null,
+        data?.widgetId || null,
+        data?.toolCallId || null,
+        data?.turnId || null,
+        data?.payload || null,
+      ]);
+    } catch {
+      return null;
+    }
+  }
+
+  function flushHostEnvelope() {
+    pendingHostEnvelopeFrame = 0;
+    const data = pendingHostEnvelope;
+    pendingHostEnvelope = null;
     if (!data) return;
+
     window.piclawWidget.lastHostMessage = data;
     const nextPayload = data.payload || null;
     if (data.type === 'widget.init') {
@@ -284,7 +306,25 @@ function buildWidgetBootstrapScript(widget: any): string {
     } else if (data.type === 'widget.update' || data.type === 'widget.complete' || data.type === 'widget.error') {
       window.piclawWidget.hostState = nextPayload;
     }
-    window.dispatchEvent(new CustomEvent('piclaw:widget-message', { detail: data }));
+
+    const effectivePayload = window.piclawWidget.hostState ?? nextPayload ?? null;
+    const detail = (effectivePayload === data.payload)
+      ? data
+      : { ...data, payload: effectivePayload };
+    const envelopeKey = getEnvelopeKey(detail);
+    if (envelopeKey && envelopeKey === lastDispatchedEnvelopeKey) return;
+    lastDispatchedEnvelopeKey = envelopeKey;
+    window.dispatchEvent(new CustomEvent('piclaw:widget-message', { detail }));
+  }
+
+  function scheduleHostEnvelope(data) {
+    if (!data) return;
+    pendingHostEnvelope = data;
+    if (pendingHostEnvelopeFrame) return;
+    const schedule = typeof requestAnimationFrame === 'function'
+      ? requestAnimationFrame
+      : (cb) => setTimeout(cb, 0);
+    pendingHostEnvelopeFrame = schedule(flushHostEnvelope);
   }
 
   function readWindowNameState() {
@@ -293,7 +333,7 @@ function buildWidgetBootstrapScript(widget: any): string {
       if (!raw || raw === lastWindowName || !raw.startsWith(windowNamePrefix)) return;
       lastWindowName = raw;
       const payload = JSON.parse(raw.slice(windowNamePrefix.length));
-      applyHostEnvelope({
+      scheduleHostEnvelope({
         __piclawGeneratedWidgetHost: true,
         type: 'widget.update',
         widgetId: meta.widgetId || null,
@@ -318,7 +358,7 @@ function buildWidgetBootstrapScript(widget: any): string {
     const data = event && event.data;
     if (!data || data.__piclawGeneratedWidgetHost !== true) return;
     if ((data.widgetId || null) !== (meta.widgetId || null)) return;
-    applyHostEnvelope(data);
+    scheduleHostEnvelope(data);
   });
 
   function announceReady() {
