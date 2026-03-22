@@ -2798,6 +2798,7 @@ function MainApp({ locationParams }) {
     const handleFloatingWidgetEvent = useCallback((event, widget) => {
         const kind = typeof event?.kind === 'string' ? event.kind : '';
         const sessionKey = getGeneratedWidgetSessionKey(widget);
+        console.debug('[widget-host] handleFloatingWidgetEvent', { kind, sessionKey, widgetId: widget?.widgetId || null, payload: event?.payload || null });
         if (!kind || !sessionKey) return;
 
         if (kind === 'widget.close') {
@@ -2974,6 +2975,39 @@ function MainApp({ locationParams }) {
             }
         }
     }, [buildFloatingWidgetDashboardSnapshot, currentChatJid, handleCloseFloatingWidget, handleMessageResponse, isComposeBoxAgentActive, showIntentToast]);
+
+    useEffect(() => {
+        if (typeof window === 'undefined') return undefined;
+        window.__piclawFloatingWidget = floatingWidget || null;
+        console.debug('[widget-host] floatingWidget state', floatingWidget ? {
+            widgetId: floatingWidget?.widgetId || null,
+            runtimeState: floatingWidget?.runtimeState || null,
+        } : null);
+        return undefined;
+    }, [floatingWidget]);
+
+    useEffect(() => {
+        if (!floatingWidget || typeof window === 'undefined') return undefined;
+
+        const handleWindowWidgetRefresh = (event) => {
+            const data = event?.data;
+            if (!data || data.__piclawGeneratedWidget !== true) return;
+            if (data.kind !== 'widget.request_refresh') return;
+
+            const currentKey = getGeneratedWidgetSessionKey(floatingWidget);
+            const incomingKey = getGeneratedWidgetSessionKey({
+                widgetId: data.widgetId,
+                toolCallId: data.toolCallId,
+            });
+            console.debug('[widget-host] window message', { currentKey, incomingKey, kind: data.kind, widgetId: data.widgetId || null, payload: data.payload || null });
+            if (incomingKey && currentKey && incomingKey !== currentKey) return;
+
+            handleFloatingWidgetEvent(data, floatingWidget);
+        };
+
+        window.addEventListener('message', handleWindowWidgetRefresh);
+        return () => window.removeEventListener('message', handleWindowWidgetRefresh);
+    }, [floatingWidget, handleFloatingWidgetEvent]);
 
     useEffect(() => {
         dismissedLiveWidgetKeysRef.current.clear();

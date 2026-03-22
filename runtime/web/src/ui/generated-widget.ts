@@ -265,8 +265,24 @@ function buildWidgetBootstrapScript(widget: any): string {
   function applyHostEnvelope(data) {
     if (!data) return;
     window.piclawWidget.lastHostMessage = data;
-    if (data.type === 'widget.init' || data.type === 'widget.update' || data.type === 'widget.complete' || data.type === 'widget.error') {
-      window.piclawWidget.hostState = data.payload || null;
+    const nextPayload = data.payload || null;
+    if (data.type === 'widget.init') {
+      const previous = window.piclawWidget.hostState && typeof window.piclawWidget.hostState === 'object'
+        ? window.piclawWidget.hostState
+        : null;
+      if (nextPayload && typeof nextPayload === 'object') {
+        window.piclawWidget.hostState = {
+          ...(previous || {}),
+          ...nextPayload,
+          ...(Object.prototype.hasOwnProperty.call(nextPayload, 'runtimeState')
+            ? {}
+            : { runtimeState: previous?.runtimeState ?? null }),
+        };
+      } else {
+        window.piclawWidget.hostState = previous || null;
+      }
+    } else if (data.type === 'widget.update' || data.type === 'widget.complete' || data.type === 'widget.error') {
+      window.piclawWidget.hostState = nextPayload;
     }
     window.dispatchEvent(new CustomEvent('piclaw:widget-message', { detail: data }));
   }

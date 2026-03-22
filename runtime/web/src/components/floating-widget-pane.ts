@@ -13,7 +13,15 @@ import {
 export function FloatingWidgetPane({ widget, onClose, onWidgetEvent }) {
     const frameRef = useRef(null);
     const frameLoadedRef = useRef(false);
-    const srcDoc = useMemo(() => buildWidgetSrcDoc(widget), [widget]);
+    const srcDoc = useMemo(() => buildWidgetSrcDoc(widget), [
+        widget?.artifact?.kind,
+        widget?.artifact?.html,
+        widget?.artifact?.svg,
+        widget?.widgetId,
+        widget?.toolCallId,
+        widget?.turnId,
+        widget?.title,
+    ]);
 
     useEffect(() => {
         if (!widget) return undefined;
@@ -34,23 +42,34 @@ export function FloatingWidgetPane({ widget, onClose, onWidgetEvent }) {
         if (!iframe) return undefined;
 
         const postToFrame = (type) => {
+            const hostName = getGeneratedWidgetHostWindowName(widget);
+            const payload = type === 'widget.init'
+                ? getGeneratedWidgetInitPayload(widget)
+                : getGeneratedWidgetHostPayload(widget);
+            console.debug('[widget-host] postToFrame', {
+                type,
+                widgetId: widget?.widgetId || null,
+                runtimeState: payload?.runtimeState || null,
+            });
+
             try {
-                const hostName = getGeneratedWidgetHostWindowName(widget);
                 iframe.name = hostName;
-                if (iframe.contentWindow) {
-                    iframe.contentWindow.name = hostName;
-                }
+            } catch (error) {
+                console.debug('[widget-host] iframe.name fallback failed', { type, error: error?.message || String(error) });
+            }
+
+            try {
                 iframe.contentWindow?.postMessage({
                     __piclawGeneratedWidgetHost: true,
                     type,
                     widgetId: widget?.widgetId || null,
                     toolCallId: widget?.toolCallId || null,
                     turnId: widget?.turnId || null,
-                    payload: type === 'widget.init'
-                        ? getGeneratedWidgetInitPayload(widget)
-                        : getGeneratedWidgetHostPayload(widget),
+                    payload,
                 }, '*');
-            } catch {}
+            } catch (error) {
+                console.debug('[widget-host] postToFrame failed', { type, error: error?.message || String(error) });
+            }
         };
 
         const syncHostState = () => {
@@ -75,42 +94,56 @@ export function FloatingWidgetPane({ widget, onClose, onWidgetEvent }) {
             iframe.removeEventListener('load', handleLoad);
             retryTimers.forEach((timer) => clearTimeout(timer));
         };
-    }, [widget, srcDoc]);
+    }, [srcDoc, widget?.widgetId, widget?.toolCallId, widget?.turnId]);
 
     useEffect(() => {
         if (!widget) return undefined;
         const iframe = frameRef.current;
         if (!iframe?.contentWindow) return undefined;
+        const hostName = getGeneratedWidgetHostWindowName(widget);
+        const payload = getGeneratedWidgetHostPayload(widget);
+        console.debug('[widget-host] direct update effect', {
+            widgetId: widget?.widgetId || null,
+            runtimeState: payload?.runtimeState || null,
+        });
+
         try {
-            const hostName = getGeneratedWidgetHostWindowName(widget);
             iframe.name = hostName;
-            iframe.contentWindow.name = hostName;
+        } catch (error) {
+            console.debug('[widget-host] direct update iframe.name fallback failed', { error: error?.message || String(error) });
+        }
+
+        try {
             iframe.contentWindow.postMessage({
                 __piclawGeneratedWidgetHost: true,
                 type: 'widget.update',
                 widgetId: widget?.widgetId || null,
                 toolCallId: widget?.toolCallId || null,
                 turnId: widget?.turnId || null,
-                payload: getGeneratedWidgetHostPayload(widget),
+                payload,
             }, '*');
-        } catch {}
+        } catch (error) {
+            console.debug('[widget-host] direct update effect failed', { error: error?.message || String(error) });
+        }
         return undefined;
     }, [widget]);
 
     useEffect(() => {
         if (!widget) return undefined;
         const handleMessage = (event) => {
-            const iframe = frameRef.current;
-            if (!iframe?.contentWindow || event.source !== iframe.contentWindow) return;
             const data = event?.data;
             if (!data || data.__piclawGeneratedWidget !== true) return;
 
+            const iframe = frameRef.current;
+            const currentKey = getGeneratedWidgetSessionKey(widget);
             const incomingKey = getGeneratedWidgetSessionKey({
                 widgetId: data.widgetId,
                 toolCallId: data.toolCallId,
             });
-            const currentKey = getGeneratedWidgetSessionKey(widget);
+
             if (incomingKey && currentKey && incomingKey !== currentKey) return;
+
+            if (!incomingKey && iframe?.contentWindow && event.source !== iframe.contentWindow) return;
 
             onWidgetEvent?.(data, widget);
         };
