@@ -1,7 +1,7 @@
 ---
 id: upgrade-pi-0-62-sourceinfo-migration
 title: "Upgrade pi to 0.62.0: migrate extensionPath → sourceInfo"
-status: next
+status: done
 priority: high
 created: 2026-03-23
 updated: 2026-03-23
