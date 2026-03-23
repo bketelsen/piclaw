@@ -12,6 +12,7 @@ import {
   attachMediaToMessage,
   clampWebContent,
   createMedia,
+  getChatBranchByChatJid,
   getDb,
   getMediaInfoById,
   getMessageByRowId,
@@ -123,7 +124,7 @@ export function storeWebMessage(
     getDb().prepare("UPDATE messages SET thread_id = ? WHERE rowid = ?").run(rowId, rowId);
   }
 
-  storeChatMetadata(params.chatJid, msg.timestamp, "Web");
+  storeChatMetadata(params.chatJid, msg.timestamp, getChatBranchByChatJid(params.chatJid)?.agent_name || undefined);
 
   const interaction = getMessageByRowId(params.chatJid, rowId);
   if (interaction) {

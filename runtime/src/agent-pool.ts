@@ -796,11 +796,12 @@ export class AgentPool {
     try {
       const existing = getChatBranchByChatJid(chatJid);
       if (existing) return existing;
-      storeChatMetadata(chatJid, new Date().toISOString(), session?.sessionName?.trim() || chatJid);
-      return ensureChatBranch({
+      const created = ensureChatBranch({
         chat_jid: chatJid,
         agent_name: deriveAgentHandle(chatJid, session?.sessionName?.trim() || null),
       });
+      storeChatMetadata(chatJid, new Date().toISOString(), created.agent_name || chatJid);
+      return created;
     } catch {
       return createVolatileBranchRecord(chatJid, session);
     }
@@ -896,7 +897,7 @@ export class AgentPool {
     const requestedAgentName = typeof options.agentName === "string" && options.agentName.trim()
       ? options.agentName.trim()
       : sourceBranch.agent_name;
-    storeChatMetadata(nextChatJid, new Date().toISOString(), requestedAgentName || sourceSession.sessionName?.trim() || nextChatJid);
+    storeChatMetadata(nextChatJid, new Date().toISOString(), requestedAgentName || nextChatJid);
     const nextBranch = ensureChatBranch({
       chat_jid: nextChatJid,
       root_chat_jid: sourceBranch.root_chat_jid || sourceBranch.chat_jid,
