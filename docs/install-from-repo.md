@@ -22,25 +22,28 @@ sources, web app, extensions, vendored assets, and skills.
 
 ## What happens at install time
 
-A `postinstall` script runs automatically after `bun add` to build assets
-that are too large to commit to git or that require a compilation step:
+A `postinstall` script runs automatically after `bun add` to download the
+draw.io viewer (~35 MB), which is too large to commit to git.
 
-| Asset | Size | What it does |
-|---|---|---|
-| draw.io viewer | ~35 MB | Downloads `draw.war` from GitHub releases, extracts webapp |
-| Web bundles | ~2 MB | Builds `app.bundle.js`, `login.bundle.js`, CSS from source |
-| TypeScript dist | ~1 MB | Compiles `runtime/src/` → `runtime/dist/` |
-
-All other vendored assets (Mermaid, CodeMirror, KaTeX, Ghostty, fonts,
-Office viewer, VNC decoder, etc.) are committed to git and available
-immediately after install.
+All other vendored assets — Mermaid, CodeMirror, KaTeX, Ghostty, fonts,
+Office viewer, VNC decoder, web bundles, etc. — are committed to git and
+available immediately after install. No devDependencies or build tools
+are required for a working runtime.
 
 If `postinstall` was skipped (e.g. `--ignore-scripts`), run manually:
 
 ```bash
-bun run build:vendor:drawio   # draw.io viewer
-bun run build:web             # web bundles (includes all other vendors)
-bun run build                 # compile TypeScript
+bun run build:vendor:drawio
+```
+
+### Full development rebuild
+
+If you want to rebuild everything from source (requires devDependencies):
+
+```bash
+bun install               # includes devDependencies
+bun run build:web         # rebuild vendor bundles + web app from source
+bun run build             # recompile TypeScript via tsc (optional — Bun runs .ts directly)
 ```
 
 ## Current scope

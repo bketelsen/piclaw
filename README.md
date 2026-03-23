@@ -68,18 +68,22 @@ cd /workspace && pi
 bun add -g github:rcarmo/piclaw
 ```
 
-A `postinstall` script runs automatically to build assets that are too large to commit:
-
-- **draw.io viewer** (~35 MB, downloaded from GitHub releases)
-- **Web bundles** (`app.bundle.js`, `login.bundle.js`, CSS)
-- **Compiled TypeScript** (`runtime/dist/`)
+A `postinstall` script runs automatically to fetch the draw.io viewer (~35 MB),
+which is too large to commit to git. All other vendored assets and web bundles
+are committed and available immediately.
 
 If `postinstall` is skipped (e.g. `--ignore-scripts`), run manually:
 
 ```bash
-bun run build:vendor:drawio   # draw.io viewer
-bun run build:web             # web bundles (includes all other vendors)
-bun run build                 # compile TypeScript
+bun run build:vendor:drawio
+```
+
+For a full development rebuild (requires devDependencies):
+
+```bash
+bun install               # includes devDependencies
+bun run build:web         # rebuild web bundles from source
+bun run build             # recompile TypeScript (optional — Bun runs .ts directly)
 ```
 
 See [docs/install-from-repo.md](docs/install-from-repo.md) for scope and caveats.

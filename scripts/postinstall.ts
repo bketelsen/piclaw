@@ -3,9 +3,22 @@
  * postinstall.ts — Run after `bun add -g github:rcarmo/piclaw`.
  *
  * Ensures vendored assets that are .gitignored (too large to commit)
- * and build artifacts (web bundles, compiled TS) are present.
+ * are present. Only uses bun and node:* builtins — no devDependencies
+ * required.
  *
- * Safe to re-run: each step checks whether its output already exists.
+ * What's already committed to git (available immediately):
+ *   - Mermaid, CodeMirror, Preact, Marked, KaTeX (JS/CSS/fonts)
+ *   - Ghostty Web (JS + WASM)
+ *   - VNC decoder (WASM)
+ *   - Office viewer libs
+ *   - Terminal fonts
+ *   - Adaptive Cards
+ *   - Web bundles (app.bundle.js, login.bundle.js, CSS)
+ *
+ * What this script builds:
+ *   - Draw.io viewer (~35 MB, downloaded from GitHub releases)
+ *
+ * Safe to re-run: checks whether output already exists.
  */
 
 import { existsSync } from "node:fs";
@@ -20,7 +33,7 @@ function run(label: string, cmd: string[], cwd = ROOT): boolean {
   const result = spawnSync(cmd[0], cmd.slice(1), {
     cwd,
     stdio: "inherit",
-    env: { ...process.env, BUN_INSTALL_GLOBAL: undefined },
+    env: { ...process.env },
   });
   if (result.status !== 0) {
     console.warn(`${LOG} ⚠ ${label} failed (exit ${result.status}), skipping`);
@@ -29,28 +42,12 @@ function run(label: string, cmd: string[], cwd = ROOT): boolean {
   return true;
 }
 
-// 1. Vendor: draw.io (35 MB, .gitignored)
+// Draw.io viewer (~35 MB, .gitignored — downloads from GitHub releases)
 const drawioIndex = resolve(ROOT, "runtime/extensions/drawio-editor/vendor/index.html");
 if (!existsSync(drawioIndex)) {
   run("Vendoring draw.io", ["bun", "run", "build:vendor:drawio"]);
 } else {
   console.log(`${LOG} draw.io vendor already present, skipping`);
-}
-
-// 2. Web bundles (app.bundle.js, login.bundle.js, CSS)
-const appBundle = resolve(ROOT, "runtime/web/static/dist/app.bundle.js");
-if (!existsSync(appBundle)) {
-  run("Building web bundles", ["bun", "run", "build:web"]);
-} else {
-  console.log(`${LOG} Web bundles already present, skipping`);
-}
-
-// 3. Compiled TypeScript (runtime/dist/)
-const distIndex = resolve(ROOT, "runtime/dist/index.js");
-if (!existsSync(distIndex)) {
-  run("Compiling TypeScript", ["bun", "run", "build"]);
-} else {
-  console.log(`${LOG} TypeScript dist already present, skipping`);
 }
 
 console.log(`${LOG} Done`);
