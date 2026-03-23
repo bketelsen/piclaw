@@ -84,8 +84,13 @@ class RichSession {
   seededEntries: Array<Array<any>> = [];
 
   extensionRunner = {
-    getRegisteredCommandsWithPaths: () => [
-      { command: { name: "ext", description: "Extension command" }, extensionPath: "/ext" },
+    getRegisteredCommands: () => [
+      {
+        name: "ext",
+        invocationName: "ext",
+        description: "Extension command",
+        sourceInfo: { path: "/ext", source: "extension", scope: "user", origin: "top-level" },
+      },
     ],
   };
 

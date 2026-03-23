@@ -73,6 +73,6 @@ describe("builtin extension factories", () => {
   });
 
   test("factories array has expected length", () => {
-    expect(builtinExtensionFactories.length).toBe(11);
+    expect(builtinExtensionFactories.length).toBe(12);
   });
 });

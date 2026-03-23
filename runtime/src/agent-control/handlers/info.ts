@@ -240,17 +240,18 @@ export async function handleCommands(session: AgentSession, _command: CommandsCo
 
   const extensionRunner = session.extensionRunner;
   if (extensionRunner) {
-    const extCommands = extensionRunner.getRegisteredCommandsWithPaths();
-    const isPiBuiltin = (extensionPath: string | undefined) => {
-      if (!extensionPath) return false;
-      return extensionPath.includes("node_modules/@mariozechner/pi-");
+    const extCommands = extensionRunner.getRegisteredCommands();
+    const isPiBuiltin = (path: string | undefined) => {
+      if (!path) return false;
+      return path.includes("node_modules/@mariozechner/pi-");
     };
     for (const entry of extCommands) {
-      const name = entry.command?.name;
+      const name = entry.invocationName || entry.name;
       if (!name) continue;
-      const description = entry.command.description || `extension (${entry.extensionPath})`;
-      const source: CommandSource = isPiBuiltin(entry.extensionPath) ? "pi-extension" : "extension";
-      addEntry(`/${name}`, description, source, entry.extensionPath || undefined);
+      const entryPath = entry.sourceInfo?.path;
+      const description = entry.description || `extension (${entryPath || "unknown"})`;
+      const source: CommandSource = isPiBuiltin(entryPath) ? "pi-extension" : "extension";
+      addEntry(`/${name}`, description, source, entryPath || undefined);
     }
   }
 

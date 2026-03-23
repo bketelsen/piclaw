@@ -59,7 +59,7 @@ test("terminal session service resolves owner from web session cookie", () => {
     headers: { cookie: "piclaw_session=terminal-token" },
   });
 
-  expect(service.resolveOwnerFromRequest(req)).toEqual({ token: "terminal-token", userId: "user-1" });
+  expect(service.resolveOwnerFromRequest(req)).toEqual({ kind: "terminal", token: "terminal-token", userId: "user-1" });
 });
 
 test("terminal session service falls back to the local default owner when allowed", () => {
@@ -69,6 +69,7 @@ test("terminal session service falls back to the local default owner when allowe
 
   const req = new Request("https://example.com/terminal/session");
   expect(service.resolveOwnerFromRequest(req, true)).toEqual({
+    kind: "terminal",
     token: "web-terminal-local-default",
     userId: "default",
   });
