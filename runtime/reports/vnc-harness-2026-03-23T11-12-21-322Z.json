@@ -1,0 +1,269 @@
+{
+  "startedAt": "2026-03-23T11:12:18.837Z",
+  "finishedAt": "2026-03-23T11:12:21.428Z",
+  "baseUrl": "http://127.0.0.1:8791",
+  "args": {
+    "target": "192.168.1.10:5917",
+    "password": "***len:8***",
+    "host": "127.0.0.1",
+    "port": 8791,
+    "liveWaitMs": 12000,
+    "encodings": "16,5,2,1,0,-223"
+  },
+  "liveRuns": [
+    {
+      "requested": "16",
+      "effective": "16",
+      "passed": true,
+      "connectedAt": "2026-03-23T11:12:19.202Z",
+      "firstDisplayInitAt": "2026-03-23T11:12:19.209Z",
+      "firstFramebufferAt": "2026-03-23T11:12:19.256Z",
+      "lastError": "none",
+      "protocolState": "connected",
+      "frames": 1,
+      "rects": 0
+    },
+    {
+      "requested": "5",
+      "effective": "5",
+      "passed": true,
+      "connectedAt": "2026-03-23T11:12:19.558Z",
+      "firstDisplayInitAt": "2026-03-23T11:12:19.562Z",
+      "firstFramebufferAt": "2026-03-23T11:12:19.648Z",
+      "lastError": "none",
+      "protocolState": "connected",
+      "frames": 1,
+      "rects": 1
+    },
+    {
+      "requested": "2",
+      "effective": "2",
+      "passed": true,
+      "connectedAt": "2026-03-23T11:12:19.910Z",
+      "firstDisplayInitAt": "2026-03-23T11:12:19.914Z",
+      "firstFramebufferAt": "2026-03-23T11:12:20.033Z",
+      "lastError": "none",
+      "protocolState": "connected",
+      "frames": 1,
+      "rects": 1
+    },
+    {
+      "requested": "1",
+      "effective": "1",
+      "passed": true,
+      "connectedAt": "2026-03-23T11:12:20.261Z",
+      "firstDisplayInitAt": "2026-03-23T11:12:20.265Z",
+      "firstFramebufferAt": "2026-03-23T11:12:20.376Z",
+      "lastError": "none",
+      "protocolState": "connected",
+      "frames": 1,
+      "rects": 1
+    },
+    {
+      "requested": "0",
+      "effective": "0",
+      "passed": true,
+      "connectedAt": "2026-03-23T11:12:20.615Z",
+      "firstDisplayInitAt": "2026-03-23T11:12:20.619Z",
+      "firstFramebufferAt": "2026-03-23T11:12:20.745Z",
+      "lastError": "none",
+      "protocolState": "connected",
+      "frames": 1,
+      "rects": 1
+    },
+    {
+      "requested": "-223",
+      "effective": "-223",
+      "passed": true,
+      "connectedAt": "2026-03-23T11:12:20.969Z",
+      "firstDisplayInitAt": "2026-03-23T11:12:20.975Z",
+      "firstFramebufferAt": "2026-03-23T11:12:21.088Z",
+      "lastError": "none",
+      "protocolState": "connected",
+      "frames": 2,
+      "rects": 429
+    }
+  ],
+  "synthetic": {
+    "at": "2026-03-23T11:12:19.197Z",
+    "cases": [
+      {
+        "name": "raw",
+        "pass": true,
+        "detail": "1x1 raw red pixel decoded"
+      },
+      {
+        "name": "rre",
+        "pass": true,
+        "detail": "RRE background + subrect decoded"
+      },
+      {
+        "name": "copyrect",
+        "pass": true,
+        "detail": "CopyRect copied 2x2 block"
+      },
+      {
+        "name": "hextile",
+        "pass": true,
+        "detail": "Hextile background + single subrect decoded"
+      },
+      {
+        "name": "zrle",
+        "pass": true,
+        "detail": "ZRLE decoded compressed tile (13 byte payload)"
+      },
+      {
+        "name": "desktop-size",
+        "pass": true,
+        "detail": "DesktopSize resized framebuffer to 3x4"
+      }
+    ],
+    "summary": {
+      "total": 6,
+      "passed": 6,
+      "failed": 0
+    }
+  },
+  "snapshot": {
+    "target": "192.168.1.10:5917",
+    "connectedAt": "2026-03-23T11:12:20.969Z",
+    "firstDisplayInitAt": "2026-03-23T11:12:20.975Z",
+    "firstFramebufferAt": "2026-03-23T11:12:21.088Z",
+    "lastError": null,
+    "protocolState": "connected",
+    "currentEncoding": "-223",
+    "fallbackQueue": [
+      -223,
+      16,
+      5,
+      2,
+      1,
+      0
+    ],
+    "stats": {
+      "startedAt": "2026-03-23T11:12:19.133Z",
+      "bytesIn": 5665300,
+      "bytesOut": 103,
+      "frames": 2,
+      "rects": 429,
+      "clipboardEvents": 0,
+      "bellEvents": 0,
+      "protocolEvents": {
+        "protocol-version": 1,
+        "security-types": 1,
+        "security-selected": 1,
+        "security-result": 1,
+        "display-init": 1,
+        "framebuffer-update": 2
+      },
+      "logs": [
+        "[2026-03-23T11:12:19.133Z] Harness booted. target=192.168.1.10:5917 ws=/bridge",
+        "[2026-03-23T11:12:19.142Z] Connecting websocket to ws://127.0.0.1:8791/bridge",
+        "[2026-03-23T11:12:19.179Z] websocket.open",
+        "[2026-03-23T11:12:19.181Z] control.vnc.connected target=192.168.1.10:5917",
+        "[2026-03-23T11:12:19.184Z] protocol-version server=RFB 003.008 client=RFB 003.008",
+        "[2026-03-23T11:12:19.185Z] control.pong",
+        "[2026-03-23T11:12:19.187Z] security-types [2]",
+        "[2026-03-23T11:12:19.187Z] security-selected VNC Authentication",
+        "[2026-03-23T11:12:19.189Z] security-result ok=true",
+        "[2026-03-23T11:12:19.191Z] display-init width=1280 height=1024 name=QEMU (winagent)",
+        "[2026-03-23T11:12:19.197Z] synthetic-suite done 6/6 passed",
+        "[2026-03-23T11:12:19.200Z] Connecting websocket to ws://127.0.0.1:8791/bridge",
+        "[2026-03-23T11:12:19.202Z] websocket.open",
+        "[2026-03-23T11:12:19.203Z] control.vnc.connected target=192.168.1.10:5917",
+        "[2026-03-23T11:12:19.204Z] protocol-version server=RFB 003.008 client=RFB 003.008",
+        "[2026-03-23T11:12:19.204Z] control.pong",
+        "[2026-03-23T11:12:19.205Z] security-types [2]",
+        "[2026-03-23T11:12:19.206Z] security-selected VNC Authentication",
+        "[2026-03-23T11:12:19.207Z] security-result ok=true",
+        "[2026-03-23T11:12:19.209Z] display-init width=1280 height=1024 name=QEMU (winagent)",
+        "[2026-03-23T11:12:19.256Z] framebuffer-update rects=0 painted=1 size=1280x1024",
+        "[2026-03-23T11:12:19.554Z] Connecting websocket to ws://127.0.0.1:8791/bridge",
+        "[2026-03-23T11:12:19.558Z] websocket.open",
+        "[2026-03-23T11:12:19.559Z] control.vnc.connected target=192.168.1.10:5917",
+        "[2026-03-23T11:12:19.559Z] protocol-version server=RFB 003.008 client=RFB 003.008",
+        "[2026-03-23T11:12:19.559Z] control.pong",
+        "[2026-03-23T11:12:19.559Z] security-types [2]",
+        "[2026-03-23T11:12:19.560Z] security-selected VNC Authentication",
+        "[2026-03-23T11:12:19.560Z] security-result ok=true",
+        "[2026-03-23T11:12:19.562Z] display-init width=1280 height=1024 name=QEMU (winagent)",
+        "[2026-03-23T11:12:19.648Z] framebuffer-update rects=1 painted=1 size=1280x1024",
+        "[2026-03-23T11:12:19.907Z] Connecting websocket to ws://127.0.0.1:8791/bridge",
+        "[2026-03-23T11:12:19.910Z] websocket.open",
+        "[2026-03-23T11:12:19.910Z] control.vnc.connected target=192.168.1.10:5917",
+        "[2026-03-23T11:12:19.911Z] protocol-version server=RFB 003.008 client=RFB 003.008",
+        "[2026-03-23T11:12:19.911Z] control.pong",
+        "[2026-03-23T11:12:19.911Z] security-types [2]",
+        "[2026-03-23T11:12:19.911Z] security-selected VNC Authentication",
+        "[2026-03-23T11:12:19.912Z] security-result ok=true",
+        "[2026-03-23T11:12:19.914Z] display-init width=1280 height=1024 name=QEMU (winagent)",
+        "[2026-03-23T11:12:20.033Z] framebuffer-update rects=1 painted=1 size=1280x1024",
+        "[2026-03-23T11:12:20.260Z] Connecting websocket to ws://127.0.0.1:8791/bridge",
+        "[2026-03-23T11:12:20.262Z] websocket.open",
+        "[2026-03-23T11:12:20.262Z] control.vnc.connected target=192.168.1.10:5917",
+        "[2026-03-23T11:12:20.262Z] control.pong",
+        "[2026-03-23T11:12:20.263Z] protocol-version server=RFB 003.008 client=RFB 003.008",
+        "[2026-03-23T11:12:20.263Z] security-types [2]",
+        "[2026-03-23T11:12:20.263Z] security-selected VNC Authentication",
+        "[2026-03-23T11:12:20.264Z] security-result ok=true",
+        "[2026-03-23T11:12:20.265Z] display-init width=1280 height=1024 name=QEMU (winagent)",
+        "[2026-03-23T11:12:20.376Z] framebuffer-update rects=1 painted=1 size=1280x1024",
+        "[2026-03-23T11:12:20.613Z] Connecting websocket to ws://127.0.0.1:8791/bridge",
+        "[2026-03-23T11:12:20.615Z] websocket.open",
+        "[2026-03-23T11:12:20.616Z] control.vnc.connected target=192.168.1.10:5917",
+        "[2026-03-23T11:12:20.616Z] protocol-version server=RFB 003.008 client=RFB 003.008",
+        "[2026-03-23T11:12:20.617Z] control.pong",
+        "[2026-03-23T11:12:20.617Z] security-types [2]",
+        "[2026-03-23T11:12:20.617Z] security-selected VNC Authentication",
+        "[2026-03-23T11:12:20.619Z] security-result ok=true",
+        "[2026-03-23T11:12:20.619Z] display-init width=1280 height=1024 name=QEMU (winagent)",
+        "[2026-03-23T11:12:20.745Z] framebuffer-update rects=1 painted=1 size=1280x1024",
+        "[2026-03-23T11:12:20.966Z] Connecting websocket to ws://127.0.0.1:8791/bridge",
+        "[2026-03-23T11:12:20.969Z] websocket.open",
+        "[2026-03-23T11:12:20.969Z] control.vnc.connected target=192.168.1.10:5917",
+        "[2026-03-23T11:12:20.970Z] protocol-version server=RFB 003.008 client=RFB 003.008",
+        "[2026-03-23T11:12:20.971Z] control.pong",
+        "[2026-03-23T11:12:20.971Z] security-types [2]",
+        "[2026-03-23T11:12:20.972Z] security-selected VNC Authentication",
+        "[2026-03-23T11:12:20.974Z] security-result ok=true",
+        "[2026-03-23T11:12:20.975Z] display-init width=1280 height=1024 name=QEMU (winagent)",
+        "[2026-03-23T11:12:21.088Z] framebuffer-update rects=1 painted=1 size=1280x1024",
+        "[2026-03-23T11:12:21.187Z] framebuffer-update rects=428 painted=1 size=1280x1024"
+      ]
+    },
+    "syntheticResults": [
+      {
+        "name": "raw",
+        "pass": true,
+        "detail": "1x1 raw red pixel decoded"
+      },
+      {
+        "name": "rre",
+        "pass": true,
+        "detail": "RRE background + subrect decoded"
+      },
+      {
+        "name": "copyrect",
+        "pass": true,
+        "detail": "CopyRect copied 2x2 block"
+      },
+      {
+        "name": "hextile",
+        "pass": true,
+        "detail": "Hextile background + single subrect decoded"
+      },
+      {
+        "name": "zrle",
+        "pass": true,
+        "detail": "ZRLE decoded compressed tile (13 byte payload)"
+      },
+      {
+        "name": "desktop-size",
+        "pass": true,
+        "detail": "DesktopSize resized framebuffer to 3x4"
+      }
+    ]
+  },
+  "consoleLines": [],
+  "screenshotPath": "/workspace/piclaw/runtime/reports/vnc-harness-2026-03-23T11-12-21-322Z.png"
+}

@@ -138,42 +138,66 @@ export class WebChannel {
         }
         catch { }
         const tls = await this.loadTlsOptions();
-        this.server = Bun.serve({
-            hostname: WEB_HOST,
-            port: WEB_PORT,
-            idleTimeout: WEB_IDLE_TIMEOUT,
-            // Hard limit on request body size. Individual endpoints enforce tighter
-            // limits (e.g., 10 MB for media uploads, 512 MB for workspace uploads,
-            // 100 KB for message content).
-            // This is the outermost safety net; Bun rejects bodies exceeding this
-            // before any handler code runs.
-            maxRequestBodySize: 512 * 1024 * 1024, // 512 MB hard cap
-            fetch: (req, server) => this.handleFetch(req, server),
-            websocket: {
-                open: (ws) => {
-                    if (ws.data?.kind === "vnc") {
-                        this.vncService.attachClient(ws);
-                        return;
-                    }
-                    this.terminalService.attachClient(ws);
-                },
-                message: (ws, message) => {
-                    if (ws.data?.kind === "vnc") {
-                        this.vncService.handleMessage(ws, message);
-                        return;
-                    }
-                    this.terminalService.handleMessage(ws, message);
-                },
-                close: (ws) => {
-                    if (ws.data?.kind === "vnc") {
-                        this.vncService.detachClient(ws);
-                        return;
-                    }
-                    this.terminalService.detachClient(ws);
-                },
-            },
-            ...(tls ? { tls } : {}),
-        });
+        // On Windows, the previous process may linger after a restart (no
+        // SIGKILL), leaving the port in TIME_WAIT.  Retry a few times with
+        // reusePort so the new instance can bind immediately.
+        const MAX_BIND_ATTEMPTS = 5;
+        const BIND_RETRY_MS = 1500;
+        let lastBindError = null;
+        for (let attempt = 1; attempt <= MAX_BIND_ATTEMPTS; attempt++) {
+            try {
+                this.server = Bun.serve({
+                    hostname: WEB_HOST,
+                    port: WEB_PORT,
+                    reusePort: true,
+                    idleTimeout: WEB_IDLE_TIMEOUT,
+                    // Hard limit on request body size. Individual endpoints enforce tighter
+                    // limits (e.g., 10 MB for media uploads, 512 MB for workspace uploads,
+                    // 100 KB for message content).
+                    // This is the outermost safety net; Bun rejects bodies exceeding this
+                    // before any handler code runs.
+                    maxRequestBodySize: 512 * 1024 * 1024, // 512 MB hard cap
+                    fetch: (req, server) => this.handleFetch(req, server),
+                    websocket: {
+                        open: (ws) => {
+                            if (ws.data?.kind === "vnc") {
+                                this.vncService.attachClient(ws);
+                                return;
+                            }
+                            this.terminalService.attachClient(ws);
+                        },
+                        message: (ws, message) => {
+                            if (ws.data?.kind === "vnc") {
+                                this.vncService.handleMessage(ws, message);
+                                return;
+                            }
+                            this.terminalService.handleMessage(ws, message);
+                        },
+                        close: (ws) => {
+                            if (ws.data?.kind === "vnc") {
+                                this.vncService.detachClient(ws);
+                                return;
+                            }
+                            this.terminalService.detachClient(ws);
+                        },
+                    },
+                    ...(tls ? { tls } : {}),
+                });
+                lastBindError = null;
+                break;
+            }
+            catch (err) {
+                lastBindError = err;
+                if (err?.code === "EADDRINUSE" && attempt < MAX_BIND_ATTEMPTS) {
+                    console.warn(`[web] Port ${WEB_PORT} busy (attempt ${attempt}/${MAX_BIND_ATTEMPTS}), retrying in ${BIND_RETRY_MS}ms…`);
+                    await new Promise((r) => setTimeout(r, BIND_RETRY_MS));
+                    continue;
+                }
+                throw err;
+            }
+        }
+        if (lastBindError)
+            throw lastBindError;
         this.workspaceWatcher = startWorkspaceWatcher(this);
         const purgeNow = () => {
             const result = purgeExpiredLinkPreviewImageCache(new Date().toISOString(), 256);
