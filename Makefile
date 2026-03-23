@@ -29,10 +29,12 @@ REGISTRY ?= ghcr.io
 GHCR_OWNER ?= $(shell whoami)
 GHCR_IMAGE := $(REGISTRY)/$(GHCR_OWNER)/$(IMAGE):$(TAG)
 
-BUN_ROOT ?= $(or $(BUN_INSTALL),/usr/local/lib/bun)
+BUN_BIN_REAL ?= $(shell readlink -f $(shell command -v bun 2>/dev/null) 2>/dev/null)
+BUN_ROOT ?= $(or $(BUN_INSTALL),$(patsubst %/bin/bun,%,$(BUN_BIN_REAL)),/usr/local/lib/bun)
 GLOBAL_PKG := $(BUN_ROOT)/install/global/package.json
 GLOBAL_LOCK := $(BUN_ROOT)/install/global/bun.lock
 PI_AGENT_VERSION ?= $(shell jq -r '.dependencies["@mariozechner/pi-coding-agent"] // "0.58.3"' package.json)
+WEB_BUILD_TEST_TIMEOUT_MS ?= 20000
 
 .PHONY: help up down enter build build-piclaw build-web build-ts vendor update-mermaid-vendor pack \
         local-install restart lint test test-coverage \
@@ -93,7 +95,7 @@ update-mermaid-vendor: ## Rebuild or upgrade vendored mermaid (use MERMAID_VERSI
 
 build-web: ## Build web JS/CSS bundles (+ sourcemaps) into static/dist/ (includes vendor bundle)
 	cd runtime && bun run build:web
-	@cd runtime && bun test test/channels/web/web-build.test.ts test/channels/web/post-link-preview-content.test.ts
+	@cd runtime && bun test --timeout $(WEB_BUILD_TEST_TIMEOUT_MS) test/channels/web/web-build.test.ts test/channels/web/post-link-preview-content.test.ts
 	@ls -lh \
 		runtime/web/static/dist/app.bundle.js \
 		runtime/web/static/dist/app.bundle.js.map \
