@@ -13,6 +13,7 @@ import type { AgentControlCommand, AgentControlResult } from "../agent-control-t
 import { formatCompactNumber } from "../agent-control-helpers.js";
 import { createMedia } from "../../db.js";
 import { killTrackedProcesses } from "../../utils/process-tracker.js";
+import { requestGracefulShutdown } from "../../runtime/shutdown-registry.js";
 
 type RestartCommand = Extract<AgentControlCommand, { type: "restart" }>;
 type ExitCommand = Extract<AgentControlCommand, { type: "exit" }>;
@@ -23,17 +24,8 @@ type AbortCommand = Extract<AgentControlCommand, { type: "abort" }>;
 type AbortRetryCommand = Extract<AgentControlCommand, { type: "abort_retry" }>;
 type AbortBashCommand = Extract<AgentControlCommand, { type: "abort_bash" }>;
 
-const EXIT_DELAY_MS = Number(process.env.PICLAW_EXIT_DELAY_MS || "150");
-
 function scheduleProcessExit(): void {
-  const customScheduler = (globalThis as { __PICLAW_EXIT_SCHEDULER__?: (() => void) | undefined }).__PICLAW_EXIT_SCHEDULER__;
-  if (typeof customScheduler === "function") {
-    customScheduler();
-    return;
-  }
-  setTimeout(() => {
-    process.exit(0);
-  }, EXIT_DELAY_MS);
+  requestGracefulShutdown("/exit command");
 }
 
 function toCompactReportFilename(timestamp: string): string {

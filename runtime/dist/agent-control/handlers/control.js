@@ -10,16 +10,9 @@
 import { formatCompactNumber } from "../agent-control-helpers.js";
 import { createMedia } from "../../db.js";
 import { killTrackedProcesses } from "../../utils/process-tracker.js";
-const EXIT_DELAY_MS = Number(process.env.PICLAW_EXIT_DELAY_MS || "150");
+import { requestGracefulShutdown } from "../../runtime/shutdown-registry.js";
 function scheduleProcessExit() {
-    const customScheduler = globalThis.__PICLAW_EXIT_SCHEDULER__;
-    if (typeof customScheduler === "function") {
-        customScheduler();
-        return;
-    }
-    setTimeout(() => {
-        process.exit(0);
-    }, EXIT_DELAY_MS);
+    requestGracefulShutdown("/exit command");
 }
 function toCompactReportFilename(timestamp) {
     return `compaction-report-${timestamp.replace(/[:.]/g, "-")}.md`;

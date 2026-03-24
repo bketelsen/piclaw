@@ -15,6 +15,7 @@ import { registerRuntimeShutdownSignals } from "./composition.js";
 import { startRuntimeLoop, type StartRuntimeLoopDeps } from "./coordinator.js";
 import { registerOptionalProviders } from "./provider-bootstrap.js";
 import { createShutdownHandler, type ShutdownDeps } from "./shutdown.js";
+import { registerShutdownHandler } from "./shutdown-registry.js";
 import {
   createWhatsAppChannel,
   initializeRuntimeEnvironment,
@@ -160,6 +161,7 @@ export async function bootstrapRuntime(deps: RuntimeBootstrapDeps): Promise<void
     stopIpcWatcher: deps.stopIpcWatcher,
     stopSchedulerLoop: deps.stopSchedulerLoop,
   });
+  registerShutdownHandler(shutdown);
   deps.registerRuntimeShutdownSignals(deps.signalRegistrar, shutdown);
 
   const senders = deps.createRuntimeSenders(web, whatsapp, pushover);

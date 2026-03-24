@@ -8,6 +8,7 @@ import { registerRuntimeShutdownSignals } from "./composition.js";
 import { startRuntimeLoop } from "./coordinator.js";
 import { registerOptionalProviders } from "./provider-bootstrap.js";
 import { createShutdownHandler } from "./shutdown.js";
+import { registerShutdownHandler } from "./shutdown-registry.js";
 import { createWhatsAppChannel, initializeRuntimeEnvironment, queueStartupResumePendingIpc, startOptionalPushoverChannel, startWebChannel, } from "./startup.js";
 import { createRuntimeSenders, startRuntimeWorkers, } from "./wiring.js";
 /**
@@ -56,6 +57,7 @@ export async function bootstrapRuntime(deps) {
         stopIpcWatcher: deps.stopIpcWatcher,
         stopSchedulerLoop: deps.stopSchedulerLoop,
     });
+    registerShutdownHandler(shutdown);
     deps.registerRuntimeShutdownSignals(deps.signalRegistrar, shutdown);
     const senders = deps.createRuntimeSenders(web, whatsapp, pushover);
     deps.startRuntimeWorkers(queue, agentPool, web, senders);
