@@ -160,6 +160,15 @@ async function executeReadAttachment(
   const isText = isTextContentType(contentType);
 
   if (mode === "image" || (mode === "auto" && isImage)) {
+    // Only return image blocks for MIME types Claude's API actually accepts.
+    // Anything else (PDF, SVG, etc.) would poison the session with a permanent 400 error.
+    const VALID_IMAGE_MIMES = new Set(["image/jpeg", "image/png", "image/gif", "image/webp"]);
+    if (!VALID_IMAGE_MIMES.has(contentType)) {
+      return {
+        content: [{ type: "text", text: `Attachment ${filename} (${contentType}, ${formatBytes(size)}) cannot be returned as an image — only jpeg, png, gif, and webp are supported. Use mode: "text" or "base64" instead.` }],
+        details: { id, filename, content_type: contentType, size, mode: "text", unsupported_image_mime: true },
+      };
+    }
     if (size > maxBytes) {
       return {
         content: [{ type: "text", text: `Attachment ${filename} is ${formatBytes(size)}. Increase max_bytes to load the full image.` }],

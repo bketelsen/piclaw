@@ -995,6 +995,21 @@ export async function processChat(
       createdAt: new Date().toISOString(),
     });
 
+    // Surface the error as a visible timeline message so the user can see
+    // what went wrong. Previously errors were only shown as transient status
+    // events which are invisible in timeline history.
+    const isApiError = /invalid_request_error|400|media_type|image.*source/i.test(errorText);
+    const userVisibleError = isApiError
+      ? `⚠️ API error — the session may be corrupted:\n\n\`${errorText.slice(0, 500)}\`\n\nThis error will repeat on every message. Try \`/new-session\` to start fresh, or manually repair the session JSONL.`
+      : `⚠️ Agent error: ${errorText.slice(0, 300)}`;
+    const errorNotice = channel.storeMessage(chatJid, userVisibleError, true, [], {
+      threadId: resolvedThreadRootId ?? undefined,
+      isTerminalAgentReply: true,
+    });
+    if (errorNotice) {
+      channel.broadcastEvent("agent_response", errorNotice);
+    }
+
     trackedEmitter.status({
       thread_id: threadId,
       agent_id: agentId,
