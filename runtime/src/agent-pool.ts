@@ -138,6 +138,12 @@ interface TurnTracker {
   getTurnCount: () => number;
 }
 
+function formatTimeoutDuration(timeoutMs: number): string {
+  if (!Number.isFinite(timeoutMs) || timeoutMs <= 0) return `${timeoutMs}ms`;
+  if (timeoutMs % 1000 === 0) return `${Math.round(timeoutMs / 1000)}s`;
+  return `${(timeoutMs / 1000).toFixed(1)}s`;
+}
+
 interface AgentContentBlock {
   type?: unknown;
   id?: unknown;
@@ -440,7 +446,7 @@ export class AgentPool {
         writeAgentLog(this.logsDir, chatJid, duration, timedOut, finalText, null);
 
         if (timedOut) {
-          return { status: "error", result: null, error: `Timed out after ${timeoutMs}ms` };
+          return { status: "error", result: null, error: `Timed out after ${formatTimeoutDuration(timeoutMs)}` };
         }
 
         console.log(
@@ -654,7 +660,7 @@ export class AgentPool {
         status: "error",
         result: null,
         thinking: thinking || null,
-        error: timedOut ? `Timed out after ${timeoutMs}ms` : (err instanceof Error ? err.message : String(err)),
+        error: timedOut ? `Timed out after ${formatTimeoutDuration(timeoutMs)}` : (err instanceof Error ? err.message : String(err)),
         model: `${model.provider}/${model.id}`,
         stopReason: timedOut ? "aborted" : "error",
       };
@@ -671,7 +677,7 @@ export class AgentPool {
           status: "error",
           result: null,
           thinking: thinking || null,
-          error: timedOut ? `Timed out after ${timeoutMs}ms` : "Side prompt finished without a response.",
+          error: timedOut ? `Timed out after ${formatTimeoutDuration(timeoutMs)}` : "Side prompt finished without a response.",
           model: `${model.provider}/${model.id}`,
           stopReason: timedOut ? "aborted" : "error",
         };
@@ -692,7 +698,7 @@ export class AgentPool {
         status: "error",
         result: null,
         thinking: thinking || extractAssistantThinking(completedMessage) || null,
-        error: timedOut ? `Timed out after ${timeoutMs}ms` : (completedMessage.errorMessage || "Side prompt failed."),
+        error: timedOut ? `Timed out after ${formatTimeoutDuration(timeoutMs)}` : (completedMessage.errorMessage || "Side prompt failed."),
         model: `${model.provider}/${model.id}`,
         usage: completedMessage.usage,
         stopReason: timedOut ? "aborted" : completedMessage.stopReason,

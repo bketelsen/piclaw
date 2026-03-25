@@ -2085,7 +2085,7 @@ test("processChat drains queued follow-ups after a persisted timeout fallback", 
             type: "message_update",
             assistantMessageEvent: { type: "text_delta", delta: "draft before timeout" },
           });
-          return { status: "error", result: null, error: "Timed out after 1000ms" };
+          return { status: "error", result: null, error: "Timed out after 1s" };
         }
         return { status: "success", result: "reply after fallback", attachments: [] };
       },
@@ -2140,7 +2140,7 @@ test("processChat treats a persisted timeout fallback as a terminal completion",
           type: "message_update",
           assistantMessageEvent: { type: "text_delta", delta: "draft only" },
         });
-        return { status: "error", result: null, error: "Timed out after 1000ms" };
+        return { status: "error", result: null, error: "Timed out after 1s" };
       },
       getContextUsageForChat: async () => null,
     },
