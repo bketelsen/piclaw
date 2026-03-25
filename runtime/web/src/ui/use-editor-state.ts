@@ -12,6 +12,29 @@
 import { useState, useCallback, useRef, useEffect } from '../vendor/preact-htm.js';
 import { paneRegistry, tabStore } from '../panes/index.js';
 
+function renamePaneOverrides(previous, oldPath, newPath, type) {
+    if (!(previous instanceof Map) || previous.size === 0 || !oldPath || !newPath) return previous;
+    let changed = false;
+    const next = new Map();
+    for (const [key, value] of previous.entries()) {
+        let nextKey = key;
+        if (type === 'dir') {
+            if (key === oldPath) {
+                nextKey = newPath;
+                changed = true;
+            } else if (key.startsWith(`${oldPath}/`)) {
+                nextKey = `${newPath}${key.slice(oldPath.length)}`;
+                changed = true;
+            }
+        } else if (key === oldPath) {
+            nextKey = newPath;
+            changed = true;
+        }
+        next.set(nextKey, value);
+    }
+    return changed ? next : previous;
+}
+
 /**
  * Custom hook that manages editor tab orchestration.
  *
@@ -37,6 +60,7 @@ export function useEditorState({ onTabClosed } = {}) {
 
     // ── Markdown preview state ────────────────────────────────
     const [previewTabs, setPreviewTabs] = useState(() => new Set());
+    const [tabPaneOverrides, setTabPaneOverrides] = useState(() => new Map());
 
     const handleTabTogglePreview = useCallback((id) => {
         setPreviewTabs((prev) => {
@@ -62,15 +86,27 @@ export function useEditorState({ onTabClosed } = {}) {
         });
     }, []);
 
+    const cleanupPaneOverride = useCallback((id) => {
+        setTabPaneOverrides((prev) => {
+            if (!prev.has(id)) return prev;
+            const next = new Map(prev);
+            next.delete(id);
+            return next;
+        });
+    }, []);
+
     // ── Tab actions ─────────────────────────────────────────────
 
     /** Open a file in the editor. Creates a tab and sets it active. */
     const openEditor = useCallback((path, options = {}) => {
         if (!path) return;
+        const paneOverrideId = typeof options?.paneOverrideId === 'string' && options.paneOverrideId.trim()
+            ? options.paneOverrideId.trim()
+            : null;
         // Verify there's a pane handler for this file type
         const context = { path, mode: 'edit' };
         try {
-            const pane = paneRegistry.resolve(context);
+            const pane = paneOverrideId ? paneRegistry.get(paneOverrideId) : paneRegistry.resolve(context);
             if (!pane) {
                 const fallback = paneRegistry.get('editor');
                 if (!fallback) {
@@ -83,6 +119,14 @@ export function useEditorState({ onTabClosed } = {}) {
         }
         const label = typeof options?.label === 'string' && options.label.trim() ? options.label.trim() : undefined;
         tabStore.open(path, label);
+        if (paneOverrideId) {
+            setTabPaneOverrides((prev) => {
+                if (prev.get(path) === paneOverrideId) return prev;
+                const next = new Map(prev);
+                next.set(path, paneOverrideId);
+                return next;
+            });
+        }
     }, []);
 
     /** Close the active tab (with dirty confirmation). */
@@ -96,9 +140,10 @@ export function useEditorState({ onTabClosed } = {}) {
             }
             tabStore.close(activeId);
             cleanupPreviewTab(activeId);
+            cleanupPaneOverride(activeId);
             onTabClosedRef.current?.(activeId);
         }
-    }, [cleanupPreviewTab]);
+    }, [cleanupPaneOverride, cleanupPreviewTab]);
 
     /** Close a specific tab (from tab strip). */
     const handleTabClose = useCallback((id) => {
@@ -109,8 +154,9 @@ export function useEditorState({ onTabClosed } = {}) {
         }
         tabStore.close(id);
         cleanupPreviewTab(id);
+        cleanupPaneOverride(id);
         onTabClosedRef.current?.(id);
-    }, [cleanupPreviewTab]);
+    }, [cleanupPaneOverride, cleanupPreviewTab]);
 
     /** Activate a tab by id. */
     const handleTabActivate = useCallback((id) => {
@@ -127,8 +173,12 @@ export function useEditorState({ onTabClosed } = {}) {
         }
         const closedIds = others.map(t => t.id);
         tabStore.closeOthers(id);
-        closedIds.forEach(cid => { cleanupPreviewTab(cid); onTabClosedRef.current?.(cid); });
-    }, [cleanupPreviewTab]);
+        closedIds.forEach(cid => {
+            cleanupPreviewTab(cid);
+            cleanupPaneOverride(cid);
+            onTabClosedRef.current?.(cid);
+        });
+    }, [cleanupPaneOverride, cleanupPreviewTab]);
 
     /** Close all tabs. */
     const handleTabCloseAll = useCallback(() => {
@@ -140,12 +190,28 @@ export function useEditorState({ onTabClosed } = {}) {
         }
         const closedIds = tabs.map(t => t.id);
         tabStore.closeAll();
-        closedIds.forEach(cid => { cleanupPreviewTab(cid); onTabClosedRef.current?.(cid); });
-    }, [cleanupPreviewTab]);
+        closedIds.forEach(cid => {
+            cleanupPreviewTab(cid);
+            cleanupPaneOverride(cid);
+            onTabClosedRef.current?.(cid);
+        });
+    }, [cleanupPaneOverride, cleanupPreviewTab]);
 
     /** Toggle pin on a tab. */
     const handleTabTogglePin = useCallback((id) => {
         tabStore.togglePin(id);
+    }, []);
+
+    /** Replace a specialized editor tab with the generic source editor. */
+    const handleTabEditSource = useCallback((id) => {
+        if (!id) return;
+        setTabPaneOverrides((prev) => {
+            if (prev.get(id) === 'editor') return prev;
+            const next = new Map(prev);
+            next.set(id, 'editor');
+            return next;
+        });
+        tabStore.activate(id);
     }, []);
 
     /** Reveal active tab in workspace explorer. */
@@ -171,6 +237,7 @@ export function useEditorState({ onTabClosed } = {}) {
             } else {
                 tabStore.rename(oldPath, newPath);
             }
+            setTabPaneOverrides((prev) => renamePaneOverrides(prev, oldPath, newPath, type));
         };
         window.addEventListener('workspace-file-renamed', handleFileRenamed);
         return () => window.removeEventListener('workspace-file-renamed', handleFileRenamed);
@@ -194,6 +261,7 @@ export function useEditorState({ onTabClosed } = {}) {
         tabStripTabs,
         tabStripActiveId,
         previewTabs,
+        tabPaneOverrides,
         // Handlers
         openEditor,
         closeEditor,
@@ -203,6 +271,7 @@ export function useEditorState({ onTabClosed } = {}) {
         handleTabCloseAll,
         handleTabTogglePin,
         handleTabTogglePreview,
+        handleTabEditSource,
         revealInExplorer,
     };
 }

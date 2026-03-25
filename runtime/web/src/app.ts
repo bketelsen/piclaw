@@ -297,10 +297,10 @@ function MainApp({ locationParams, navigate }) {
 
     // Editor state hook (file load/save, tabs, dirty, view state, SSE sync)
     const {
-        editorOpen, tabStripTabs, tabStripActiveId, previewTabs,
+        editorOpen, tabStripTabs, tabStripActiveId, previewTabs, tabPaneOverrides,
         openEditor, closeEditor, handleTabClose, handleTabActivate,
         handleTabCloseOthers, handleTabCloseAll, handleTabTogglePin,
-        handleTabTogglePreview, revealInExplorer,
+        handleTabTogglePreview, handleTabEditSource, revealInExplorer,
     } = useEditorState({ onTabClosed: (path) => removeFileRefRef.current?.(path) });
 
     // Editor extension container ref + instance tracking
@@ -322,6 +322,10 @@ function MainApp({ locationParams, navigate }) {
     const activePaneTab = useMemo(
         () => tabStripTabs.find((tab) => tab.id === tabStripActiveId) || tabStripTabs[0] || null,
         [tabStripActiveId, tabStripTabs],
+    );
+    const activePaneOverrideId = useMemo(
+        () => (tabStripActiveId ? (tabPaneOverrides.get(tabStripActiveId) || null) : null),
+        [tabPaneOverrides, tabStripActiveId],
     );
     const panePopoutTitle = useMemo(
         () => panePopoutLabel || activePaneTab?.label || panePopoutPath || 'Pane',
@@ -396,7 +400,9 @@ function MainApp({ locationParams, navigate }) {
 
         // Mount new instance
         const context = { path: activeId, mode: 'edit' };
-        const ext = paneRegistry.resolve(context) || paneRegistry.get('editor');
+        const ext = (activePaneOverrideId ? paneRegistry.get(activePaneOverrideId) : null)
+            || paneRegistry.resolve(context)
+            || paneRegistry.get('editor');
         if (!ext) {
             // No pane extension available - show fallback message
             container.innerHTML = '<div style="padding:2em;color:var(--text-secondary);text-align:center;">No editor available for this file.</div>';
@@ -442,7 +448,7 @@ function MainApp({ locationParams, navigate }) {
                 editorInstanceRef.current = null;
             }
         };
-    }, [tabStripActiveId, closeEditor]);
+    }, [tabStripActiveId, activePaneOverrideId, closeEditor]);
 
     useEffect(() => {
         const container = dockContainerRef.current;
@@ -3422,7 +3428,9 @@ function MainApp({ locationParams, navigate }) {
                             onCloseAll=${handleTabCloseAll}
                             onTogglePin=${handleTabTogglePin}
                             onTogglePreview=${handleTabTogglePreview}
+                            onEditSource=${handleTabEditSource}
                             previewTabs=${previewTabs}
+                            paneOverrides=${tabPaneOverrides}
                             onToggleDock=${hasDockPanes ? toggleDock : undefined}
                             dockVisible=${hasDockPanes && dockVisible}
                             onToggleZen=${toggleZenMode}
