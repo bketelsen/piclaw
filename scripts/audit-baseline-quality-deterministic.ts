@@ -119,6 +119,22 @@ function basenameIsOneOf(relativePath: string, names: string[]): boolean {
   return names.includes(path.posix.basename(relativePath));
 }
 
+function isAppShellTest(relativePath: string): boolean {
+  return path.posix.basename(relativePath).startsWith("app-");
+}
+
+function isAppRemoteWorkspaceTest(relativePath: string): boolean {
+  const basename = path.posix.basename(relativePath);
+  return isAppShellTest(relativePath) && /(workspace|remote|vnc)/.test(basename);
+}
+
+function isAppRenderingPaneTest(relativePath: string): boolean {
+  const basename = path.posix.basename(relativePath);
+  return isAppShellTest(relativePath)
+    && /(pane|render|widget|preview)/.test(basename)
+    && !isAppRemoteWorkspaceTest(relativePath);
+}
+
 const groupDefinitions: GroupDefinition[] = [
   {
     id: "root-misc",
@@ -311,62 +327,70 @@ const groupDefinitions: GroupDefinition[] = [
     label: "web ui interaction and state",
     notes: "Compose, queue state, session switching, tabs, app resume, routing, and interaction-heavy UI flows.",
     match: (relativePath) =>
-      relativePath.startsWith("web/") &&
-      basenameIsOneOf(relativePath, [
-        "agent-mentions.test.ts",
-        "api-routing.test.ts",
-        "app-resume.test.ts",
-        "branch-lifecycle.test.ts",
-        "btw.test.ts",
-        "chat-window.test.ts",
-        "compose-layout.test.ts",
-        "compose-session-switcher.test.ts",
-        "mobile-viewport.test.ts",
-        "optional-api.test.ts",
-        "popup-typeahead.test.ts",
-        "queue-state.test.ts",
-        "status-duration.test.ts",
-        "tab-source-editor.test.ts",
-        "tab-store.test.ts",
-      ]),
+      relativePath.startsWith("web/") && (
+        basenameIsOneOf(relativePath, [
+          "agent-mentions.test.ts",
+          "api-routing.test.ts",
+          "app-resume.test.ts",
+          "branch-lifecycle.test.ts",
+          "btw.test.ts",
+          "chat-window.test.ts",
+          "compose-layout.test.ts",
+          "compose-session-switcher.test.ts",
+          "mobile-viewport.test.ts",
+          "optional-api.test.ts",
+          "popup-typeahead.test.ts",
+          "queue-state.test.ts",
+          "status-duration.test.ts",
+          "tab-source-editor.test.ts",
+          "tab-store.test.ts",
+        ])
+        || (isAppShellTest(relativePath)
+          && !isAppRenderingPaneTest(relativePath)
+          && !isAppRemoteWorkspaceTest(relativePath))
+      ),
   },
   {
     id: "web-ui-rendering-and-panes",
     label: "web ui rendering and panes",
     notes: "Adaptive cards, markdown/rendering, widgets, pane registration, editor integration, and file/media pane behavior.",
     match: (relativePath) =>
-      relativePath.startsWith("web/") &&
-      basenameIsOneOf(relativePath, [
-        "adaptive-card-renderer.test.ts",
-        "adaptive-card-submission.test.ts",
-        "attachment-preview.test.ts",
-        "csv-viewer-pane.test.ts",
-        "editor-extension.test.ts",
-        "extension-ui-events.test.ts",
-        "file-pill-open.test.ts",
-        "generated-widget.test.ts",
-        "markdown-live-preview-gating.test.ts",
-        "markdown-rendering.test.ts",
-        "pane-registry.test.ts",
-        "terminal-pane.test.ts",
-        "video-viewer-pane.test.ts",
-      ]),
+      relativePath.startsWith("web/") && (
+        basenameIsOneOf(relativePath, [
+          "adaptive-card-renderer.test.ts",
+          "adaptive-card-submission.test.ts",
+          "attachment-preview.test.ts",
+          "csv-viewer-pane.test.ts",
+          "editor-extension.test.ts",
+          "extension-ui-events.test.ts",
+          "file-pill-open.test.ts",
+          "generated-widget.test.ts",
+          "markdown-live-preview-gating.test.ts",
+          "markdown-rendering.test.ts",
+          "pane-registry.test.ts",
+          "terminal-pane.test.ts",
+          "video-viewer-pane.test.ts",
+        ])
+        || isAppRenderingPaneTest(relativePath)
+      ),
   },
   {
     id: "web-ui-remote-and-workspace",
     label: "web ui remote and workspace",
     notes: "Workspace preview/scale flows plus client-side remote display and VNC behavior.",
     match: (relativePath) =>
-      relativePath.startsWith("web/") &&
-      basenameIsOneOf(relativePath, [
-        "remote-display-vnc.test.ts",
-        "remote-display-wasm-pipeline.test.ts",
-        "vnc-auth.test.ts",
-        "vnc-input.test.ts",
-        "workspace-auto-open.test.ts",
-        "workspace-preview-pane.test.ts",
-        "workspace-scale.test.ts",
-      ]),
+      relativePath.startsWith("web/") && (
+        basenameIsOneOf(relativePath, [
+          "remote-display-vnc.test.ts",
+          "remote-display-wasm-pipeline.test.ts",
+          "vnc-auth.test.ts",
+          "vnc-input.test.ts",
+          "workspace-auto-open.test.ts",
+          "workspace-preview-pane.test.ts",
+          "workspace-scale.test.ts",
+        ])
+        || isAppRemoteWorkspaceTest(relativePath)
+      ),
   },
 ];
 
