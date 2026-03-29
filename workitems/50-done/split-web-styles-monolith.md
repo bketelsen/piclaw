@@ -1,10 +1,11 @@
 ---
 id: split-web-styles-monolith
 title: Split the web styles monolith into layered stylesheets
-status: review
+status: done
 priority: low
 created: 2026-03-29
 updated: 2026-03-29
+completed: 2026-03-29
 estimate: L
 risk: medium
 tags:
@@ -204,6 +205,14 @@ Approximate ranges are intentional; exact cut points should follow section comme
 - Rewriting the CSS architecture around component-local CSS modules
 
 ## Updates
+
+### 2026-03-29
+- Lane change: `40-review` → `50-done` after final smoke confirmation and board closeout.
+- Closure summary:
+  - `runtime/web/static/css/styles.css` remains a thin `16`-line manifest over layered partials
+  - tranche-one validation covered `bun run build:web`, `bun run check:stale-dist`, and the recorded smoke passes, including the final follow-up confirmation
+  - remaining large partials (`content.css`, `agent.css`, `chat.css`, `editor.css`, `workspace.css`) are now follow-up quality polish, not blockers for the completed structural split
+- Quality: ★★★★★ 10/10 (problem: 2, scope: 2, test: 2, deps: 2, risk: 2)
 
 ### 2026-03-29
 - Lane change: `20-doing` → `40-review` after the final smoke pass was completed and no additional CSS-split regressions were reported.

@@ -68,7 +68,7 @@ These are desirable but not required to close this ticket:
 | P2 | `group-web-channel-flat-files` | Group 56 flat files into sub-directories |
 | P2 | `extract-typed-config-objects` | Extract 45 constants into typed config objects *(done — follow-up now tracked by `finish-config-injection-and-mutable-identity-cleanup`)* |
 | P3 | `continue-decompose-web-app-shell-toward-500-lines` | Completed — `runtime/web/src/app.ts` now sits at 493 lines on `main` |
-| P3 | `split-web-styles-monolith` | Structural split and final smoke pass completed; ticket is now in review |
+| P3 | `split-web-styles-monolith` | Completed — layered stylesheet split landed and final smoke confirmation closed the tranche |
 | P3 | — | Fix `ipc.ts → MediaService` dependency direction violation |
 
 ## Completion criteria
@@ -84,9 +84,9 @@ These are desirable but not required to close this ticket:
 ## Updates
 
 ### 2026-03-29
-- Board reassessment after the final CSS smoke confirmation:
+- Board reassessment after CSS closeout:
   - moved `continue-decompose-web-app-shell-toward-500-lines` from `40-review` to `50-done` because the thin-shell target is fully achieved on `main` and the attempted follow-up cleanup produced no better mergeable tranche
-  - moved `split-web-styles-monolith` from `20-doing` to `40-review` after the final smoke pass was completed
+  - moved `split-web-styles-monolith` from `40-review` to `50-done` after final smoke confirmation and board closeout
   - kept `adaptive-card-submissions-outside-web-default-to-default-session` in `50-done`
 - Remaining quality bottlenecks are now concentrated in other oversized files rather than `runtime/web/src/app.ts`, notably:
   - `runtime/web/src/components/workspace-explorer.ts` (`2370` lines)
