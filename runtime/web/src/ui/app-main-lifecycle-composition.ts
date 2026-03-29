@@ -405,6 +405,7 @@ export function useMainAppLifecycleComposition(options: UseMainAppLifecycleCompo
   useRealtimeLifecycleOrchestration(composeRealtimeLifecycleOptions({
     ...options,
     handleConnectionStatusChange: agentStatusLifecycle.handleConnectionStatusChange,
+    handleUiVersionDrift: agentStatusLifecycle.handleUiVersionDrift,
     refreshCurrentView: viewRefreshLifecycle.refreshCurrentView,
     updateAgentProfile: chatRefreshLifecycle.updateAgentProfile,
     updateUserProfile: chatRefreshLifecycle.updateUserProfile,

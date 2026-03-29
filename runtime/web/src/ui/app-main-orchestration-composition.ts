@@ -137,6 +137,7 @@ export function useMainAppOrchestrationComposition(options: UseMainAppOrchestrat
     setPendingRequest: setters.setPendingRequest,
     setActiveTurn: interaction.setActiveTurn,
     noteAgentActivity: interaction.noteAgentActivity,
+    showLastActivity: interaction.showLastActivity,
     clearLastActivityFlag: interaction.clearLastActivityFlag,
     isAgentRunningRef: refs.isAgentRunningRef,
     currentTurnIdRef: refs.currentTurnIdRef,
