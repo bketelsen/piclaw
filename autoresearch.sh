@@ -21,7 +21,8 @@ for optional_test in \
   runtime/test/web/app-branch-pane-orchestration.test.ts \
   runtime/test/web/app-shell-ref-utils.test.ts \
   runtime/test/web/app-main-shell-composition.test.ts \
-  runtime/test/web/app-agent-status-orchestration.test.ts
+  runtime/test/web/app-agent-status-orchestration.test.ts \
+  runtime/test/web/app-timeline-actions.test.ts
   do
   if [[ -f "$optional_test" ]]; then
     tests+=("$optional_test")
@@ -41,6 +42,7 @@ coherent_modules=(
   runtime/web/src/ui/app-shell-ref-utils.ts
   runtime/web/src/ui/app-main-shell-composition.ts
   runtime/web/src/ui/app-agent-status-orchestration.ts
+  runtime/web/src/ui/app-timeline-actions.ts
 )
 
 number_of_coherent_modules=0

@@ -137,6 +137,12 @@ import {
     normalizeComposeRefs,
     removeStringRef,
 } from './ui/app-shell-ref-utils.js';
+import {
+    backToTimeline,
+    deleteTimelinePost,
+    loadHashtagTimeline,
+    searchTimeline,
+} from './ui/app-timeline-actions.js';
 
 const CURRENT_APP_ASSET_VERSION = getCurrentAppAssetVersion();
 
@@ -1239,35 +1245,38 @@ function MainApp({ locationParams, navigate }) {
 
     // Handle hashtag click
     const handleHashtagClick = useCallback(async (hashtag) => {
-        setCurrentHashtag(hashtag);
-        setPosts(null); // Show loading
-        await loadPosts(hashtag);
+        await loadHashtagTimeline({
+            hashtag,
+            setCurrentHashtag,
+            setPosts,
+            loadPosts,
+        });
     }, [loadPosts]);
 
     // Go back to timeline
     const handleBackToTimeline = useCallback(async () => {
-        setCurrentHashtag(null);
-        setSearchQuery(null);
-        setPosts(null);
-        await loadPosts();
+        await backToTimeline({
+            setCurrentHashtag,
+            setSearchQuery,
+            setPosts,
+            loadPosts,
+        });
     }, [loadPosts]);
 
     // Handle search
     const handleSearch = useCallback(async (query, scope = searchScope) => {
-        if (!query || !query.trim()) return;
-        const normalizedScope = scope === 'root' || scope === 'all' ? scope : 'current';
-        setSearchScope(normalizedScope);
-        setSearchQuery(query.trim());
-        setCurrentHashtag(null);
-        setPosts(null);
-        try {
-            const result = await searchPosts(query.trim(), 50, 0, currentChatJid, normalizedScope, currentRootChatJid);
-            setPosts(result.results);
-            setHasMore(false);
-        } catch (error) {
-            console.error('Failed to search:', error);
-            setPosts([]);
-        }
+        await searchTimeline({
+            query,
+            scope,
+            currentChatJid,
+            currentRootChatJid,
+            searchPosts,
+            setSearchScope,
+            setSearchQuery,
+            setCurrentHashtag,
+            setPosts,
+            setHasMore,
+        });
     }, [currentChatJid, currentRootChatJid, searchScope]);
 
     const enterSearchMode = useCallback(() => {
@@ -1289,59 +1298,17 @@ function MainApp({ locationParams, navigate }) {
     const isMainTimelineView = !currentHashtag && !searchQuery && !searchOpen;
 
     const handleDeletePost = useCallback(async (post) => {
-        if (!post) return;
-        const postId = post.id;
-        const targetChatJid = typeof post?.chat_jid === 'string' && post.chat_jid.trim()
-            ? post.chat_jid.trim()
-            : currentChatJid;
-        const replyCount = posts?.filter((item) => item?.data?.thread_id === postId && item?.id !== postId).length || 0;
-        if (replyCount > 0) {
-            const confirmed = window.confirm(`Delete this message and its ${replyCount} replies?`);
-            if (!confirmed) return;
-        }
-
-        const scheduleRemoval = (ids) => {
-            if (!ids.length) return;
-            setRemovingPostIds((prev) => {
-                const next = new Set(prev);
-                ids.forEach((id) => next.add(id));
-                return next;
-            });
-            const delayMs = 180;
-            setTimeout(() => {
-                preserveTimelineScrollTop(() => {
-                    setPosts((prev) => (prev ? prev.filter((item) => !ids.includes(item.id)) : prev));
-                });
-                setRemovingPostIds((prev) => {
-                    const next = new Set(prev);
-                    ids.forEach((id) => next.delete(id));
-                    return next;
-                });
-                if (hasMoreRef.current) {
-                    loadMoreRef.current?.({ preserveScroll: true, preserveMode: 'top' });
-                }
-            }, delayMs);
-        };
-
-        try {
-            const result = await deletePost(postId, replyCount > 0, targetChatJid);
-            if (result?.ids?.length) {
-                scheduleRemoval(result.ids);
-            }
-        } catch (error) {
-            const errorMessage = error?.message || '';
-            if (replyCount === 0 && errorMessage.includes('Replies exist')) {
-                const confirmed = window.confirm('Delete this message and its replies?');
-                if (!confirmed) return;
-                const result = await deletePost(postId, true, targetChatJid);
-                if (result?.ids?.length) {
-                    scheduleRemoval(result.ids);
-                }
-                return;
-            }
-            console.error('Failed to delete post:', error);
-            alert(`Failed to delete message: ${errorMessage}`);
-        }
+        await deleteTimelinePost({
+            post,
+            posts,
+            currentChatJid,
+            deletePost,
+            preserveTimelineScrollTop,
+            setPosts,
+            setRemovingPostIds,
+            hasMoreRef,
+            loadMoreRef,
+        });
     }, [currentChatJid, posts, preserveTimelineScrollTop]);
 
     const loadAgents = useCallback(async () => {
