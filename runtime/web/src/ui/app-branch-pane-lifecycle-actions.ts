@@ -1,5 +1,5 @@
-import { watchPaneOpenEvents } from './app-browser-events.js';
-import {
+import { useCallback, useEffect } from '../vendor/preact-htm.js';
+import { watchPaneOpenEvents } from './app-browser-events.js';import {
   closeRenameBranchForm,
   openRenameBranchForm,
   pruneCurrentBranch,
@@ -393,4 +393,267 @@ export function applyStoredPaneLayoutAction(options: ApplyStoredPaneLayoutAction
     hasWindow,
     ...rest,
   });
+}
+
+export interface UseBranchPaneLifecycleOptions {
+  setWorkspaceOpen: StateSetter<boolean>;
+  currentChatJid: string;
+  chatOnlyMode?: boolean;
+  navigate: (url: string, options?: Record<string, unknown>) => void;
+
+  currentBranchRecord: BranchRecordLike | null;
+  renameBranchInFlightRef: RefBox<boolean>;
+  renameBranchLockUntilRef: RefBox<number>;
+  getFormLock: () => number;
+  setRenameBranchNameDraft: (value: string) => void;
+  setIsRenameBranchFormOpen: (open: boolean) => void;
+  setIsRenamingBranch: StateSetter<boolean>;
+  renameChatBranch: (chatJid: string, name: string) => Promise<any>;
+
+  refreshActiveChatAgents: () => void;
+  refreshCurrentChatBranches: () => void;
+  showIntentToast: (title: string, detail?: string | null, kind?: string, durationMs?: number) => void;
+
+  currentChatBranches: any[];
+  activeChatAgents: any[];
+  pruneChatBranch: (chatJid: string) => Promise<any>;
+  restoreChatBranch: (chatJid: string) => Promise<any>;
+
+  branchLoaderMode: boolean;
+  branchLoaderSourceChatJid: string;
+  forkChatBranch: (chatJid: string) => Promise<any>;
+  setBranchLoaderState: StateSetter<any>;
+
+  currentRootChatJid: string;
+  isWebAppMode: boolean;
+  getActiveChatAgents: (chatJid: string) => Promise<any>;
+  getChatBranches: (chatJid: string | null, options?: Record<string, unknown>) => Promise<any>;
+  setActiveChatAgents: StateSetter<any[]>;
+  setCurrentChatBranches: StateSetter<any[]>;
+
+  openEditor: (path: string, options?: Record<string, unknown>) => void;
+  tabStripActiveId: string | null;
+  editorInstanceRef: RefBox<PaneTransferInstanceLike | null>;
+  dockInstanceRef: RefBox<PaneTransferInstanceLike | null>;
+  terminalTabPath: string;
+  dockVisible: boolean;
+  resolveTab: (path: string) => { dirty?: boolean } | null | undefined;
+  closeTab: (path: string) => void;
+  setDockVisible: (visible: boolean) => void;
+
+  editorOpen: boolean;
+  shellElement: HTMLElement | null;
+  editorWidthRef: RefBox<number>;
+  dockHeightRef: RefBox<number>;
+  sidebarWidthRef: RefBox<number>;
+  readStoredNumber: (key: string, fallback?: number | null) => number | null;
+}
+
+export function useBranchPaneLifecycle(options: UseBranchPaneLifecycleOptions) {
+  const {
+    setWorkspaceOpen,
+    currentChatJid,
+    chatOnlyMode,
+    navigate,
+    currentBranchRecord,
+    renameBranchInFlightRef,
+    renameBranchLockUntilRef,
+    getFormLock,
+    setRenameBranchNameDraft,
+    setIsRenameBranchFormOpen,
+    setIsRenamingBranch,
+    renameChatBranch,
+    refreshActiveChatAgents,
+    refreshCurrentChatBranches,
+    showIntentToast,
+    currentChatBranches,
+    activeChatAgents,
+    pruneChatBranch,
+    restoreChatBranch,
+    branchLoaderMode,
+    branchLoaderSourceChatJid,
+    forkChatBranch,
+    setBranchLoaderState,
+    currentRootChatJid,
+    isWebAppMode,
+    getActiveChatAgents,
+    getChatBranches,
+    setActiveChatAgents,
+    setCurrentChatBranches,
+    openEditor,
+    tabStripActiveId,
+    editorInstanceRef,
+    dockInstanceRef,
+    terminalTabPath,
+    dockVisible,
+    resolveTab,
+    closeTab,
+    setDockVisible,
+    editorOpen,
+    shellElement,
+    editorWidthRef,
+    dockHeightRef,
+    sidebarWidthRef,
+    readStoredNumber,
+  } = options;
+
+  const toggleWorkspace = useCallback(() => {
+    toggleWorkspaceVisibility(setWorkspaceOpen);
+  }, [setWorkspaceOpen]);
+
+  const handleBranchPickerChange = useCallback((nextChatJid: unknown) => {
+    handleBranchPickerChangeAction({
+      nextChatJid,
+      currentChatJid,
+      chatOnlyMode,
+      navigate,
+    });
+  }, [chatOnlyMode, currentChatJid, navigate]);
+
+  const openRenameCurrentBranchForm = useCallback(() => {
+    openRenameCurrentBranchFormAction({
+      currentBranchRecord,
+      renameBranchInFlight: renameBranchInFlightRef.current,
+      renameBranchLockUntil: renameBranchLockUntilRef.current,
+      getFormLock,
+      setRenameBranchNameDraft,
+      setIsRenameBranchFormOpen,
+    });
+  }, [currentBranchRecord, getFormLock, renameBranchInFlightRef, renameBranchLockUntilRef, setIsRenameBranchFormOpen, setRenameBranchNameDraft]);
+
+  const closeRenameCurrentBranchForm = useCallback(() => {
+    closeRenameCurrentBranchFormAction({
+      setIsRenameBranchFormOpen,
+      setRenameBranchNameDraft,
+    });
+  }, [setIsRenameBranchFormOpen, setRenameBranchNameDraft]);
+
+  const handleRenameCurrentBranch = useCallback(async (nextName: string) => {
+    await renameCurrentBranchAction({
+      currentBranchRecord,
+      nextName,
+      openRenameForm: openRenameCurrentBranchForm,
+      renameBranchInFlightRef,
+      renameBranchLockUntilRef,
+      getFormLock,
+      setIsRenamingBranch,
+      renameChatBranch,
+      refreshActiveChatAgents,
+      refreshCurrentChatBranches,
+      showIntentToast,
+      closeRenameForm: closeRenameCurrentBranchForm,
+    });
+  }, [closeRenameCurrentBranchForm, currentBranchRecord, getFormLock, openRenameCurrentBranchForm, refreshActiveChatAgents, refreshCurrentChatBranches, renameBranchInFlightRef, renameBranchLockUntilRef, renameChatBranch, setIsRenamingBranch, showIntentToast]);
+
+  const handlePruneCurrentBranch = useCallback(async (targetChatJid: string | null = null) => {
+    await pruneCurrentBranchAction({
+      targetChatJid,
+      currentChatJid,
+      currentBranchRecord,
+      currentChatBranches,
+      activeChatAgents,
+      pruneChatBranch,
+      refreshActiveChatAgents,
+      refreshCurrentChatBranches,
+      showIntentToast,
+      chatOnlyMode,
+      navigate,
+    });
+  }, [activeChatAgents, chatOnlyMode, currentBranchRecord, currentChatBranches, currentChatJid, navigate, pruneChatBranch, refreshActiveChatAgents, refreshCurrentChatBranches, showIntentToast]);
+
+  const handleRestoreBranch = useCallback(async (targetChatJid: string) => {
+    await restoreBranchAction({
+      targetChatJid,
+      restoreChatBranch,
+      currentChatBranches,
+      refreshActiveChatAgents,
+      refreshCurrentChatBranches,
+      showIntentToast,
+      chatOnlyMode,
+      navigate,
+    });
+  }, [chatOnlyMode, currentChatBranches, navigate, refreshActiveChatAgents, refreshCurrentChatBranches, restoreChatBranch, showIntentToast]);
+
+  useEffect(() => runBranchLoaderModeEffect({
+    branchLoaderMode,
+    branchLoaderSourceChatJid,
+    forkChatBranch,
+    setBranchLoaderState,
+    navigate,
+  }), [branchLoaderMode, branchLoaderSourceChatJid, forkChatBranch, navigate, setBranchLoaderState]);
+
+  const handleCreateSessionFromCompose = useCallback(async () => {
+    await createSessionFromComposeAction({
+      currentChatJid,
+      chatOnlyMode,
+      forkChatBranch,
+      refreshActiveChatAgents,
+      refreshCurrentChatBranches,
+      showIntentToast,
+      navigate,
+    });
+  }, [chatOnlyMode, currentChatJid, forkChatBranch, navigate, refreshActiveChatAgents, refreshCurrentChatBranches, showIntentToast]);
+
+  const handlePopOutPane = useCallback(async (path: string, label?: string | null) => {
+    await popOutPaneAction({
+      isWebAppMode,
+      path,
+      label,
+      showIntentToast,
+      currentChatJid,
+      tabStripActiveId,
+      editorInstanceRef,
+      dockInstanceRef,
+      terminalTabPath,
+      dockVisible,
+      resolveTab,
+      closeTab,
+      setDockVisible,
+    });
+  }, [closeTab, currentChatJid, dockInstanceRef, dockVisible, editorInstanceRef, isWebAppMode, resolveTab, setDockVisible, showIntentToast, tabStripActiveId, terminalTabPath]);
+
+  useEffect(() => watchPaneOpenEventBridge({
+    openEditor,
+    popOutPane: (path, label) => {
+      void handlePopOutPane(path, label);
+    },
+  }), [handlePopOutPane, openEditor]);
+
+  const handlePopOutChat = useCallback(async () => {
+    await popOutChatAction({
+      isWebAppMode,
+      currentChatJid,
+      currentRootChatJid,
+      forkChatBranch,
+      getActiveChatAgents,
+      getChatBranches,
+      setActiveChatAgents,
+      setCurrentChatBranches,
+      showIntentToast,
+    });
+  }, [currentChatJid, currentRootChatJid, forkChatBranch, getActiveChatAgents, getChatBranches, isWebAppMode, setActiveChatAgents, setCurrentChatBranches, showIntentToast]);
+
+  useEffect(() => {
+    applyStoredPaneLayoutAction({
+      editorOpen,
+      shellElement,
+      editorWidthRef,
+      dockHeightRef,
+      sidebarWidthRef,
+      readStoredNumber,
+    });
+  }, [dockHeightRef, editorOpen, editorWidthRef, readStoredNumber, shellElement, sidebarWidthRef]);
+
+  return {
+    toggleWorkspace,
+    handleBranchPickerChange,
+    openRenameCurrentBranchForm,
+    closeRenameCurrentBranchForm,
+    handleRenameCurrentBranch,
+    handlePruneCurrentBranch,
+    handleRestoreBranch,
+    handleCreateSessionFromCompose,
+    handlePopOutPane,
+    handlePopOutChat,
+  };
 }
