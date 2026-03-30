@@ -80,16 +80,27 @@ const DRAWIO_FRAME_CSP =
   "frame-ancestors 'self'; base-uri 'self'; form-action 'self'";
 
 export function buildEmbeddedDrawioAppUrl(isDark: boolean, readOnly = false): string {
-  let editorUrl = `${ROUTE_PREFIX}/index.html?embed=1&proto=json&spin=1&modified=0&noExitBtn=1&saveAndExit=0&ui=dark&dark=${isDark ? "1" : "0"}`;
+  let editorUrl = `${ROUTE_PREFIX}/index.html?embed=1&proto=json&spin=1&modified=0&saveAndExit=0&ui=dark&dark=${isDark ? "1" : "0"}`;
   if (readOnly) {
     editorUrl += '&chrome=0&toolbar=0&layers=0&edit=0';
   }
   return editorUrl;
 }
 
+export function isExplicitDrawioExportRequest(mimeType?: string, filename?: string): boolean {
+  const explicitMime = mimeType && !/^(application|text)\/xml$/i.test(mimeType)
+    ? EXPORT_EXTENSIONS[mimeType || ""]
+    : "";
+  const explicitExt = extname(filename || "");
+  return Boolean(explicitMime || (explicitExt && !/^\.drawio$/i.test(explicitExt)));
+}
+
 export function resolveDrawioSavePath(path: string, mimeType?: string, filename?: string): string {
+  if (!isExplicitDrawioExportRequest(mimeType, filename)) {
+    return path;
+  }
   const ext = EXPORT_EXTENSIONS[mimeType || ""] || "";
-  return replaceExtension(path, ext || extname(filename || "") || ".bin");
+  return replaceExtension(path, ext || extname(filename || "") || extname(path) || ".drawio");
 }
 
 export function isBinaryDrawioSaveTarget(savePath: string, format?: string, mimeType?: string): boolean {
@@ -205,7 +216,6 @@ if (readOnly && readonlyLock) readonlyLock.classList.add('active');
 var DEFAULT_DRAWIO_XML = ${JSON.stringify(DEFAULT_DRAWIO_XML)};
 var xmlData = DEFAULT_DRAWIO_XML;
 var modified = false;
-var pendingServerSaveAs = null;
 var format = (function() {
   var lower = String(sourceName || '').toLowerCase();
   if (lower.endsWith('.drawio.svg') || lower.endsWith('.svg')) return 'xmlsvg';
@@ -237,38 +247,10 @@ function responseToDataUri(response, fallbackMimeType) {
 
 function patchDrawioExportTarget(win) {
   try {
-    function postParentEvent(eventName, payload) {
-      var target = (win && (win.parent || win.opener)) || window;
-      target.postMessage(JSON.stringify(Object.assign({ event: eventName }, payload)), '*');
-      return true;
-    }
     function postExport(payload) {
-      return postParentEvent('workspace-export', payload);
-    }
-    function resolveBaseName(filename) {
-      var text = String(filename || 'diagram.drawio').trim() || 'diagram.drawio';
-      return text
-        .replace(/\.drawio\.(svg|png|xml)$/i, '')
-        .replace(/\.(svg|png|jpe?g|pdf|xml)$/i, '')
-        .replace(/\.drawio$/i, '') || 'diagram';
-    }
-    function mimeTypeForFormat(targetFormat) {
-      switch (targetFormat) {
-        case 'svg': return 'image/svg+xml';
-        case 'png': return 'image/png';
-        case 'jpeg':
-        case 'jpg': return 'image/jpeg';
-        default: return 'application/xml';
-      }
-    }
-    function extensionForFormat(targetFormat) {
-      switch (targetFormat) {
-        case 'svg': return '.svg';
-        case 'png': return '.png';
-        case 'jpeg':
-        case 'jpg': return '.jpg';
-        default: return '.drawio';
-      }
+      var target = (win && (win.parent || win.opener)) || window;
+      target.postMessage(JSON.stringify(Object.assign({ event: 'workspace-export' }, payload)), '*');
+      return true;
     }
     function findEditorUi() {
       try {
@@ -287,7 +269,8 @@ function patchDrawioExportTarget(win) {
     }
 
     var editorUiCtor = win && win.EditorUi;
-    if (editorUiCtor && editorUiCtor.prototype && !editorUiCtor.prototype.__piclawWorkspaceSavePatched) {
+    var savePatched = !!(editorUiCtor && editorUiCtor.prototype && editorUiCtor.prototype.__piclawWorkspaceSavePatched);
+    if (editorUiCtor && editorUiCtor.prototype && !savePatched) {
       var originalSaveData = editorUiCtor.prototype.saveData;
       editorUiCtor.prototype.saveData = function(filename, format, data, mime, base64Encoded, defaultMode) {
         try {
@@ -300,10 +283,12 @@ function patchDrawioExportTarget(win) {
         return originalSaveData.apply(this, arguments);
       };
       editorUiCtor.prototype.__piclawWorkspaceSavePatched = true;
+      savePatched = true;
     }
 
     var appCtor = win && win.App;
-    if (appCtor && appCtor.prototype && !appCtor.prototype.__piclawExportPatched) {
+    var exportPatched = !!(appCtor && appCtor.prototype && appCtor.prototype.__piclawExportPatched);
+    if (appCtor && appCtor.prototype && !exportPatched) {
       var original = appCtor.prototype.exportFile;
       appCtor.prototype.exportFile = function(data, filename, mimeType, base64Encoded, mode, folderId) {
         try {
@@ -316,47 +301,71 @@ function patchDrawioExportTarget(win) {
         return original.apply(this, arguments);
       };
       appCtor.prototype.__piclawExportPatched = true;
+      exportPatched = true;
     }
 
     var ui = findEditorUi();
-    if (ui && !ui.__piclawServerSaveFlowPatched) {
+    var uiPatched = !!(ui && ui.__piclawMinimalExportMenuPatched);
+    if (ui && !uiPatched) {
       var saveAsAction = ui.actions && (ui.actions.get('saveAs') || ui.actions.get('saveAs...'));
       if (saveAsAction) {
-        var originalSaveAs = saveAsAction.funct;
         saveAsAction.funct = function() {
           try {
-            var currentFilename = String((ui.getCurrentFile && ui.getCurrentFile().getTitle && ui.getCurrentFile().getTitle()) || (ui.getCurrentFile && ui.getCurrentFile().title) || 'diagram.drawio');
-            var choice = String((win.prompt && win.prompt('Save on server as: drawio, svg, png, jpeg', 'drawio')) || '').trim().toLowerCase();
-            if (!choice) return;
-            var normalized = choice === 'jpg' ? 'jpeg' : choice;
-            if (['drawio', 'xml', 'svg', 'png', 'jpeg'].indexOf(normalized) === -1) {
-              win.alert && win.alert('Supported server-side save formats: drawio, svg, png, jpeg');
-              return;
+            var currentPath = String(filePath || 'diagram.drawio');
+            var currentName = currentPath.split('/').pop() || 'diagram.drawio';
+            var input = String((win.prompt && win.prompt('Save as (.drawio):', currentName)) || '').trim();
+            if (!input) return;
+            var nextPath = /\//.test(input)
+              ? input
+              : currentPath.replace(/[^/]*$/, '') + input;
+            if (!/\.drawio(?:\.(xml|svg|png))?$/i.test(nextPath)) {
+              nextPath += '.drawio';
             }
             var xml = typeof ui.getFileData === 'function' ? ui.getFileData(true) : null;
             if (typeof xml !== 'string' || !xml.trim()) {
               win.alert && win.alert('Could not read the current diagram XML for Save As.');
               return;
             }
-            var targetFormat = normalized === 'xml' ? 'drawio' : normalized;
-            var filename = resolveBaseName(currentFilename) + extensionForFormat(targetFormat);
-            postParentEvent('workspace-save-as', {
-              filename: filename,
-              format: targetFormat,
+            saveWorkspace({
+              targetPath: nextPath,
               xml: xml,
-              mimeType: mimeTypeForFormat(targetFormat)
+              format: 'xml',
+              mimeType: 'application/xml'
+            }, true).catch(function(err) {
+              console.error('[drawio] save-as error:', err);
             });
           } catch (err) {
-            console.warn('[drawio] custom saveAs failed, falling back to native action', err);
-            return originalSaveAs && originalSaveAs.apply(saveAsAction, []);
+            console.warn('[drawio] saveAs intercept failed', err);
           }
         };
       }
 
-      ui.__piclawServerSaveFlowPatched = true;
+      var exportAction = ui.actions && ui.actions.get('export');
+      if (exportAction) {
+        exportAction.setEnabled && exportAction.setEnabled(false);
+        exportAction.isEnabled = function() { return false; };
+      }
+
+      var exportAsMenu = ui.menus && ui.menus.get('exportAs');
+      if (exportAsMenu) {
+        exportAsMenu.funct = function(menu, parent) {
+          ui.menus.addMenuItems(menu, ['exportPng', 'exportJpg', 'exportSvg'], parent);
+        };
+      }
+
+      var fileMenu = ui.menus && ui.menus.get('file');
+      if (fileMenu) {
+        fileMenu.funct = function(menu, parent) {
+          ui.menus.addMenuItems(menu, ['save', 'saveAs', '-'], parent);
+          ui.menus.addSubmenu('exportAs', menu, parent);
+        };
+      }
+
+      ui.__piclawMinimalExportMenuPatched = true;
+      uiPatched = true;
     }
 
-    return !!((editorUiCtor && editorUiCtor.prototype && editorUiCtor.prototype.__piclawWorkspaceSavePatched) || (appCtor && appCtor.prototype && appCtor.prototype.__piclawExportPatched) || (ui && ui.__piclawServerSaveFlowPatched));
+    return !!(savePatched && exportPatched && uiPatched);
   } catch (_) {
     return false;
   }
@@ -368,6 +377,7 @@ function saveWorkspace(payload, acknowledge) {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       path: filePath,
+      targetPath: payload.targetPath,
       format: payload.format || format,
       xml: payload.xml,
       data: payload.data,
@@ -375,12 +385,28 @@ function saveWorkspace(payload, acknowledge) {
       filename: payload.filename,
       base64Encoded: payload.base64Encoded
     })
-  }).then(function(r) {
+  }).then(async function(r) {
     if (!r.ok) throw new Error('HTTP ' + r.status);
+    var result = null;
+    try {
+      result = await r.json();
+    } catch (_) {
+      result = null;
+    }
+    if (payload.targetPath && result && result.path) {
+      filePath = result.path;
+      fileName = String(filePath).split('/').pop() || fileName;
+      try {
+        var nextUrl = location.pathname + '?path=' + encodeURIComponent(filePath);
+        history.replaceState(null, '', nextUrl);
+      } catch (_) {
+        // ignore history update failures
+      }
+    }
     if (acknowledge && frame.contentWindow) {
       frame.contentWindow.postMessage(JSON.stringify({
         action: 'status',
-        message: 'Saved',
+        message: payload.targetPath ? ('Saved as ' + fileName) : 'Saved',
         modified: false
       }), '*');
     }
@@ -453,7 +479,6 @@ window.addEventListener('message', function(e) {
         xml: format === 'xml' ? normalizeDrawioXml(xmlData) : xmlData,
         autosave: readOnly ? 0 : 1,
         saveAndExit: '0',
-        noExitBtn: '1',
         title: fileName
       }), '*');
       break;
@@ -488,46 +513,12 @@ window.addEventListener('message', function(e) {
       }
       break;
 
-    case 'workspace-save-as':
-      if (readOnly || !filePath) break;
-      if (msg.format === 'drawio' || msg.format === 'xml') {
-        if (!msg.xml) break;
-        saveWorkspace({
-          xml: msg.xml,
-          data: msg.xml,
-          format: 'xml',
-          mimeType: msg.mimeType || 'application/xml',
-          filename: msg.filename
-        }, true).catch(function(err) {
-          console.error('[drawio] save-as xml error:', err);
-        });
-        break;
-      }
-      pendingServerSaveAs = {
-        filename: msg.filename,
-        mimeType: msg.mimeType,
-        format: msg.format
-      };
-      if (msg.xml && frame.contentWindow) {
-        frame.contentWindow.postMessage(JSON.stringify({
-          action: 'export',
-          format: msg.format,
-          xml: msg.xml,
-          spinKey: 'export'
-        }), '*');
-      }
-      break;
-
     case 'export':
       if (readOnly || !filePath || !msg.data) break;
-      var pendingSaveAs = pendingServerSaveAs;
-      pendingServerSaveAs = null;
       saveWorkspace({
         data: msg.data,
-        format: (pendingSaveAs && pendingSaveAs.format) || format,
-        xml: msg.xml,
-        mimeType: pendingSaveAs && pendingSaveAs.mimeType,
-        filename: pendingSaveAs && pendingSaveAs.filename
+        format: format,
+        xml: msg.xml
       }, true).catch(function(err) {
         console.error('[drawio] export save error:', err);
       });
@@ -535,14 +526,12 @@ window.addEventListener('message', function(e) {
 
     case 'workspace-export':
       if (readOnly || !filePath || !msg.data) break;
-      var pendingWorkspaceSaveAs = pendingServerSaveAs;
-      pendingServerSaveAs = null;
       saveWorkspace({
         data: msg.data,
         xml: msg.xml,
-        format: (pendingWorkspaceSaveAs && pendingWorkspaceSaveAs.format) || format,
-        mimeType: (pendingWorkspaceSaveAs && pendingWorkspaceSaveAs.mimeType) || msg.mimeType,
-        filename: (pendingWorkspaceSaveAs && pendingWorkspaceSaveAs.filename) || msg.filename,
+        format: msg.format || format,
+        mimeType: msg.mimeType,
+        filename: msg.filename,
         base64Encoded: !!msg.base64Encoded
       }, true).catch(function(err) {
         console.error('[drawio] workspace export save error:', err);
@@ -556,10 +545,6 @@ window.addEventListener('message', function(e) {
       } else {
         history.back();
       }
-      break;
-
-    case 'export':
-      // Handle export if needed
       break;
   }
 });
@@ -616,7 +601,7 @@ function replaceExtension(path: string, extension: string): string {
 }
 
 async function handleSaveRequest(req: Request): Promise<Response> {
-  let data: { path?: string; format?: string; xml?: string; data?: string; mimeType?: string; filename?: string; base64Encoded?: boolean };
+  let data: { path?: string; targetPath?: string; format?: string; xml?: string; data?: string; mimeType?: string; filename?: string; base64Encoded?: boolean };
   try {
     data = await req.json();
   } catch {
@@ -628,7 +613,7 @@ async function handleSaveRequest(req: Request): Promise<Response> {
   }
 
   try {
-    const savePath = resolveDrawioSavePath(String(data.path), data.mimeType, data.filename);
+    const savePath = resolveDrawioSavePath(String(data.targetPath || data.path), data.mimeType, data.filename);
     const targetPath = resolveWorkspacePath(savePath);
     mkdirSync(dirname(targetPath), { recursive: true });
     const lower = savePath.toLowerCase();

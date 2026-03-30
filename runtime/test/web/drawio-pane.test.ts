@@ -2,10 +2,9 @@ import { expect, test } from 'bun:test';
 
 import { buildDrawioEditorUrl } from '../../web/src/panes/drawio-pane.js';
 
-test('buildDrawioEditorUrl keeps the direct embedded route while leaving save/export UI available', () => {
-  expect(buildDrawioEditorUrl(false)).toBe('/drawio/index.html?embed=1&proto=json&spin=1&modified=0&noExitBtn=1&saveAndExit=0&ui=dark&dark=0');
-  expect(buildDrawioEditorUrl(true)).toBe('/drawio/index.html?embed=1&proto=json&spin=1&modified=0&noExitBtn=1&saveAndExit=0&ui=dark&dark=1');
-  expect(buildDrawioEditorUrl(true)).not.toContain('/drawio/edit.html');
-  expect(buildDrawioEditorUrl(true)).not.toContain('noSaveBtn=1');
-  expect(buildDrawioEditorUrl(true)).not.toContain('libraries=0');
+test('buildDrawioEditorUrl routes pane tabs through the shared wrapper page', () => {
+  expect(buildDrawioEditorUrl('/workspace/test-documents/sample.drawio')).toBe('/drawio/edit.html?path=%2Fworkspace%2Ftest-documents%2Fsample.drawio');
+  expect(buildDrawioEditorUrl('notes/diagram.drawio')).toBe('/drawio/edit.html?path=notes%2Fdiagram.drawio');
+  expect(buildDrawioEditorUrl('/workspace/test-documents/sample.drawio')).toContain('/drawio/edit.html');
+  expect(buildDrawioEditorUrl('/workspace/test-documents/sample.drawio')).not.toContain('noSaveBtn=1');
 });

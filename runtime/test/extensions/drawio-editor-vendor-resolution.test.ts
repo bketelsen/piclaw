@@ -7,6 +7,7 @@ import {
   buildEmbeddedDrawioAppUrl,
   getDrawioVendorDirCandidates,
   isBinaryDrawioSaveTarget,
+  isExplicitDrawioExportRequest,
   resolveDrawioSavePath,
   resolveDrawioVendorDir,
 } from '../../extensions/viewers/drawio-editor/index.ts';
@@ -42,17 +43,24 @@ test('resolveDrawioVendorDir falls back to workspace source vendor when packaged
   });
 });
 
-test('buildEmbeddedDrawioAppUrl keeps embedded mode while leaving save/export UI available', () => {
-  expect(buildEmbeddedDrawioAppUrl(false)).toBe('/drawio/index.html?embed=1&proto=json&spin=1&modified=0&noExitBtn=1&saveAndExit=0&ui=dark&dark=0');
-  expect(buildEmbeddedDrawioAppUrl(true)).toBe('/drawio/index.html?embed=1&proto=json&spin=1&modified=0&noExitBtn=1&saveAndExit=0&ui=dark&dark=1');
+test('buildEmbeddedDrawioAppUrl keeps save and exit visible in embedded mode', () => {
+  expect(buildEmbeddedDrawioAppUrl(false)).toBe('/drawio/index.html?embed=1&proto=json&spin=1&modified=0&saveAndExit=0&ui=dark&dark=0');
+  expect(buildEmbeddedDrawioAppUrl(true)).toBe('/drawio/index.html?embed=1&proto=json&spin=1&modified=0&saveAndExit=0&ui=dark&dark=1');
   expect(buildEmbeddedDrawioAppUrl(true, true)).toContain('chrome=0');
   expect(buildEmbeddedDrawioAppUrl(true)).not.toContain('noSaveBtn=1');
+  expect(buildEmbeddedDrawioAppUrl(true)).not.toContain('noExitBtn=1');
   expect(buildEmbeddedDrawioAppUrl(true)).not.toContain('libraries=0');
 });
 
-test('drawio save helpers map JPEG exports to binary jpg targets', () => {
+test('drawio save helpers preserve normal saves and map explicit image exports', () => {
+  expect(isExplicitDrawioExportRequest(undefined, undefined)).toBe(false);
+  expect(resolveDrawioSavePath('/workspace/foo.drawio')).toBe('/workspace/foo.drawio');
+  expect(resolveDrawioSavePath('/workspace/foo.drawio', 'application/xml')).toBe('/workspace/foo.drawio');
+  expect(isExplicitDrawioExportRequest('image/jpeg', 'foo.jpeg')).toBe(true);
   expect(resolveDrawioSavePath('/workspace/foo.drawio', 'image/jpeg', 'foo.jpeg')).toBe('/workspace/foo.jpg');
   expect(resolveDrawioSavePath('/workspace/foo.drawio', 'image/jpg', 'foo.jpg')).toBe('/workspace/foo.jpg');
+  expect(resolveDrawioSavePath('/workspace/foo.drawio', 'image/png', 'foo.png')).toBe('/workspace/foo.png');
+  expect(resolveDrawioSavePath('/workspace/foo.drawio', 'image/svg+xml', 'foo.svg')).toBe('/workspace/foo.svg');
   expect(isBinaryDrawioSaveTarget('/workspace/foo.jpg', 'xml', 'image/jpeg')).toBe(true);
   expect(isBinaryDrawioSaveTarget('/workspace/foo.jpeg', 'jpeg', 'image/jpeg')).toBe(true);
   expect(isBinaryDrawioSaveTarget('/workspace/foo.drawio', 'xml', 'application/xml')).toBe(false);
