@@ -308,59 +308,63 @@ function patchDrawioExportTarget(win) {
     var uiPatched = !!(ui && ui.__piclawMinimalExportMenuPatched);
     if (ui && !uiPatched) {
       var saveAsAction = ui.actions && (ui.actions.get('saveAs') || ui.actions.get('saveAs...'));
-      if (saveAsAction) {
-        saveAsAction.funct = function() {
-          try {
-            var currentPath = String(filePath || 'diagram.drawio');
-            var currentName = currentPath.split('/').pop() || 'diagram.drawio';
-            var input = String((win.prompt && win.prompt('Save as (.drawio):', currentName)) || '').trim();
-            if (!input) return;
-            var nextPath = input.indexOf('/') >= 0
-              ? input
-              : currentPath.replace(/[^/]*$/, '') + input;
-            var lowerNextPath = nextPath.toLowerCase();
-            if (!(lowerNextPath.endsWith('.drawio') || lowerNextPath.endsWith('.drawio.xml') || lowerNextPath.endsWith('.drawio.svg') || lowerNextPath.endsWith('.drawio.png'))) {
-              nextPath += '.drawio';
-            }
-            var xml = typeof ui.getFileData === 'function' ? ui.getFileData(true) : null;
-            if (typeof xml !== 'string' || !xml.trim()) {
-              win.alert && win.alert('Could not read the current diagram XML for Save As.');
-              return;
-            }
-            saveWorkspace({
-              targetPath: nextPath,
-              xml: xml,
-              format: 'xml',
-              mimeType: 'application/xml'
-            }, true).catch(function(err) {
-              console.error('[drawio] save-as error:', err);
-            });
-          } catch (err) {
-            console.warn('[drawio] saveAs intercept failed', err);
-          }
-        };
-      }
-
       var exportAction = ui.actions && ui.actions.get('export');
-      if (exportAction) {
-        exportAction.setEnabled && exportAction.setEnabled(false);
-        exportAction.isEnabled = function() { return false; };
-      }
-
       var exportAsMenu = ui.menus && ui.menus.get('exportAs');
-      if (exportAsMenu) {
-        exportAsMenu.funct = function(menu, parent) {
-          ui.menus.addMenuItems(menu, ['exportPng', 'exportJpg', 'exportSvg'], parent);
-        };
+      var fileMenu = ui.menus && ui.menus.get('file');
+      if (!saveAsAction || !exportAction || !exportAsMenu || !fileMenu) {
+        return false;
       }
 
-      var fileMenu = ui.menus && ui.menus.get('file');
-      if (fileMenu) {
-        fileMenu.funct = function(menu, parent) {
-          ui.menus.addMenuItems(menu, ['save', 'saveAs', '-'], parent);
-          ui.menus.addSubmenu('exportAs', menu, parent);
-        };
-      }
+      saveAsAction.funct = function() {
+        try {
+          var currentPath = String(filePath || 'diagram.drawio');
+          var currentName = currentPath.split('/').pop() || 'diagram.drawio';
+          var input = String((win.prompt && win.prompt('Save as (.drawio):', currentName)) || '').trim();
+          if (!input) return;
+          var nextPath = input.indexOf('/') >= 0
+            ? input
+            : currentPath.replace(/[^/]*$/, '') + input;
+          var lowerNextPath = nextPath.toLowerCase();
+          if (!(lowerNextPath.endsWith('.drawio') || lowerNextPath.endsWith('.drawio.xml') || lowerNextPath.endsWith('.drawio.svg') || lowerNextPath.endsWith('.drawio.png'))) {
+            nextPath += '.drawio';
+          }
+          var xml = typeof ui.getFileData === 'function' ? ui.getFileData(true) : null;
+          if (typeof xml !== 'string' || !xml.trim()) {
+            win.alert && win.alert('Could not read the current diagram XML for Save As.');
+            return;
+          }
+          saveWorkspace({
+            targetPath: nextPath,
+            xml: xml,
+            format: 'xml',
+            mimeType: 'application/xml'
+          }, true).catch(function(err) {
+            console.error('[drawio] save-as error:', err);
+          });
+        } catch (err) {
+          console.warn('[drawio] saveAs intercept failed', err);
+        }
+      };
+
+      exportAction.setEnabled && exportAction.setEnabled(false);
+      exportAction.isEnabled = function() { return false; };
+
+      ['exportWebp', 'exportAnimatedGif', 'exportPdf', 'exportVsdx', 'exportHtml', 'exportXml', 'exportUrl', 'publishLink'].forEach(function(name) {
+        var action = ui.actions && ui.actions.get(name);
+        if (action) {
+          action.setEnabled && action.setEnabled(false);
+          action.isEnabled = function() { return false; };
+        }
+      });
+
+      exportAsMenu.funct = function(menu, parent) {
+        ui.menus.addMenuItems(menu, ['exportPng', 'exportJpg', 'exportSvg'], parent);
+      };
+
+      fileMenu.funct = function(menu, parent) {
+        ui.menus.addMenuItems(menu, ['save', 'saveAs', '-'], parent);
+        ui.menus.addSubmenu('exportAs', menu, parent);
+      };
 
       ui.__piclawMinimalExportMenuPatched = true;
       uiPatched = true;
