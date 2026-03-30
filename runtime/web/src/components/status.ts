@@ -611,10 +611,8 @@ export function AgentStatus({ status, draft, plan, thought, pendingRequest, inte
                         <span class="agent-status-text">${content}</span>
                         ${toolRepoLabel && html`
                             <span class="agent-status-git-row" title=${toolContextPath || toolRepoLabel}>
-                                <span class="agent-status-git-pill">
-                                    <span class="agent-status-git-icon">${GIT_BRANCH_ICON_SVG}</span>
-                                    <span class="agent-status-git-label">${toolRepoLabel}</span>
-                                </span>
+                                <span class="agent-status-git-icon">${GIT_BRANCH_ICON_SVG}</span>
+                                <span class="agent-status-git-label">${toolRepoLabel}</span>
                             </span>
                         `}
                     </div>

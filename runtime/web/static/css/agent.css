@@ -166,22 +166,17 @@
 }
 
 .agent-status-git-row {
-    display: flex;
-    min-width: 0;
-}
-
-.agent-status-git-pill {
     display: inline-flex;
     align-items: center;
-    gap: 6px;
-    max-width: 100%;
-    padding: 2px 8px;
-    border-radius: var(--radius-full);
-    border: 1px solid color-mix(in srgb, var(--border-color) 92%, transparent);
-    background: color-mix(in srgb, var(--bg-primary) 70%, transparent);
-    color: var(--text-secondary);
+    gap: 4px;
+    min-width: 0;
+    max-width: min(32vw, 280px);
     font-size: 11px;
-    line-height: 1.2;
+    color: var(--text-secondary);
+    opacity: 0.82;
+    font-family: var(--font-mono, monospace);
+    line-height: 1.1;
+    flex: 0 1 auto;
 }
 
 .agent-status-git-icon {
