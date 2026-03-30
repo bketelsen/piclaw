@@ -42,10 +42,12 @@ test('resolveDrawioVendorDir falls back to workspace source vendor when packaged
   });
 });
 
-test('buildEmbeddedDrawioAppUrl matches the prior editor route with save/exit chrome disabled', () => {
-  expect(buildEmbeddedDrawioAppUrl(false)).toBe('/drawio/index.html?embed=1&proto=json&spin=1&modified=0&noSaveBtn=1&noExitBtn=1&saveAndExit=0&libraries=0&ui=dark&dark=0');
-  expect(buildEmbeddedDrawioAppUrl(true)).toBe('/drawio/index.html?embed=1&proto=json&spin=1&modified=0&noSaveBtn=1&noExitBtn=1&saveAndExit=0&libraries=0&ui=dark&dark=1');
+test('buildEmbeddedDrawioAppUrl keeps embedded mode while leaving save/export UI available', () => {
+  expect(buildEmbeddedDrawioAppUrl(false)).toBe('/drawio/index.html?embed=1&proto=json&spin=1&modified=0&noExitBtn=1&saveAndExit=0&ui=dark&dark=0');
+  expect(buildEmbeddedDrawioAppUrl(true)).toBe('/drawio/index.html?embed=1&proto=json&spin=1&modified=0&noExitBtn=1&saveAndExit=0&ui=dark&dark=1');
   expect(buildEmbeddedDrawioAppUrl(true, true)).toContain('chrome=0');
+  expect(buildEmbeddedDrawioAppUrl(true)).not.toContain('noSaveBtn=1');
+  expect(buildEmbeddedDrawioAppUrl(true)).not.toContain('libraries=0');
 });
 
 test('drawio save helpers map JPEG exports to binary jpg targets', () => {

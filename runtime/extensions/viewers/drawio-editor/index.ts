@@ -80,7 +80,7 @@ const DRAWIO_FRAME_CSP =
   "frame-ancestors 'self'; base-uri 'self'; form-action 'self'";
 
 export function buildEmbeddedDrawioAppUrl(isDark: boolean, readOnly = false): string {
-  let editorUrl = `${ROUTE_PREFIX}/index.html?embed=1&proto=json&spin=1&modified=0&noSaveBtn=1&noExitBtn=1&saveAndExit=0&libraries=0&ui=dark&dark=${isDark ? "1" : "0"}`;
+  let editorUrl = `${ROUTE_PREFIX}/index.html?embed=1&proto=json&spin=1&modified=0&noExitBtn=1&saveAndExit=0&ui=dark&dark=${isDark ? "1" : "0"}`;
   if (readOnly) {
     editorUrl += '&chrome=0&toolbar=0&layers=0&edit=0';
   }
@@ -353,28 +353,6 @@ function patchDrawioExportTarget(win) {
         };
       }
 
-      var exportAction = ui.actions && ui.actions.get('export');
-      if (exportAction) {
-        exportAction.setEnabled && exportAction.setEnabled(false);
-        exportAction.isEnabled = function() { return false; };
-        exportAction.funct = function() {
-          win.alert && win.alert('Use File → Save As… to save SVG, PNG, JPEG, or Draw.io to the server.');
-        };
-      }
-
-      var exportAsMenu = ui.menus && ui.menus.get('exportAs');
-      if (exportAsMenu) {
-        exportAsMenu.setEnabled && exportAsMenu.setEnabled(false);
-        exportAsMenu.isEnabled = function() { return false; };
-      }
-
-      var fileMenu = ui.menus && ui.menus.get('file');
-      if (fileMenu) {
-        fileMenu.funct = function(menu, parent) {
-          ui.menus.addMenuItems(menu, ['new', 'open', '-', 'save', 'saveAs', '-', 'import', '-', 'pageSetup', 'print'], parent);
-        };
-      }
-
       ui.__piclawServerSaveFlowPatched = true;
     }
 
@@ -475,7 +453,6 @@ window.addEventListener('message', function(e) {
         xml: format === 'xml' ? normalizeDrawioXml(xmlData) : xmlData,
         autosave: readOnly ? 0 : 1,
         saveAndExit: '0',
-        noSaveBtn: '1',
         noExitBtn: '1',
         title: fileName
       }), '*');

@@ -60,7 +60,7 @@ function bytesToBase64(bytes: Uint8Array): string {
 }
 
 export function buildDrawioEditorUrl(isDark: boolean): string {
-    return `/drawio/index.html?embed=1&proto=json&spin=1&modified=0&noSaveBtn=1&noExitBtn=1&saveAndExit=0&libraries=0&ui=dark&dark=${isDark ? '1' : '0'}`;
+    return `/drawio/index.html?embed=1&proto=json&spin=1&modified=0&noExitBtn=1&saveAndExit=0&ui=dark&dark=${isDark ? '1' : '0'}`;
 }
 
 function patchDrawioExportTarget(iframeWindow: Window, targetOrigin = '*'): boolean {
@@ -176,28 +176,6 @@ function patchDrawioExportTarget(iframeWindow: Window, targetOrigin = '*'): bool
                         console.warn('[drawio-pane] custom saveAs failed, falling back to native action', error);
                         return originalSaveAs?.apply(saveAsAction, []);
                     }
-                };
-            }
-
-            const exportAction = ui.actions?.get?.('export');
-            if (exportAction) {
-                exportAction.setEnabled?.(false);
-                exportAction.isEnabled = () => false;
-                exportAction.funct = () => {
-                    iframeWindow.alert?.('Use File → Save As… to save SVG, PNG, JPEG, or Draw.io to the server.');
-                };
-            }
-
-            const exportAsMenu = ui.menus?.get?.('exportAs');
-            if (exportAsMenu) {
-                exportAsMenu.setEnabled?.(false);
-                exportAsMenu.isEnabled = () => false;
-            }
-
-            const fileMenu = ui.menus?.get?.('file');
-            if (fileMenu) {
-                fileMenu.funct = function(menu: any, parent: any) {
-                    ui.menus.addMenuItems(menu, ['new', 'open', '-', 'save', 'saveAs', '-', 'import', '-', 'pageSetup', 'print'], parent);
                 };
             }
 
@@ -365,7 +343,6 @@ class DrawioEditorInstance implements PaneInstance {
             xml: this.format === 'xml' ? normalizeDrawioXml(this.xmlData) : this.xmlData,
             autosave: 1,
             saveAndExit: '0',
-            noSaveBtn: '1',
             noExitBtn: '1',
             title: this.fileName,
         }), '*');
