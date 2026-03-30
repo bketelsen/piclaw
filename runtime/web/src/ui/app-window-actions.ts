@@ -117,13 +117,16 @@ export async function popOutPane(options: PopOutPaneOptions): Promise<boolean> {
 
   try {
     const popoutParams = await resolveSourceTransfer?.(panePath);
+    const hasTransferPayload = Boolean(popoutParams && Object.keys(popoutParams).length > 0);
     const popoutUrl = buildPanePopoutUrl(baseHref, panePath, {
       label: typeof label === 'string' && label.trim() ? label.trim() : undefined,
       chatJid: currentChatJid,
       params: popoutParams,
     });
     navigateProvisionalChatWindow(provisionalWindow, popoutUrl);
-    closeSourcePaneIfTransferred?.(panePath);
+    if (hasTransferPayload) {
+      closeSourcePaneIfTransferred?.(panePath);
+    }
     return true;
   } catch (error) {
     closeProvisionalChatWindow(provisionalWindow);
