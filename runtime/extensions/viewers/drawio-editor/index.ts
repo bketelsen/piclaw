@@ -315,10 +315,11 @@ function patchDrawioExportTarget(win) {
             var currentName = currentPath.split('/').pop() || 'diagram.drawio';
             var input = String((win.prompt && win.prompt('Save as (.drawio):', currentName)) || '').trim();
             if (!input) return;
-            var nextPath = /\//.test(input)
+            var nextPath = input.indexOf('/') >= 0
               ? input
               : currentPath.replace(/[^/]*$/, '') + input;
-            if (!/\.drawio(?:\.(xml|svg|png))?$/i.test(nextPath)) {
+            var lowerNextPath = nextPath.toLowerCase();
+            if (!(lowerNextPath.endsWith('.drawio') || lowerNextPath.endsWith('.drawio.xml') || lowerNextPath.endsWith('.drawio.svg') || lowerNextPath.endsWith('.drawio.png'))) {
               nextPath += '.drawio';
             }
             var xml = typeof ui.getFileData === 'function' ? ui.getFileData(true) : null;
