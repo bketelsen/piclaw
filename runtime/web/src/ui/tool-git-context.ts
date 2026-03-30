@@ -32,24 +32,13 @@ export function extractToolContextPath(toolName: unknown, args: unknown): string
   const cwd = readTrimmedString(record.cwd, record.working_directory, record.workingDirectory);
   if (cwd) return cwd;
 
-  const directPath = readTrimmedString(
-    record.path,
-    record.file,
-    record.filePath,
-    record.targetPath,
+  const explicitRepoContext = readTrimmedString(
     record.project_dir,
     record.projectDir,
     record.repo_path,
     record.repoPath,
-    record.directory,
-    record.dir,
   );
-  if (directPath) return directPath;
-
-  if (Array.isArray(record.paths)) {
-    const firstPath = readTrimmedString(...record.paths);
-    if (firstPath) return firstPath;
-  }
+  if (explicitRepoContext) return explicitRepoContext;
 
   const command = readTrimmedString(record.command);
   const commandCwd = extractShellCwdFromCommand(command);
@@ -60,10 +49,6 @@ export function extractToolContextPath(toolName: unknown, args: unknown): string
       const nestedCwd = extractShellCwdFromCommand(entry);
       if (nestedCwd) return nestedCwd;
     }
-  }
-
-  if (typeof toolName === 'string' && toolName === 'bash') {
-    return null;
   }
 
   return null;
