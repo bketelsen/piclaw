@@ -13,6 +13,14 @@ const MINDMAP_EXTENSION = /\.mindmap\.ya?ml$/i;
 /** Cache-bust token for vendor scripts — evaluated at bundle build time. */
 const VENDOR_CACHE_BUST = String(Date.now());
 
+function esc(value: string): string {
+    return String(value || '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
+}
+
 function isDarkThemeActive(): boolean {
     const mode = document.documentElement?.dataset?.theme;
     if (mode === 'dark') return true;
@@ -103,18 +111,17 @@ class MindmapPreviewCard implements PaneInstance {
         const filePath = context.path || '';
         const name = filePath.split('/').pop() || 'mindmap';
         const wrapper = document.createElement('div');
-        wrapper.style.cssText = 'width:100%;height:100%;display:flex;flex-direction:column;background:var(--bg-primary);';
+        wrapper.style.cssText = 'width:100%;height:100%;display:flex;align-items:center;justify-content:center;background:var(--bg-primary,#1a1a1a);';
         wrapper.innerHTML = `
-            <div style="flex:1;display:flex;align-items:center;justify-content:center;padding:24px;">
-                <div style="text-align:center;">
-                    <div style="font-size:32px;margin-bottom:8px;">🧠</div>
-                    <div style="font-size:14px;color:var(--text-primary);">${name}</div>
-                    <div style="font-size:12px;color:var(--text-secondary);margin-top:4px;">Mindmap Editor</div>
-                </div>
-            </div>
-            <div style="display:flex;align-items:center;justify-content:flex-end;padding:8px 16px;border-top:1px solid var(--border-color);flex-shrink:0;">
-                <button id="mm-open-tab" style="padding:5px 14px;background:var(--accent-color);color:var(--accent-contrast-text,#fff);
-                    border:none;border-radius:4px;font-size:12px;font-weight:500;cursor:pointer;">Edit in Tab</button>
+            <div style="text-align:center;max-width:360px;padding:24px;">
+                <div style="font-size:56px;margin-bottom:12px;">🧠</div>
+                <div style="font-size:14px;font-weight:600;color:var(--text-primary,#e0e0e0);margin-bottom:4px;word-break:break-word;">${esc(name)}</div>
+                <div style="font-size:11px;color:var(--text-secondary,#888);margin-bottom:20px;">Mindmap Editor</div>
+                <button id="mm-open-tab" style="padding:8px 20px;background:var(--accent-color,#1d9bf0);color:var(--accent-contrast-text,#fff);
+                    border:none;border-radius:5px;font-size:13px;font-weight:500;cursor:pointer;
+                    transition:background 0.15s;"
+                    onmouseenter="this.style.background='var(--accent-hover,#1a8cd8)'"
+                    onmouseleave="this.style.background='var(--accent-color,#1d9bf0)'">Edit in Tab</button>
             </div>`;
         container.appendChild(wrapper);
         wrapper.querySelector('#mm-open-tab')?.addEventListener('click', () => {
