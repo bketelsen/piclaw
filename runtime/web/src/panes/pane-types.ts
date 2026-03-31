@@ -29,6 +29,8 @@ export interface PaneContext {
     size?: number;
     /** Optional preview payload for read-only workspace/file previews. */
     preview?: Record<string, unknown>;
+    /** Optional host-transfer payload consumed by panes that support detach/reattach handoff. */
+    transferState?: Record<string, unknown>;
     /** Whether the pane should open in edit or read-only mode. */
     mode: "edit" | "view";
 }
@@ -64,6 +66,13 @@ export interface PaneInstance {
 
     /** Register callback for close requests. */
     onClose?(cb: () => void): void;
+
+    /**
+     * Optional generic host-transfer export hook.
+     * Lets a pane hand state to a newly mounted host without encoding that
+     * state directly into the URL.
+     */
+    exportHostTransferState?(): Record<string, unknown> | null;
 
     /**
      * Optional pre-popout hook. Lets a pane prepare transferable session state

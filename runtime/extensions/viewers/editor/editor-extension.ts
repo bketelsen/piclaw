@@ -97,6 +97,42 @@ function setLocalBool(key: string, value: boolean): void {
 }
 
 /** Map file extension → CodeMirror language extension. */
+interface EditorHostTransferState {
+    kind?: string;
+    path?: string;
+    content?: string;
+    initialContent?: string;
+    mtime?: string | null;
+    dirty?: boolean;
+    viewState?: {
+        cursorLine?: number;
+        cursorCol?: number;
+        scrollTop?: number;
+    } | null;
+}
+
+function normalizeEditorHostTransferState(value: unknown): EditorHostTransferState | null {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+    const raw = value as Record<string, unknown>;
+    const kind = typeof raw.kind === 'string' ? raw.kind.trim() : '';
+    if (kind && kind !== 'editor') return null;
+    return {
+        kind: kind || 'editor',
+        path: typeof raw.path === 'string' ? raw.path : undefined,
+        content: typeof raw.content === 'string' ? raw.content : undefined,
+        initialContent: typeof raw.initialContent === 'string' ? raw.initialContent : undefined,
+        mtime: typeof raw.mtime === 'string' ? raw.mtime : (raw.mtime === null ? null : undefined),
+        dirty: typeof raw.dirty === 'boolean' ? raw.dirty : undefined,
+        viewState: raw.viewState && typeof raw.viewState === 'object'
+            ? {
+                cursorLine: typeof (raw.viewState as any).cursorLine === 'number' ? (raw.viewState as any).cursorLine : undefined,
+                cursorCol: typeof (raw.viewState as any).cursorCol === 'number' ? (raw.viewState as any).cursorCol : undefined,
+                scrollTop: typeof (raw.viewState as any).scrollTop === 'number' ? (raw.viewState as any).scrollTop : undefined,
+            }
+            : null,
+    };
+}
+
 function languageForPath(path: string) {
     const lower = String(path || '').toLowerCase();
     if (lower.endsWith('.py')) return python();
@@ -226,9 +262,17 @@ export class StandaloneEditorInstance implements PaneInstance {
         this.paneEl.appendChild(this.statusEl);
         container.appendChild(this.paneEl);
 
+        const transferState = normalizeEditorHostTransferState(context.transferState);
+
         // If content was provided in context, mount immediately
         if (context.content !== undefined) {
             this.mountEditor(context.content, context.mtime);
+            if (transferState) {
+                this.applyHostTransferState(transferState);
+            }
+        } else if (transferState?.content !== undefined) {
+            this.mountEditor(transferState.content, transferState.mtime);
+            this.applyHostTransferState(transferState);
         } else {
             // Load from API
             this.loadFile();
@@ -541,6 +585,38 @@ export class StandaloneEditorInstance implements PaneInstance {
             : 'Toggle whitespace (Alt+W)';
     }
 
+    private captureViewState(): { cursorLine: number; cursorCol: number; scrollTop: number } | null {
+        if (!this.view) return null;
+        try {
+            const pos = this.view.state.selection.main.head;
+            const line = this.view.state.doc.lineAt(pos);
+            const col = pos - line.from + 1;
+            const scrollTop = this.view.scrollDOM?.scrollTop || 0;
+            return { cursorLine: line.number, cursorCol: col, scrollTop };
+        } catch {
+            return null;
+        }
+    }
+
+    private applyHostTransferState(state: EditorHostTransferState): void {
+        if (!state) return;
+        if (typeof state.path === 'string' && state.path) {
+            this.path = state.path;
+        }
+        if (typeof state.initialContent === 'string') {
+            this.initialContent = state.initialContent;
+        }
+        if (typeof state.mtime === 'string' || state.mtime === null) {
+            this.currentMtime = state.mtime || null;
+        }
+        if (state.viewState) {
+            requestAnimationFrame(() => this.restoreViewState(state.viewState || null));
+        }
+        if (typeof state.dirty === 'boolean') {
+            this.setDirty(state.dirty);
+        }
+    }
+
     /** Compare content to baseline and update dirty state. */
     private checkDirty(): void {
         if (!this.view) return;
@@ -801,6 +877,18 @@ export class StandaloneEditorInstance implements PaneInstance {
 
     onClose(cb: () => void): void {
         this.closeCb = cb;
+    }
+
+    exportHostTransferState(): Record<string, unknown> | null {
+        return {
+            kind: 'editor',
+            path: this.path,
+            content: this.getContent() ?? '',
+            initialContent: this.initialContent,
+            mtime: this.currentMtime,
+            dirty: this.dirty,
+            viewState: this.captureViewState(),
+        };
     }
 
     // ── Extended PaneInstance methods ────────────────────────────

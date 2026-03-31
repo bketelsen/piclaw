@@ -1,5 +1,6 @@
 import { useCallback, useEffect } from '../vendor/preact-htm.js';
 import { createEditorPopoutTransferPayload } from '../panes/editor-popout-transfer.js';
+import { createPaneHostTransferPayload } from '../panes/pane-host-transfer.js';
 import { tabStore } from '../panes/index.js';
 import { watchPaneOpenEvents } from './app-browser-events.js';
 import {
@@ -30,6 +31,7 @@ interface RefBox<T> {
 
 interface PaneTransferInstanceLike {
   preparePopoutTransfer?: () => Promise<Record<string, string> | null> | Record<string, string> | null;
+  exportHostTransferState?: () => Record<string, unknown> | null;
   getContent?: () => string | undefined;
   isDirty?: () => boolean;
 }
@@ -343,12 +345,20 @@ export async function popOutPaneAction(options: PopOutPaneActionOptions): Promis
           });
         },
       });
-      if (!detachTransfer?.params) {
-        return sourceTransfer;
-      }
+      const sourceInstance = panePath === terminalTabPath ? dockInstanceRef.current : editorInstanceRef.current;
+      const exportedHostTransfer = typeof sourceInstance?.exportHostTransferState === 'function'
+        ? sourceInstance.exportHostTransferState()
+        : null;
+      const hostTransfer = exportedHostTransfer
+        ? createPaneHostTransferPayload({
+          path: panePath,
+          payload: exportedHostTransfer,
+        })
+        : null;
       return {
         ...(sourceTransfer || {}),
-        ...detachTransfer.params,
+        ...(hostTransfer || {}),
+        ...(detachTransfer?.params || {}),
       };
     },
     onPaneWindowOpened: registerDetachedPaneWindow

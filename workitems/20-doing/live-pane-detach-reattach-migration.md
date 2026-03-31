@@ -204,7 +204,12 @@ Core ideas:
   - `bun run build:web`
   - `bun run lint`
   - `bun run typecheck`
-- Remaining gap for later slices: this is still claim/ownership orchestration on top of reopen-backed pane startup, not full live pane instance migration.
+- Added the first generic pane-host transfer contract slice:
+  - `PaneContext.transferState`
+  - `PaneInstance.exportHostTransferState?()`
+  - opaque `pane_transfer` payload storage/consumption for pop-out bootstraps
+  - editor is the first adopter through the generic host-transfer path
+- Remaining gap for later slices: this is still claim/ownership orchestration plus host-transfer state handoff on top of reopen-backed pane startup, not full live pane instance migration.
 
 ## Definition of Done
 

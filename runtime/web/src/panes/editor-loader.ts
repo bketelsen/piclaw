@@ -19,6 +19,7 @@ interface ExtendedEditorPaneInstance extends PaneInstance {
     restoreViewState?(viewState: TabViewState): void;
     getPath?(): string;
     setPath?(newPath: string): void;
+    exportHostTransferState?(): Record<string, unknown> | null;
 }
 
 interface EditorBundleModule {
@@ -185,6 +186,10 @@ class LazyEditorInstance implements PaneInstance {
     onClose(cb: () => void): void {
         this.queuedCloseCb = cb;
         if (this.real?.onClose) this.real.onClose(cb);
+    }
+
+    exportHostTransferState(): Record<string, unknown> | null {
+        return this.real?.exportHostTransferState?.() ?? null;
     }
 
     // ── Extended methods ────────────────────────────────────────

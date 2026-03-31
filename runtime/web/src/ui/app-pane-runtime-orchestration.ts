@@ -13,6 +13,7 @@ import {
   matchesPaneDetachClaim,
   type PendingPaneOwnershipState,
 } from '../panes/pane-detach-state.js';
+import { consumePaneHostTransferFromLocation, type PaneHostTransferEnvelope } from '../panes/pane-host-transfer.js';
 import { paneRegistry, tabStore } from '../panes/index.js';
 import {
   getPanePopoutTitle,
@@ -105,6 +106,10 @@ export function usePaneRuntimeOrchestration(options: UsePaneRuntimeOrchestration
     if (!panePopoutMode) return null;
     const token = consumePanePopoutTransferToken('editor_popout');
     return consumeEditorPopoutState(token);
+  })());
+  const pendingPaneHostTransferRef = useRef<PaneHostTransferEnvelope | null>((() => {
+    if (!panePopoutMode) return null;
+    return consumePaneHostTransferFromLocation();
   })());
   const paneDetachTransferRef = useRef<PaneDetachTransferState>(readPaneDetachTransferState({
     search: typeof window !== 'undefined' ? window.location.search : '',
@@ -532,12 +537,16 @@ export function usePaneRuntimeOrchestration(options: UsePaneRuntimeOrchestration
     const pendingTransfer = pendingEditorPopoutTransferRef.current?.path === activeId
       ? pendingEditorPopoutTransferRef.current
       : null;
+    const pendingHostTransfer = pendingPaneHostTransferRef.current?.path === activeId
+      ? pendingPaneHostTransferRef.current
+      : null;
     const effectivePaneOverrideId = activePaneOverrideId || pendingTransfer?.paneOverrideId || null;
     const context = {
       path: activeId,
       mode: 'edit',
       ...(pendingTransfer?.content !== undefined ? { content: pendingTransfer.content } : {}),
       ...(pendingTransfer?.mtime !== undefined ? { mtime: pendingTransfer.mtime } : {}),
+      ...(pendingHostTransfer?.payload ? { transferState: pendingHostTransfer.payload } : {}),
     };
     const ext = (effectivePaneOverrideId ? paneRegistry.get(effectivePaneOverrideId) : null)
       || paneRegistry.resolve(context)
@@ -578,6 +587,9 @@ export function usePaneRuntimeOrchestration(options: UsePaneRuntimeOrchestration
 
     if (pendingTransfer) {
       pendingEditorPopoutTransferRef.current = null;
+    }
+    if (pendingHostTransfer) {
+      pendingPaneHostTransferRef.current = null;
     }
 
     return () => {
