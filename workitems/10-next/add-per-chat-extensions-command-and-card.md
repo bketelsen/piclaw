@@ -196,6 +196,103 @@ Likely implementation need:
 - store explicit enabled-extension IDs by chat JID / branch
 - support inheritance when creating a new chat from the most recently used chat
 
+## DB schema + endpoint draft
+
+### Suggested DB table
+
+```sql
+CREATE TABLE IF NOT EXISTS chat_extension_profiles (
+  chat_jid TEXT PRIMARY KEY,
+  enabled_extensions_json TEXT NOT NULL,
+  revision INTEGER NOT NULL DEFAULT 1,
+  inherited_from_chat_jid TEXT,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_chat_extension_profiles_updated_at
+  ON chat_extension_profiles(updated_at);
+```
+
+### Row semantics
+
+- `chat_jid`
+  - chat/session identifier owning the extension profile
+- `enabled_extensions_json`
+  - sorted JSON array of resolved enabled extension ids
+- `revision`
+  - optimistic concurrency / stale card submit protection
+- `inherited_from_chat_jid`
+  - provenance for new-chat inheritance
+- `created_at`, `updated_at`
+  - audit/debug timestamps
+
+### Suggested runtime shape
+
+```ts
+type ChatExtensionProfileSnapshot = {
+  chat_jid: string;
+  revision: number;
+  enabled_extension_ids: string[];
+  inherited_from_chat_jid: string | null;
+  inventory: ExtensionInventoryItem[];
+};
+
+type ApplyExtensionsResult = {
+  ok: boolean;
+  chat_jid: string;
+  revision: number;
+  previous_enabled_extension_ids: string[];
+  requested_enabled_extension_ids: string[];
+  resolved_enabled_extension_ids: string[];
+  summary: {
+    enabled: string[];
+    disabled: string[];
+    auto_disabled: Array<{ id: string; reason: string }>;
+    unavailable: Array<{ id: string; reason: string }>;
+    rollback: boolean;
+  };
+  inventory: ExtensionInventoryItem[];
+  error?: {
+    code: string;
+    message: string;
+  };
+};
+```
+
+### Suggested endpoints
+
+#### `GET /chat/extensions?chat_jid=<jid>`
+Returns the current persisted per-chat extension profile plus live inventory for card rendering.
+
+#### `POST /chat/extensions/apply`
+Request body:
+
+```json
+{
+  "chat_jid": "web:foobar",
+  "revision": 4,
+  "enabled_extension_ids": ["messages", "model-control", "workspace-search"]
+}
+```
+
+Behavior:
+1. load current profile
+2. derive live extension inventory from currently loaded runtime extensions
+3. resolve availability + inferred dependencies
+4. auto-correct requested set
+5. persist resolved set
+6. rebind/recreate current chat session
+7. rollback to previous set if rebind fails
+
+### New-chat inheritance rule
+
+When a new chat is created:
+1. find the most recently used chat with an extension profile
+2. copy its resolved enabled extension set
+3. create a new `chat_extension_profiles` row for the new chat
+4. record `inherited_from_chat_jid`
+
 ## Key implementation risks
 
 - The current extension mechanism may not expose enough metadata to infer dependencies cleanly.
