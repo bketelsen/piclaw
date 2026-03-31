@@ -61,6 +61,14 @@ const SLASH_COMMANDS = [
   { name: "/commands", description: "List available commands" },
 ];
 
+const COMPOSE_HISTORY_STORAGE_KEY = 'piclaw_compose_history';
+
+export function getComposeHistoryStorageKey(chatJid = 'web:default') {
+    const normalized = typeof chatJid === 'string' && chatJid.trim() ? chatJid.trim() : 'web:default';
+    if (normalized === 'web:default') return COMPOSE_HISTORY_STORAGE_KEY;
+    return `${COMPOSE_HISTORY_STORAGE_KEY}:${encodeURIComponent(normalized)}`;
+}
+
 /**
  * Tiny SVG pie chart showing context window usage.
  * Green when <75%, amber 75–90%, red >90%. Tooltip shows exact numbers.
@@ -357,6 +365,7 @@ export function ComposeBox({
     const dragCounterRef = useRef(0);
     const renameSessionInProgressRef = useRef(false);
     const historyMax = 200;
+    const historyStorageKey = getComposeHistoryStorageKey(currentChatJid);
     const normaliseHistory = (items) => {
         const seen = new Set();
         const cleaned = [];
@@ -369,8 +378,8 @@ export function ComposeBox({
         }
         return cleaned;
     };
-    const loadHistory = () => {
-        const raw = getLocalStorageItem('piclaw_compose_history');
+    const loadHistory = (storageKey = historyStorageKey) => {
+        const raw = getLocalStorageItem(storageKey);
         if (!raw) return [];
         try {
             const parsed = JSON.parse(raw);
@@ -380,12 +389,18 @@ export function ComposeBox({
             return [];
         }
     };
-    const saveHistory = (history) => {
-        setLocalStorageItem('piclaw_compose_history', JSON.stringify(history));
+    const saveHistory = (history, storageKey = historyStorageKey) => {
+        setLocalStorageItem(storageKey, JSON.stringify(history));
     };
-    const historyRef = useRef(loadHistory());
+    const historyRef = useRef(loadHistory(historyStorageKey));
     const historyIndexRef = useRef(-1);
     const historyDraftRef = useRef('');
+
+    useEffect(() => {
+        historyRef.current = loadHistory(historyStorageKey);
+        historyIndexRef.current = -1;
+        historyDraftRef.current = '';
+    }, [historyStorageKey]);
     const canSend = content.trim() || mediaFiles.length > 0 || fileRefs.length > 0 || messageRefs.length > 0;
     const canShareLocation = typeof window !== 'undefined'
         && typeof navigator !== 'undefined'
