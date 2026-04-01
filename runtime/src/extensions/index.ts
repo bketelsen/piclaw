@@ -10,7 +10,7 @@
  *   - messages: unified messages tool for searching, retrieving, adding, and deleting chat messages.
  *   - modelControl: get_model_state, list_models, switch_model, switch_thinking.
  *   - internalTools: list_internal_tools for tool discovery.
- *   - toolActivation: activate_tools/activate_toolset/reset_active_tools for lazy tool activation.
+ *   - toolActivation: activate_tools/reset_active_tools for lazy tool activation.
  *   - keychainTools: keychain for listing/retrieving keychain entries.
  *   - sqlIntrospect: introspect_sql for read-only DB introspection.
  *   - scheduledTasks: /tasks and /scheduled commands for task listing.

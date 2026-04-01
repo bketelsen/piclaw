@@ -10,14 +10,13 @@ import { withTempWorkspaceEnv } from "../helpers.js";
 import { createFakeExtensionApi } from "./fake-extension-api.js";
 
 describe("tool-activation extension", () => {
-  test("registers activation tools and default toolset metadata", async () => {
+  test("registers activation tools and default baseline metadata", async () => {
     const { toolActivation, getDefaultActiveToolNames } = await import("../../src/extensions/tool-activation.js");
     const fake = createFakeExtensionApi({ allTools: [] });
 
     toolActivation(fake.api);
 
     expect(fake.tools.has("activate_tools")).toBe(true);
-    expect(fake.tools.has("activate_toolset")).toBe(true);
     expect(fake.tools.has("reset_active_tools")).toBe(true);
     expect(getDefaultActiveToolNames()).toContain("list_internal_tools");
     expect(getDefaultActiveToolNames()).toContain("attach_file");
@@ -53,7 +52,6 @@ describe("tool-activation extension", () => {
         { name: "messages", description: "Read and write timeline messages." },
         { name: "list_internal_tools", description: "List tools." },
         { name: "activate_tools", description: "Activate tools." },
-        { name: "activate_toolset", description: "Activate toolsets." },
         { name: "reset_active_tools", description: "Reset tools." },
         { name: "attach_file", description: "Attach a file." },
         { name: "read_attachment", description: "Read attachment." },
@@ -63,7 +61,7 @@ describe("tool-activation extension", () => {
         { name: "switch_model", description: "Switch model." },
         { name: "switch_thinking", description: "Switch thinking." },
       ],
-      activeTools: ["read", "bash", "list_internal_tools", "activate_tools", "activate_toolset", "reset_active_tools"],
+      activeTools: ["read", "bash", "list_internal_tools", "activate_tools", "reset_active_tools"],
     });
 
     toolActivation(fake.api);
@@ -78,13 +76,11 @@ describe("tool-activation extension", () => {
     expect(fake.api.getActiveTools()).toContain("messages");
   });
 
-  test("activate_toolset enables named toolsets and reset_active_tools returns to baseline", async () => {
+  test("reset_active_tools returns to baseline after manual activation", async () => {
     const { toolActivation, getDefaultActiveToolNames } = await import("../../src/extensions/tool-activation.js");
     const available = [
       ...getDefaultActiveToolNames(),
-      "messages",
       "introspect_sql",
-      "keychain",
     ];
     const fake = createFakeExtensionApi({
       allTools: available.map((name) => ({ name, description: `${name} description` })),
@@ -93,31 +89,15 @@ describe("tool-activation extension", () => {
 
     toolActivation(fake.api);
 
-    const activateToolset = fake.tools.get("activate_toolset");
+    const activateTools = fake.tools.get("activate_tools");
     const resetActiveTools = fake.tools.get("reset_active_tools");
 
-    const activated = await activateToolset.execute("t2", { name: "data" });
-    expect(activated.details.toolset).toBe("data");
-    expect(activated.details.availability).toBe("same_turn");
-    expect(fake.api.getActiveTools()).toContain("messages");
+    await activateTools.execute("t2", { names: ["introspect_sql"] });
     expect(fake.api.getActiveTools()).toContain("introspect_sql");
-    expect(fake.api.getActiveTools()).toContain("keychain");
 
-    await resetActiveTools.execute("t3", {});
+    const resetResult = await resetActiveTools.execute("t3", {});
+    expect(resetResult.details.availability).toBe("same_turn");
     expect(fake.api.getActiveTools()).toEqual(getDefaultActiveToolNames());
-  });
-
-  test("activate_toolset returns helpful error for unknown toolsets", async () => {
-    const { toolActivation } = await import("../../src/extensions/tool-activation.js");
-    const fake = createFakeExtensionApi({ allTools: [] });
-    toolActivation(fake.api);
-
-    const tool = fake.tools.get("activate_toolset");
-    const result = await tool.execute("t4", { name: "unknown" });
-    expect(result.content[0].text).toContain("Unknown toolset");
-    expect(result.details.ok).toBe(false);
-    expect(result.details.availability).toBe("same_turn");
-    expect(result.details.available_toolsets.length).toBeGreaterThan(1);
   });
 
   test("default active tools include config-defined additions", async () => {
@@ -157,6 +137,7 @@ describe("tool-activation extension", () => {
       const names = JSON.parse(proc.stdout.toString().trim());
       expect(names).toContain("search_workspace");
       expect(names).toContain("introspect_sql");
+      expect(names).not.toContain("activate_toolset");
     });
   });
 });

@@ -134,8 +134,7 @@ Set via environment variables (see above) or in `.piclaw/config.json`:
 ### Default active tools
 
 Piclaw now keeps the agent's always-active tool list intentionally small and uses
-`list_internal_tools`, `activate_tools`, and `activate_toolset` to enable extra
-capabilities on demand.
+`list_internal_tools` and `activate_tools` to enable extra capabilities on demand.
 
 Built-in default baseline:
 
@@ -145,7 +144,6 @@ Built-in default baseline:
 - `bash` on Linux/macOS, or `powershell` on Windows
 - `list_internal_tools`
 - `activate_tools`
-- `activate_toolset`
 - `reset_active_tools`
 - `attach_file`
 - `messages`

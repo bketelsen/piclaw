@@ -9,7 +9,7 @@ export const TOOLSETS = [
     {
         name: "discovery",
         description: "Tool discovery and lazy activation controls.",
-        toolNames: ["list_internal_tools", "activate_tools", "activate_toolset", "reset_active_tools"],
+        toolNames: ["list_internal_tools", "activate_tools", "reset_active_tools"],
     },
     {
         name: "attachments",
@@ -71,7 +71,6 @@ const DEFAULT_ACTIVE_TOOL_NAMES = [
     "write",
     "list_internal_tools",
     "activate_tools",
-    "activate_toolset",
     "reset_active_tools",
     "attach_file",
     "messages",
@@ -82,7 +81,7 @@ const TOOL_ACTIVATION_HINT = [
     "## Tool Activation",
     "Keep the active tool set small by default.",
     "If you are unsure which capability is available, call list_internal_tools.",
-    "Use activate_tools or activate_toolset to enable only what you need.",
+    "Use activate_tools to enable only what you need.",
     "Newly activated tools become available immediately to subsequent tool/model steps in the same turn.",
     "Use reset_active_tools to return to the default configured tool set.",
 ].join("\n");
@@ -96,13 +95,6 @@ const ActivateToolsSchema = Type.Object({
         Type.Literal("replace"),
     ], { description: "append keeps currently active tools; replace swaps to only the requested tools plus the configured default baseline." })),
 });
-const ActivateToolsetSchema = Type.Object({
-    name: Type.String({ description: "Toolset name to activate (for example: data, workspace, automation, browser)." }),
-    mode: Type.Optional(Type.Union([
-        Type.Literal("append"),
-        Type.Literal("replace"),
-    ], { description: "append keeps currently active tools; replace swaps to only the selected toolset plus the configured default baseline." })),
-});
 function unique(values) {
     return [...new Set(Array.from(values).map((value) => String(value || "").trim()).filter(Boolean))];
 }
@@ -115,13 +107,6 @@ function normalizeToolNamesForPlatform(toolNames, platform = process.platform) {
 }
 export function getToolsetsForTool(toolName) {
     return TOOLSETS.filter((toolset) => toolset.toolNames.includes(toolName)).map((toolset) => toolset.name);
-}
-export function expandToolsetToolNames(toolset, platform = process.platform) {
-    return normalizeToolNamesForPlatform(toolset.toolNames, platform);
-}
-export function getToolset(name) {
-    const normalized = String(name || "").trim().toLowerCase();
-    return TOOLSETS.find((toolset) => toolset.name.toLowerCase() === normalized);
 }
 export function getDefaultActiveToolNames(platform = process.platform) {
     return normalizeToolNamesForPlatform([
@@ -189,38 +174,6 @@ export const toolActivation = (pi) => {
                 content: [{ type: "text", text: formatActivationSummary(result, "Tool activation updated") }],
                 details: {
                     availability: "same_turn",
-                    ...result,
-                },
-            };
-        },
-    });
-    pi.registerTool({
-        name: "activate_toolset",
-        label: "activate_toolset",
-        description: "Activate a named toolset for the current session.",
-        promptSnippet: "activate_toolset: enable a named toolset such as data, workspace, automation, or browser.",
-        parameters: ActivateToolsetSchema,
-        async execute(_toolCallId, params) {
-            const toolset = getToolset(params.name);
-            if (!toolset) {
-                return {
-                    content: [{ type: "text", text: `Unknown toolset: ${params.name}. Available toolsets: ${TOOLSETS.map((entry) => entry.name).join(", ")}.` }],
-                    details: {
-                        ok: false,
-                        availability: "same_turn",
-                        available_toolsets: TOOLSETS.map((entry) => ({ name: entry.name, description: entry.description })),
-                    },
-                };
-            }
-            const result = applyActiveToolNames(pi, expandToolsetToolNames(toolset), params.mode);
-            return {
-                content: [{ type: "text", text: formatActivationSummary(result, `Toolset \"${toolset.name}\" activated`) }],
-                details: {
-                    ok: true,
-                    availability: "same_turn",
-                    toolset: toolset.name,
-                    toolset_description: toolset.description,
-                    available_toolsets: TOOLSETS.map((entry) => ({ name: entry.name, description: entry.description })),
                     ...result,
                 },
             };

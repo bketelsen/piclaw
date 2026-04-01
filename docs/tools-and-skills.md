@@ -20,7 +20,6 @@ Default always-active set:
 - `bash` on Linux/macOS, or `powershell` on Windows
 - `list_internal_tools`
 - `activate_tools`
-- `activate_toolset`
 - `reset_active_tools`
 - `attach_file`
 - `messages`
@@ -57,7 +56,6 @@ You can extend that baseline with `.piclaw/config.json`:
 - `introspect_sql` — run read-only SQL queries against the messages database
 - `list_internal_tools` — list available tools with descriptions, active-state markers, and toolset membership
 - `activate_tools` — activate one or more available tools for the current session
-- `activate_toolset` — activate a named toolset (for example `data`, `workspace`, `automation`, `browser`)
 - `reset_active_tools` — restore the configured default active-tool set for the current session
 - `open_office_viewer` — open an Office document (`.docx`, `.xlsx`, `.pptx`, `.odt`, `.ods`, `.odp`) in the built-in JS Office viewer (`/office-viewer/*`)
 - `open_drawio_editor` — open a `.drawio` diagram file in the self-hosted draw.io editor (creates the file if it doesn't exist)

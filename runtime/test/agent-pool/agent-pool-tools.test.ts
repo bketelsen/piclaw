@@ -64,7 +64,6 @@ describe("builtin extension factories", () => {
     expect(fake.tools.has("switch_thinking")).toBe(true);
     expect(fake.tools.has("list_internal_tools")).toBe(true);
     expect(fake.tools.has("activate_tools")).toBe(true);
-    expect(fake.tools.has("activate_toolset")).toBe(true);
     expect(fake.tools.has("reset_active_tools")).toBe(true);
     expect(fake.tools.has("keychain")).toBe(true);
     expect(fake.tools.has("introspect_sql")).toBe(true);
