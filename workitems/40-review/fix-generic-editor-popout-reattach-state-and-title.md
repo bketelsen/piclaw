@@ -1,7 +1,7 @@
 ---
 id: fix-generic-editor-popout-reattach-state-and-title
 title: Fix generic editor pop-out reattach state loss and window title
-status: doing
+status: review
 priority: high
 created: 2026-04-02
 updated: 2026-04-02
@@ -123,6 +123,11 @@ reattach/recovery does not preserve the authoritative in-memory state.
 - `runtime/web/src/ui/app-branch-pane-lifecycle-actions.ts`
 
 ## Updates
+
+### 2026-04-02
+- Lane change: `20-doing` → `40-review` after confirming the generic editor pop-out regressions are functionally fixed and the latest live Playwright result is green.
+- Review focus from here: verify the remaining checklist items are sufficiently evidenced, especially unchanged simple-viewer behavior and whether the focused regression coverage is adequate for both reattach-state recovery and title resolution.
+- Quality: ★★★★☆ 8/10 (problem: 2, scope: 2, test: 1, deps: 2, risk: 1)
 
 ### 2026-04-02
 - Created from the live regression sweep after the simple viewers passed but
