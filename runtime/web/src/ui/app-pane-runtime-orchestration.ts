@@ -1,5 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from '../vendor/preact-htm.js';
-import { consumeEditorPopoutState, consumePanePopoutTransferToken, type EditorPopoutTransferState } from '../panes/editor-popout-transfer.js';
+import {
+  consumeEditorPopoutState,
+  consumePanePopoutTransferToken,
+  createEditorPopoutTransferPayload,
+  type EditorPopoutTransferState,
+} from '../panes/editor-popout-transfer.js';
 import {
   createPaneDetachTransferParams,
   generatePaneDetachId,
@@ -13,7 +18,12 @@ import {
   matchesPaneDetachClaim,
   type PendingPaneOwnershipState,
 } from '../panes/pane-detach-state.js';
-import { consumePaneHostTransferFromLocation, type PaneHostTransferEnvelope } from '../panes/pane-host-transfer.js';
+import {
+  consumePaneHostTransferFromLocation,
+  consumePaneHostTransferState,
+  createPaneHostTransferPayload,
+  type PaneHostTransferEnvelope,
+} from '../panes/pane-host-transfer.js';
 import { claimPaneLiveTransfer, clearPaneLiveTransferForPath } from '../panes/pane-live-transfer.js';
 import { paneRegistry, tabStore } from '../panes/index.js';
 import {
@@ -123,6 +133,109 @@ export async function invokePaneAfterAttachToHost(
   await instance.afterAttachToHost(context);
 }
 
+export interface PanePopoutReattachRequestMessage {
+  type: 'piclaw-pane-reattach-request';
+  panePath: string;
+  paneInstanceId?: string;
+  editorPopoutToken?: string;
+  paneTransferToken?: string;
+}
+
+export function buildPanePopoutReattachRequestMessage(options: {
+  panePath: string;
+  paneInstanceId?: string | null;
+  paneOverrideId?: string | null;
+  terminalTabPath: string;
+  viewState?: Record<string, unknown> | null;
+  instance?: {
+    exportHostTransferState?: () => Record<string, unknown> | null;
+    getContent?: () => string | undefined;
+    isDirty?: () => boolean;
+  } | null;
+  runtime?: any;
+  nowMs?: number;
+}): PanePopoutReattachRequestMessage | null {
+  const panePath = typeof options?.panePath === 'string' ? options.panePath.trim() : '';
+  if (!panePath) return null;
+
+  const runtime = options?.runtime ?? globalThis;
+  const nowMs = typeof options?.nowMs === 'number' ? options.nowMs : Date.now();
+  const paneInstanceId = typeof options?.paneInstanceId === 'string' ? options.paneInstanceId.trim() : '';
+  const paneOverrideId = typeof options?.paneOverrideId === 'string' ? options.paneOverrideId.trim() : '';
+  const terminalTabPath = typeof options?.terminalTabPath === 'string' ? options.terminalTabPath : 'piclaw://terminal';
+  const instance = options?.instance || null;
+  const exportedHostTransfer = typeof instance?.exportHostTransferState === 'function'
+    ? instance.exportHostTransferState()
+    : null;
+  const paneTransfer = exportedHostTransfer
+    ? createPaneHostTransferPayload({
+      path: panePath,
+      payload: exportedHostTransfer,
+    }, runtime, nowMs)
+    : null;
+
+  let editorTransfer: Record<string, string> | null = null;
+  if (panePath !== terminalTabPath) {
+    const exportedMtime = exportedHostTransfer && typeof exportedHostTransfer === 'object'
+      ? (typeof (exportedHostTransfer as Record<string, unknown>).mtime === 'string'
+        ? (exportedHostTransfer as Record<string, unknown>).mtime as string
+        : ((exportedHostTransfer as Record<string, unknown>).mtime === null ? null : undefined))
+      : undefined;
+    const isDirty = typeof instance?.isDirty === 'function' ? instance.isDirty() : false;
+    const content = typeof instance?.getContent === 'function' ? instance.getContent() : undefined;
+    editorTransfer = createEditorPopoutTransferPayload({
+      path: panePath,
+      content: isDirty ? content : undefined,
+      mtime: exportedMtime,
+      paneOverrideId: paneOverrideId || null,
+      viewState: options?.viewState || null,
+    }, runtime, nowMs);
+  }
+
+  return {
+    type: 'piclaw-pane-reattach-request',
+    panePath,
+    ...(paneInstanceId ? { paneInstanceId } : {}),
+    ...(editorTransfer?.editor_popout ? { editorPopoutToken: editorTransfer.editor_popout } : {}),
+    ...(paneTransfer?.pane_transfer ? { paneTransferToken: paneTransfer.pane_transfer } : {}),
+  };
+}
+
+export function consumePanePopoutReattachRequestMessage(options: {
+  payload: any;
+  runtime?: any;
+  nowMs?: number;
+}): {
+  panePath: string;
+  paneInstanceId: string | null;
+  editorTransfer: EditorPopoutTransferState | null;
+  hostTransfer: PaneHostTransferEnvelope | null;
+} | null {
+  const panePath = typeof options?.payload?.panePath === 'string' ? options.payload.panePath.trim() : '';
+  if (!panePath) return null;
+  const runtime = options?.runtime ?? globalThis;
+  const nowMs = typeof options?.nowMs === 'number' ? options.nowMs : Date.now();
+  const paneInstanceId = typeof options?.payload?.paneInstanceId === 'string' && options.payload.paneInstanceId.trim()
+    ? options.payload.paneInstanceId.trim()
+    : null;
+  const editorPopoutToken = typeof options?.payload?.editorPopoutToken === 'string' ? options.payload.editorPopoutToken.trim() : '';
+  const paneTransferToken = typeof options?.payload?.paneTransferToken === 'string' ? options.payload.paneTransferToken.trim() : '';
+
+  const editorTransfer = editorPopoutToken
+    ? consumeEditorPopoutState(editorPopoutToken, runtime, nowMs)
+    : null;
+  const hostTransfer = paneTransferToken
+    ? consumePaneHostTransferState(paneTransferToken, runtime, nowMs)
+    : null;
+
+  return {
+    panePath,
+    paneInstanceId,
+    editorTransfer: editorTransfer?.path === panePath ? editorTransfer : null,
+    hostTransfer: hostTransfer?.path === panePath ? hostTransfer : null,
+  };
+}
+
 export function usePaneRuntimeOrchestration(options: UsePaneRuntimeOrchestrationOptions) {
   const {
     panePopoutMode,
@@ -161,6 +274,9 @@ export function usePaneRuntimeOrchestration(options: UsePaneRuntimeOrchestration
     paneLabel: panePopoutLabel,
   }));
   const currentWindowIdRef = useRef<string>(paneDetachTransferRef.current.paneWindowId || generatePaneDetachId('pane-window'));
+  const pendingReattachEditorTransfersRef = useRef<Map<string, EditorPopoutTransferState>>(new Map());
+  const pendingReattachPaneHostTransfersRef = useRef<Map<string, PaneHostTransferEnvelope>>(new Map());
+  const panePopoutReattachSentRef = useRef(false);
   const tabPaneInstanceIdsRef = useRef<Map<string, string>>(new Map());
   const dockPaneInstanceIdRef = useRef<string>(generatePaneDetachId('pane-instance'));
   const detachedWindowHandlesRef = useRef<Map<string, any>>(new Map());
@@ -358,29 +474,69 @@ export function usePaneRuntimeOrchestration(options: UsePaneRuntimeOrchestration
     return true;
   }, [setDockVisible, terminalTabPath]);
 
-  const requestPanePopoutReattach = useCallback(() => {
+  const sendPanePopoutReattachRequest = useCallback((closeWindow = false) => {
     if (!panePopoutMode) return false;
     const detachState = paneDetachTransferRef.current;
     if (!hasPaneDetachTransferState(detachState)) return false;
     if (typeof window === 'undefined' || !window.opener || window.opener.closed) return false;
+    if (panePopoutReattachSentRef.current) {
+      if (closeWindow) {
+        try {
+          window.close();
+        } catch {
+          /* expected: some browsers ignore scripted close attempts. */
+        }
+      }
+      return true;
+    }
+
+    const panePath = detachState.panePath || panePopoutPath;
+    const instance = panePath === terminalTabPath ? dockInstanceRef.current : editorInstanceRef.current;
+    const payload = buildPanePopoutReattachRequestMessage({
+      panePath,
+      paneInstanceId: detachState.paneInstanceId,
+      paneOverrideId: panePath === terminalTabPath
+        ? null
+        : (typeof (tabPaneOverrides as any)?.get === 'function' ? ((tabPaneOverrides as any).get(panePath) || null) : null),
+      terminalTabPath,
+      viewState: panePath === terminalTabPath ? null : (tabStore.getViewState(panePath) || null),
+      instance,
+    });
+    if (!payload) return false;
 
     try {
-      window.opener.postMessage({
-        type: 'piclaw-pane-reattach-request',
-        panePath: detachState.panePath,
-        paneInstanceId: detachState.paneInstanceId,
-      }, window.location.origin);
+      window.opener.postMessage(payload, window.location.origin);
+      panePopoutReattachSentRef.current = true;
     } catch {
       return false;
     }
 
-    try {
-      window.close();
-    } catch {
-      /* expected: some browsers ignore scripted close attempts. */
+    if (closeWindow) {
+      try {
+        window.close();
+      } catch {
+        /* expected: some browsers ignore scripted close attempts. */
+      }
     }
     return true;
-  }, [panePopoutMode]);
+  }, [panePopoutMode, panePopoutPath, tabPaneOverrides, terminalTabPath]);
+
+  const requestPanePopoutReattach = useCallback(() => sendPanePopoutReattachRequest(true), [sendPanePopoutReattachRequest]);
+
+  useEffect(() => {
+    if (!panePopoutMode || typeof window === 'undefined') return undefined;
+
+    const flushReattachState = () => {
+      sendPanePopoutReattachRequest(false);
+    };
+
+    window.addEventListener('pagehide', flushReattachState);
+    window.addEventListener('beforeunload', flushReattachState);
+    return () => {
+      window.removeEventListener('pagehide', flushReattachState);
+      window.removeEventListener('beforeunload', flushReattachState);
+    };
+  }, [panePopoutMode, sendPanePopoutReattachRequest]);
 
   const activePaneTab = useMemo(
     () => resolveActivePaneTab(tabStripTabs, tabStripActiveId),
@@ -488,18 +644,25 @@ export function usePaneRuntimeOrchestration(options: UsePaneRuntimeOrchestration
         return;
       }
       if (payload.type !== 'piclaw-pane-reattach-request') return;
-      const panePath = typeof payload.panePath === 'string' ? payload.panePath.trim() : '';
+      const transfer = consumePanePopoutReattachRequestMessage({ payload });
+      const panePath = transfer?.panePath || '';
       if (!panePath) return;
+      if (transfer?.editorTransfer) {
+        pendingReattachEditorTransfersRef.current.set(panePath, transfer.editorTransfer);
+      }
+      if (transfer?.hostTransfer) {
+        pendingReattachPaneHostTransfersRef.current.set(panePath, transfer.hostTransfer);
+      }
       if (panePath === terminalTabPath) {
         const detached = detachedDockPaneRef.current;
         if (!detached) return;
-        if (payload.paneInstanceId && payload.paneInstanceId !== detached.paneInstanceId) return;
+        if (transfer?.paneInstanceId && transfer.paneInstanceId !== detached.paneInstanceId) return;
         reattachPane(panePath, { closeDetachedWindow: false });
         return;
       }
       const detached = detachedTabsRef.current.get(panePath);
       if (!detached) return;
-      if (payload.paneInstanceId && payload.paneInstanceId !== detached.paneInstanceId) return;
+      if (transfer?.paneInstanceId && transfer.paneInstanceId !== detached.paneInstanceId) return;
       reattachPane(panePath, { closeDetachedWindow: false });
     };
 
@@ -573,12 +736,16 @@ export function usePaneRuntimeOrchestration(options: UsePaneRuntimeOrchestration
       return;
     }
 
-    const pendingTransfer = pendingEditorPopoutTransferRef.current?.path === activeId
+    const pendingPopoutTransfer = pendingEditorPopoutTransferRef.current?.path === activeId
       ? pendingEditorPopoutTransferRef.current
       : null;
-    const pendingHostTransfer = pendingPaneHostTransferRef.current?.path === activeId
+    const pendingReattachTransfer = pendingReattachEditorTransfersRef.current.get(activeId) || null;
+    const pendingTransfer = pendingPopoutTransfer || pendingReattachTransfer;
+    const pendingPopoutHostTransfer = pendingPaneHostTransferRef.current?.path === activeId
       ? pendingPaneHostTransferRef.current
       : null;
+    const pendingReattachHostTransfer = pendingReattachPaneHostTransfersRef.current.get(activeId) || null;
+    const pendingHostTransfer = pendingPopoutHostTransfer || pendingReattachHostTransfer;
     const effectivePaneOverrideId = activePaneOverrideId || pendingTransfer?.paneOverrideId || null;
     const context = {
       path: activeId,
@@ -658,10 +825,18 @@ export function usePaneRuntimeOrchestration(options: UsePaneRuntimeOrchestration
           });
           if (!disposed && claimedInstance) {
             bindInstance(claimedInstance);
-            if (pendingTransfer) {
+            if (pendingPopoutTransfer) {
               pendingEditorPopoutTransferRef.current = null;
             }
-            pendingPaneHostTransferRef.current = null;
+            if (pendingReattachTransfer) {
+              pendingReattachEditorTransfersRef.current.delete(activeId);
+            }
+            if (pendingPopoutHostTransfer) {
+              pendingPaneHostTransferRef.current = null;
+            }
+            if (pendingReattachHostTransfer) {
+              pendingReattachPaneHostTransfersRef.current.delete(activeId);
+            }
             return;
           }
         } catch (error) {
@@ -671,11 +846,17 @@ export function usePaneRuntimeOrchestration(options: UsePaneRuntimeOrchestration
 
       if (disposed) return;
       bindInstance(ext.mount(container, context));
-      if (pendingTransfer) {
+      if (pendingPopoutTransfer) {
         pendingEditorPopoutTransferRef.current = null;
       }
-      if (pendingHostTransfer) {
+      if (pendingReattachTransfer) {
+        pendingReattachEditorTransfersRef.current.delete(activeId);
+      }
+      if (pendingPopoutHostTransfer) {
         pendingPaneHostTransferRef.current = null;
+      }
+      if (pendingReattachHostTransfer) {
+        pendingReattachPaneHostTransfersRef.current.delete(activeId);
       }
     })();
 

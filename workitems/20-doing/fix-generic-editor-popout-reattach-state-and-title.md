@@ -52,13 +52,13 @@ reattach/recovery does not preserve the authoritative in-memory state.
 
 ## Acceptance Criteria
 
-- [ ] Generic editor pop-outs preserve unsaved in-memory content when the
+- [x] Generic editor pop-outs preserve unsaved in-memory content when the
       detached window is closed and the tab reattaches to the main shell.
-- [ ] Generic editor pop-outs preserve unsaved in-memory content when using any
+- [x] Generic editor pop-outs preserve unsaved in-memory content when using any
       manual reattach path, if present.
-- [ ] The standalone editor window title uses the file/tab label rather than a
+- [x] The standalone editor window title uses the file/tab label rather than a
       content-derived heading.
-- [ ] Exactly one editor tab exists after reattach; no duplicate tab is created.
+- [x] Exactly one editor tab exists after reattach; no duplicate tab is created.
 - [ ] Existing viewer/simple-pane reattach behavior remains unchanged.
 - [ ] Focused regression coverage exists for both unsaved-state recovery and
       window-title resolution.
@@ -108,11 +108,11 @@ reattach/recovery does not preserve the authoritative in-memory state.
 
 ## Validation Plan
 
-- [ ] focused `bun test ...` for editor pop-out/reattach flows
-- [ ] live Playwright/browser reproduction for `AGENTS.md`
-- [ ] `bun run lint`
+- [x] focused `bun test ...` for editor pop-out/reattach flows
+- [x] live Playwright/browser reproduction for `AGENTS.md`
+- [x] `bun run lint`
 - [ ] `bun run typecheck`
-- [ ] `bun run build:web` if web bundles are affected
+- [x] `bun run build:web` if web bundles are affected
 
 ## Links
 
@@ -138,3 +138,23 @@ reattach/recovery does not preserve the authoritative in-memory state.
     through `applyBranding(...)`
 - Patched the branding flow to skip `document.title` overrides while running in
   pane-popout mode, while keeping normal branding behavior in the main shell.
+- Live Playwright retest after deploying the freshly rebuilt browser bundle now
+  passes for the title portion:
+  - pop-out title is `AGENTS.md · PiClaw`
+  - unsaved marker content still transfers into the pop-out editor
+  - closing the pop-out still loses the unsaved marker during main-window
+    reattach, so the state-loss half of this ticket remains open.
+- Fixed the state-loss half by teaching pane-popout windows to send one-shot
+  reattach transfer tokens back to the opener during manual reattach and
+  `pagehide`/`beforeunload` close flows.
+- The main shell now consumes those tokens before reopening the pane, so the
+  editor remount rehydrates from the detached window's last in-memory content
+  instead of reading from disk first.
+- Focused regression coverage added for the reattach token builder/consumer.
+- Latest live Playwright result for `AGENTS.md` is now fully green:
+  - pop-out title remains `AGENTS.md · PiClaw`
+  - unsaved marker survives pop-out close and main-window reattach
+  - exactly one `AGENTS.md` tab exists after reattach
+  - no detached badge remains after recovery
+- `bun run typecheck` still fails for unrelated existing `contextLength`
+  errors in `src/agent-pool/run-agent-orchestrator.ts`.
