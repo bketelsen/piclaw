@@ -169,7 +169,7 @@ test("applyControlCommand switches model and thinking level", async () => {
   session.model = modelSimple;
   session.thinkingLevel = "off";
 
-  const modelResult = await applyControlCommand(session as any, runtime as any, registry, {
+  const modelResult = await applyControlCommand(runtime as any, registry, {
     type: "model",
     provider: "openai",
     modelId: "gpt-test",
@@ -181,7 +181,7 @@ test("applyControlCommand switches model and thinking level", async () => {
   expect(modelResult.message).toContain("openai/gpt-test");
   expect(session.reloadCalls).toBe(0);
 
-  const thinkingResult = await applyControlCommand(session as any, runtime as any, registry, {
+  const thinkingResult = await applyControlCommand(runtime as any, registry, {
     type: "thinking",
     level: "high",
     raw: "/thinking high",
@@ -197,7 +197,7 @@ test("applyControlCommand reports unsupported thinking", async () => {
   const runtime = createRuntime(session);
   session.model = modelSimple;
 
-  const result = await applyControlCommand(session as any, runtime as any, registry, {
+  const result = await applyControlCommand(runtime as any, registry, {
     type: "thinking",
     level: "high",
     raw: "/thinking high",
@@ -212,7 +212,7 @@ test("applyControlCommand sends immediate steering when stream active", async ()
   const runtime = createRuntime(session);
   session.isStreaming = true;
 
-  const result = await applyControlCommand(session as any, runtime as any, registry, {
+  const result = await applyControlCommand(runtime as any, registry, {
     type: "steer",
     message: "focus on pricing",
     raw: "/steer focus on pricing",
@@ -229,7 +229,7 @@ test("applyControlCommand falls back to follow-up when steering with no active r
   const session = new StubSession();
   const runtime = createRuntime(session);
 
-  const result = await applyControlCommand(session as any, runtime as any, registry, {
+  const result = await applyControlCommand(runtime as any, registry, {
     type: "steer",
     message: "focus on pricing",
     raw: "/steer focus on pricing",
@@ -246,7 +246,7 @@ test("applyControlCommand queues follow-up when queue has no active response", a
   const session = new StubSession();
   const runtime = createRuntime(session);
 
-  const result = await applyControlCommand(session as any, runtime as any, registry, {
+  const result = await applyControlCommand(runtime as any, registry, {
     type: "queue",
     message: "capture this for later",
     raw: "/queue capture this for later",
@@ -264,7 +264,7 @@ test("applyControlCommand restarts agent", async () => {
   const session = new StubSession();
   const runtime = createRuntime(session);
 
-  const result = await applyControlCommand(session as any, runtime as any, registry, {
+  const result = await applyControlCommand(runtime as any, registry, {
     type: "restart",
     raw: "/restart",
   });
@@ -284,7 +284,7 @@ test("applyControlCommand exits agent so supervisor can restart it", async () =>
   };
 
   try {
-    const result = await applyControlCommand(session as any, runtime as any, registry, {
+    const result = await applyControlCommand(runtime as any, registry, {
       type: "exit",
       raw: "/exit",
     });
@@ -302,7 +302,7 @@ test("applyControlCommand aborts agent", async () => {
   const session = new StubSession();
   const runtime = createRuntime(session);
 
-  const result = await applyControlCommand(session as any, runtime as any, registry, {
+  const result = await applyControlCommand(runtime as any, registry, {
     type: "abort",
     raw: "/abort",
   });
@@ -316,7 +316,7 @@ test("applyControlCommand lists models when /model has no args", async () => {
   const session = new StubSession();
   const runtime = createRuntime(session);
 
-  const result = await applyControlCommand(session as any, runtime as any, registry, {
+  const result = await applyControlCommand(runtime as any, registry, {
     type: "model",
     raw: "/model",
   });
@@ -331,7 +331,7 @@ test("applyControlCommand blocks model switching during compaction", async () =>
   const runtime = createRuntime(session);
   session.isCompacting = true;
 
-  const result = await applyControlCommand(session as any, runtime as any, registry, {
+  const result = await applyControlCommand(runtime as any, registry, {
     type: "model",
     provider: "openai",
     modelId: "gpt-test",
@@ -351,7 +351,7 @@ test("/model uses session registry when available", async () => {
     getAll: () => [modelSimple],
   } as any;
 
-  const result = await applyControlCommand(session as any, runtime as any, registry, {
+  const result = await applyControlCommand(runtime as any, registry, {
     type: "model",
     raw: "/model",
   });
@@ -370,7 +370,7 @@ test("/model rejects provider without model id", async () => {
   expect(parsed && "provider" in parsed ? parsed.provider : null).toBe("openai");
   expect(parsed && "modelId" in parsed ? parsed.modelId : null).toBeUndefined();
 
-  const result = await applyControlCommand(session as any, runtime as any, registry, parsed as any);
+  const result = await applyControlCommand(runtime as any, registry, parsed as any);
   expect(result.status).toBe("error");
   expect(result.message).toContain("model");
   expect(result.message.toLowerCase()).toContain("provider");
@@ -386,7 +386,7 @@ test("/model warns when model id matches multiple providers", async () => {
     getAll: () => [modelReasoning, duplicateModel, modelSimple],
   } as any;
 
-  const result = await applyControlCommand(session as any, runtime as any, dupRegistry, {
+  const result = await applyControlCommand(runtime as any, dupRegistry, {
     type: "model",
     modelId: "gpt-test",
     raw: "/model gpt-test",

@@ -18,8 +18,7 @@ import { fileURLToPath } from "url";
 import { createAgentSessionFromServices, createAgentSessionRuntime, createAgentSessionServices, getAgentDir, SessionManager, } from "@mariozechner/pi-coding-agent";
 import { SESSIONS_DIR, WORKSPACE_DIR } from "../core/config.js";
 import { builtinExtensionFactories } from "../extensions/index.js";
-import { installSameTurnToolActivationPatch } from "./tool-activation-compat.js";
-installSameTurnToolActivationPatch();
+import { bindImmediateToolActivation } from "./tool-activation-live-update.js";
 const __dirname = dirname(fileURLToPath(import.meta.url));
 /**
  * Bundled extension paths that are loaded when their activation env vars
@@ -123,6 +122,7 @@ export async function createSessionInDir(sessionDir, options) {
         agentDir: getAgentDir(),
         sessionManager: SessionManager.continueRecent(WORKSPACE_DIR, sessionDir),
     });
+    bindImmediateToolActivation(runtime.session);
     return runtime;
 }
 export async function createDefaultSession(chatJid, options) {

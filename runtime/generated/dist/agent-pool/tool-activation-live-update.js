@@ -1,5 +1,5 @@
-import { AgentSession } from "@mariozechner/pi-coding-agent";
 const liveToolSnapshotAgents = new WeakSet();
+const boundImmediateToolActivationSessions = new WeakSet();
 function replaceArrayContents(target, next) {
     target.splice(0, target.length, ...next);
 }
@@ -42,17 +42,29 @@ export function applyActiveToolsImmediately(session, toolNames) {
         session.agent.setTools(tools);
     }
     session._baseSystemPrompt = session._rebuildSystemPrompt(validToolNames);
+    if (session.agent?.state) {
+        session.agent.state.systemPrompt = session._baseSystemPrompt;
+    }
     if (typeof session.agent?.setSystemPrompt === "function") {
         session.agent.setSystemPrompt(session._baseSystemPrompt);
     }
 }
-let installed = false;
-export function installSameTurnToolActivationPatch() {
-    if (installed)
+export function bindImmediateToolActivation(session) {
+    if (!session || typeof session !== "object")
         return;
-    installed = true;
-    const proto = AgentSession.prototype;
-    proto.setActiveToolsByName = function setActiveToolsByNamePatched(toolNames) {
-        applyActiveToolsImmediately(this, toolNames);
+    if (boundImmediateToolActivationSessions.has(session))
+        return;
+    ensureLiveToolSnapshot(session.agent);
+    const original = typeof session.setActiveToolsByName === "function"
+        ? session.setActiveToolsByName.bind(session)
+        : null;
+    session.setActiveToolsByName = (toolNames) => {
+        if (original) {
+            original(toolNames);
+            ensureLiveToolSnapshot(session.agent);
+            return;
+        }
+        applyActiveToolsImmediately(session, toolNames);
     };
+    boundImmediateToolActivationSessions.add(session);
 }

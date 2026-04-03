@@ -31,9 +31,7 @@ import {
 
 import { SESSIONS_DIR, WORKSPACE_DIR } from "../core/config.js";
 import { builtinExtensionFactories } from "../extensions/index.js";
-import { installSameTurnToolActivationPatch } from "./tool-activation-compat.js";
-
-installSameTurnToolActivationPatch();
+import { bindImmediateToolActivation } from "./tool-activation-live-update.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -155,6 +153,7 @@ export async function createSessionInDir(
     sessionManager: SessionManager.continueRecent(WORKSPACE_DIR, sessionDir),
   });
 
+  bindImmediateToolActivation(runtime.session as any);
   return runtime;
 }
 

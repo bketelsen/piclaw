@@ -264,7 +264,7 @@ export async function runAgentControlFuzzAudit(options: AuditRunOptions = {}): P
       }
 
       try {
-        const result = await withChatContext(DEFAULT_CHAT_JID, "web", () => applyControlCommand(session as any, runtime as any, registry as any, parsed));
+        const result = await withChatContext(DEFAULT_CHAT_JID, "web", () => applyControlCommand(runtime as any, registry as any, parsed));
         if (!result || (result.status !== "success" && result.status !== "error") || typeof result.message !== "string") {
           failures.push({
             category: "routing_invariant",
@@ -360,9 +360,9 @@ export async function runAgentControlFuzzAudit(options: AuditRunOptions = {}): P
         caseId += 1;
         continue;
       }
-      const first = await withChatContext(DEFAULT_CHAT_JID, "web", () => applyControlCommand(session as any, runtime as any, registry as any, parsed));
+      const first = await withChatContext(DEFAULT_CHAT_JID, "web", () => applyControlCommand(runtime as any, registry as any, parsed));
       const afterFirst = testCase.read(session);
-      const second = await withChatContext(DEFAULT_CHAT_JID, "web", () => applyControlCommand(session as any, runtime as any, registry as any, parsed));
+      const second = await withChatContext(DEFAULT_CHAT_JID, "web", () => applyControlCommand(runtime as any, registry as any, parsed));
       const afterSecond = testCase.read(session);
       if (first.status !== second.status || JSON.stringify(afterFirst) !== JSON.stringify(afterSecond)) {
         failures.push({

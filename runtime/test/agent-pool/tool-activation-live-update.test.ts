@@ -3,9 +3,9 @@ import { Type } from "@sinclair/typebox";
 import { Agent } from "@mariozechner/pi-agent-core";
 import { fauxAssistantMessage, fauxToolCall, registerFauxProvider } from "@mariozechner/pi-ai";
 import "../helpers.js";
-import { applyActiveToolsImmediately } from "../../src/agent-pool/tool-activation-compat.js";
+import { applyActiveToolsImmediately, bindImmediateToolActivation } from "../../src/agent-pool/tool-activation-live-update.js";
 
-describe("same-turn tool activation compatibility patch", () => {
+describe("same-turn tool activation live update", () => {
   test("newly activated tools become callable later in the same turn", async () => {
     const faux = registerFauxProvider();
     try {
@@ -55,7 +55,8 @@ describe("same-turn tool activation compatibility patch", () => {
       session._toolRegistry.set(delayedTool.name, delayedTool);
 
       const initialToolsRef = agent.state.tools;
-      applyActiveToolsImmediately(session, ["activate_tools"]);
+      bindImmediateToolActivation(session as any);
+      session.setActiveToolsByName?.(["activate_tools"]);
       expect(agent.state.tools).toBe(initialToolsRef);
       expect(agent.state.tools.map((tool) => tool.name)).toEqual(["activate_tools"]);
 

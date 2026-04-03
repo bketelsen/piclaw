@@ -24,7 +24,8 @@ import { handleTotp } from "./handlers/totp.js";
 import { handleQr } from "./handlers/qr.js";
 import { handleLabel, handleLabels, handleTree } from "./handlers/tree.js";
 /** Dispatch a parsed control command to the appropriate handler and return the result. */
-export async function applyControlCommand(session, runtime, modelRegistry, command) {
+export async function applyControlCommand(runtime, modelRegistry, command) {
+    const session = runtime.session;
     switch (command.type) {
         case "restart":
             return handleRestart(session, command);

@@ -98,7 +98,7 @@ test("agent control info and mode commands", async () => {
   mkdirSync(dirname(session.sessionFile), { recursive: true });
   writeFileSync(session.sessionFile, '{"type":"session","id":"state","version":3}\n');
 
-  const state = await applyControlCommand(session as any, runtime as any, registry, { type: "state", raw: "/state" });
+  const state = await applyControlCommand(runtime as any, registry, { type: "state", raw: "/state" });
   expect(state.message).toContain("Model:");
   expect(state.message).toContain("Session file size:");
 
@@ -122,20 +122,20 @@ test("agent control info and mode commands", async () => {
   });
 
   const stats = await withChatContext("web:default", "web", () =>
-    applyControlCommand(session as any, runtime as any, registry, { type: "stats", raw: "/stats" })
+    applyControlCommand(runtime as any, registry, { type: "stats", raw: "/stats" })
   );
   expect(stats.message).toContain("Session stats:");
   expect(stats.message).toContain("Tracked usage (persisted):");
   expect(stats.message).toContain("Per provider:");
   expect(stats.message).toContain("Per model:");
 
-  const context = await applyControlCommand(session as any, runtime as any, registry, { type: "context", raw: "/context" });
+  const context = await applyControlCommand(runtime as any, registry, { type: "context", raw: "/context" });
   expect(context.message).toContain("Context usage:");
 
-  const last = await applyControlCommand(session as any, runtime as any, registry, { type: "last", raw: "/last" });
+  const last = await applyControlCommand(runtime as any, registry, { type: "last", raw: "/last" });
   expect(last.message).toContain("last response");
 
-  const commands = await applyControlCommand(session as any, runtime as any, registry, { type: "commands", raw: "/commands" });
+  const commands = await applyControlCommand(runtime as any, registry, { type: "commands", raw: "/commands" });
   expect(commands.message).toContain("/model");
   expect(commands.message).not.toContain("/test-card");
   expect(commands.message).toContain("/exit");
@@ -144,11 +144,11 @@ test("agent control info and mode commands", async () => {
   expect(commands.message).toContain("/template");
   expect(commands.message).toContain("/skill:demo");
 
-  const steering = await applyControlCommand(session as any, runtime as any, registry, { type: "steering_mode", mode: "all", raw: "/steering-mode all" });
+  const steering = await applyControlCommand(runtime as any, registry, { type: "steering_mode", mode: "all", raw: "/steering-mode all" });
   expect(steering.message).toContain("all");
   expect(session.steeringModeCalls).toContain("all");
 
-  const followup = await applyControlCommand(session as any, runtime as any, registry, { type: "followup_mode", mode: "all", raw: "/followup-mode all" });
+  const followup = await applyControlCommand(runtime as any, registry, { type: "followup_mode", mode: "all", raw: "/followup-mode all" });
   expect(followup.message).toContain("all");
   expect(session.followUpModeCalls).toContain("all");
 });
@@ -165,7 +165,7 @@ test("agent control state shows oversized session warning", async () => {
   writeFileSync(session.sessionFile, '{"type":"session","id":"oversized","version":3}\n');
   truncateSync(session.sessionFile, 101 * 1024 * 1024);
 
-  const state = await applyControlCommand(session as any, runtime as any, registry, { type: "state", raw: "/state" });
+  const state = await applyControlCommand(runtime as any, registry, { type: "state", raw: "/state" });
   expect(state.message).toContain("Session file warning:");
   expect(state.message).toContain("Consider /session-rotate.");
 });
@@ -178,20 +178,20 @@ test("agent control session and tree commands", async () => {
   const session = new TestAgentControlSession(ws.workspace, registry);
   const runtime = createTestSessionRuntime(session);
 
-  const sessionName = await applyControlCommand(session as any, runtime as any, registry, { type: "session_name", name: "My session", raw: "/session-name My session" });
+  const sessionName = await applyControlCommand(runtime as any, registry, { type: "session_name", name: "My session", raw: "/session-name My session" });
   expect(sessionName.message).toContain("My session");
 
-  const newSession = await applyControlCommand(session as any, runtime as any, registry, { type: "new_session", raw: "/new-session" });
+  const newSession = await applyControlCommand(runtime as any, registry, { type: "new_session", raw: "/new-session" });
   expect(newSession.message).toContain("new session");
 
-  const switchSession = await applyControlCommand(session as any, runtime as any, registry, { type: "switch_session", path: "path/to/session", raw: "/switch-session path/to/session" });
+  const switchSession = await applyControlCommand(runtime as any, registry, { type: "switch_session", path: "path/to/session", raw: "/switch-session path/to/session" });
   expect(switchSession.message).toContain("Switched to session");
 
   session.sessionName = "Carry forward";
   session.sessionFile = join(ws.data, "sessions", "web_default", "active-session.jsonl");
   mkdirSync(dirname(session.sessionFile), { recursive: true });
   writeFileSync(session.sessionFile, '{"type":"session","id":"active","version":3}\n{"type":"message","id":"m1","parentId":null,"timestamp":"2026-03-14T00:00:00.000Z","message":{"role":"assistant","content":[{"type":"text","text":"Hello"}],"provider":"openai","model":"gpt-test","usage":{"input":1,"output":1,"cacheRead":0,"cacheWrite":0,"totalTokens":2,"cost":{"input":0,"output":0,"cacheRead":0,"cacheWrite":0,"total":0}},"stopReason":"stop","timestamp":1}}\n');
-  const rotated = await applyControlCommand(session as any, runtime as any, registry, { type: "session_rotate", instructions: "keep active work", raw: "/session-rotate keep active work" });
+  const rotated = await applyControlCommand(runtime as any, registry, { type: "session_rotate", instructions: "keep active work", raw: "/session-rotate keep active work" });
   expect(rotated.status).toBe("success");
   expect(rotated.message).toContain("Session rotated.");
   expect(rotated.message).toContain("Archived previous session:");
@@ -203,26 +203,26 @@ test("agent control session and tree commands", async () => {
   expect(existsSync(join(ws.data, "sessions", "web_default", "archive", "active-session.jsonl"))).toBe(true);
   expect(session.seededEntries.at(-1)?.some((entry) => entry[0] === "compaction")).toBe(true);
 
-  const fork = await applyControlCommand(session as any, runtime as any, registry, { type: "fork", entryId: "entry-1", raw: "/fork entry-1" });
+  const fork = await applyControlCommand(runtime as any, registry, { type: "fork", entryId: "entry-1", raw: "/fork entry-1" });
   expect(fork.message).toContain("Selected");
 
-  const forks = await applyControlCommand(session as any, runtime as any, registry, { type: "forks", raw: "/forks" });
+  const forks = await applyControlCommand(runtime as any, registry, { type: "forks", raw: "/forks" });
   expect(forks.message).toContain("Forkable messages:");
 
-  const exportHtml = await applyControlCommand(session as any, runtime as any, registry, { type: "export_html", raw: "/export-html" });
+  const exportHtml = await applyControlCommand(runtime as any, registry, { type: "export_html", raw: "/export-html" });
   expect(exportHtml.message).toContain("Exported session");
 
-  const tree = await applyControlCommand(session as any, runtime as any, registry, { type: "tree", raw: "/tree" });
+  const tree = await applyControlCommand(runtime as any, registry, { type: "tree", raw: "/tree" });
   expect(tree.message).toContain("Session tree:");
 
-  const treeNav = await applyControlCommand(session as any, runtime as any, registry, { type: "tree", targetId: "entry-1", raw: "/tree entry-1" });
+  const treeNav = await applyControlCommand(runtime as any, registry, { type: "tree", targetId: "entry-1", raw: "/tree entry-1" });
   expect(treeNav.message).toContain("Navigation complete");
 
-  const label = await applyControlCommand(session as any, runtime as any, registry, { type: "label", targetId: "entry-1", label: "flag", raw: "/label entry-1 flag" });
+  const label = await applyControlCommand(runtime as any, registry, { type: "label", targetId: "entry-1", label: "flag", raw: "/label entry-1 flag" });
   expect(label.message).toContain("Label set");
   expect(session.labelChanges.length).toBe(1);
 
-  const labels = await applyControlCommand(session as any, runtime as any, registry, { type: "labels", raw: "/labels" });
+  const labels = await applyControlCommand(runtime as any, registry, { type: "labels", raw: "/labels" });
   expect(labels.message).toContain("Labels:");
 });
 
@@ -237,7 +237,7 @@ test("agent control queue, compact, and abort commands", async () => {
   const session = new TestAgentControlSession(ws.workspace, registry);
   const runtime = createTestSessionRuntime(session);
 
-  const compact = await applyControlCommand(session as any, runtime as any, registry, { type: "compact", instructions: "shorten", raw: "/compact shorten" });
+  const compact = await applyControlCommand(runtime as any, registry, { type: "compact", instructions: "shorten", raw: "/compact shorten" });
   expect(compact.message).toContain("Compaction complete.");
   expect(compact.message).toContain("Attached: full compaction report (.md).");
   expect(compact.message).not.toContain("Summary:");
@@ -251,38 +251,38 @@ test("agent control queue, compact, and abort commands", async () => {
   expect(compactReport).toContain("## Summary");
   expect(compactReport).toContain("Summary");
 
-  const autoCompact = await applyControlCommand(session as any, runtime as any, registry, { type: "auto_compact", enabled: true, raw: "/auto-compact on" });
+  const autoCompact = await applyControlCommand(runtime as any, registry, { type: "auto_compact", enabled: true, raw: "/auto-compact on" });
   expect(autoCompact.message).toContain("on");
   expect(session.autoCompactionEnabled).toBe(true);
 
-  const autoRetry = await applyControlCommand(session as any, runtime as any, registry, { type: "auto_retry", enabled: true, raw: "/auto-retry on" });
+  const autoRetry = await applyControlCommand(runtime as any, registry, { type: "auto_retry", enabled: true, raw: "/auto-retry on" });
   expect(autoRetry.message).toContain("on");
   expect(session.autoRetryEnabled).toBe(true);
 
-  const abort = await applyControlCommand(session as any, runtime as any, registry, { type: "abort", raw: "/abort" });
+  const abort = await applyControlCommand(runtime as any, registry, { type: "abort", raw: "/abort" });
   expect(abort.message).toContain("Aborted current response");
   expect(session.abortCalls).toBe(1);
 
   session.isCompacting = true;
-  const abortCompaction = await applyControlCommand(session as any, runtime as any, registry, { type: "abort", raw: "/abort" });
+  const abortCompaction = await applyControlCommand(runtime as any, registry, { type: "abort", raw: "/abort" });
   expect(abortCompaction.message).toContain("Compaction aborted");
   expect(session.abortCompactionCalls).toBe(1);
   expect(session.abortCalls).toBe(1);
   session.isCompacting = false;
 
-  const abortRetry = await applyControlCommand(session as any, runtime as any, registry, { type: "abort_retry", raw: "/abort-retry" });
+  const abortRetry = await applyControlCommand(runtime as any, registry, { type: "abort_retry", raw: "/abort-retry" });
   expect(abortRetry.message).toContain("Retry aborted");
   expect(session.abortRetryCalls).toBe(1);
 
-  const abortBashNone = await applyControlCommand(session as any, runtime as any, registry, { type: "abort_bash", raw: "/abort-bash" });
+  const abortBashNone = await applyControlCommand(runtime as any, registry, { type: "abort_bash", raw: "/abort-bash" });
   expect(abortBashNone.message).toContain("No bash command");
 
   session.isBashRunning = true;
-  const abortBash = await applyControlCommand(session as any, runtime as any, registry, { type: "abort_bash", raw: "/abort-bash" });
+  const abortBash = await applyControlCommand(runtime as any, registry, { type: "abort_bash", raw: "/abort-bash" });
   expect(abortBash.message).toContain("aborted");
   expect(session.abortBashCalls).toBe(1);
 
-  const queued = await applyControlCommand(session as any, runtime as any, registry, { type: "queue", message: "queued text", raw: "/queue queued text" });
+  const queued = await applyControlCommand(runtime as any, registry, { type: "queue", message: "queued text", raw: "/queue queued text" });
   expect(queued.message).toContain("Queued follow-up");
   expect(queued.queued_followup).toBe(true);
 });
@@ -305,7 +305,7 @@ test("login config writes stay inside the overridden pi-agent dir", async () => 
   const session = new TestAgentControlSession(ws.workspace, loginRegistry);
   const runtime = createTestSessionRuntime(session);
 
-  const apiKeyResult = await applyControlCommand(session as any, runtime as any, loginRegistry, {
+  const apiKeyResult = await applyControlCommand(runtime as any, loginRegistry, {
     type: "login",
     provider: `__step2 ${JSON.stringify({ provider: "openai", method: "api_key", api_key: "new-key" })}`,
     raw: "/login __step2",
@@ -317,7 +317,7 @@ test("login config writes stay inside the overridden pi-agent dir", async () => 
   const authBackups = readdirSync(piAgentDir).filter((name) => name.startsWith("auth.json.") && name.endsWith(".bak"));
   expect(authBackups.length).toBeGreaterThan(0);
 
-  const configureResult = await applyControlCommand(session as any, runtime as any, loginRegistry, {
+  const configureResult = await applyControlCommand(runtime as any, loginRegistry, {
     type: "login",
     provider: `__step2 ${JSON.stringify({ provider: "ollama", method: "configure", baseUrl: "http://127.0.0.1:11434/v1", modelId: "llama3:latest", modelIds: "qwen3:latest", contextWindow: "128000" })}`,
     raw: "/login __step2",
@@ -352,7 +352,7 @@ test("login refreshes model registry before activating newly authenticated provi
   const session = new TestAgentControlSession(ws.workspace, loginRegistry);
   const runtime = createTestSessionRuntime(session);
 
-  const result = await applyControlCommand(session as any, runtime as any, loginRegistry as any, {
+  const result = await applyControlCommand(runtime as any, loginRegistry as any, {
     type: "login",
     provider: `__step2 ${JSON.stringify({ provider: "github-copilot", method: "oauth_check" })}`,
     raw: "/login __step2",
@@ -373,22 +373,22 @@ test("agent control cycle and agent identity commands", async () => {
   const session = new TestAgentControlSession(ws.workspace, registry);
   const runtime = createTestSessionRuntime(session);
 
-  const cycleModel = await applyControlCommand(session as any, runtime as any, registry, { type: "cycle_model", direction: "forward", raw: "/cycle-model" });
+  const cycleModel = await applyControlCommand(runtime as any, registry, { type: "cycle_model", direction: "forward", raw: "/cycle-model" });
   expect(cycleModel.message).toContain("Model set to");
 
   session.isCompacting = true;
-  const blockedCycleModel = await applyControlCommand(session as any, runtime as any, registry, { type: "cycle_model", direction: "forward", raw: "/cycle-model" });
+  const blockedCycleModel = await applyControlCommand(runtime as any, registry, { type: "cycle_model", direction: "forward", raw: "/cycle-model" });
   expect(blockedCycleModel.status).toBe("error");
   expect(blockedCycleModel.message).toContain("Auto-compaction is still running");
   session.isCompacting = false;
 
-  const cycleThinking = await applyControlCommand(session as any, runtime as any, registry, { type: "cycle_thinking", raw: "/cycle-thinking" });
+  const cycleThinking = await applyControlCommand(runtime as any, registry, { type: "cycle_thinking", raw: "/cycle-thinking" });
   expect(cycleThinking.message).toContain("Thinking level set");
 
-  const agentName = await applyControlCommand(session as any, runtime as any, registry, { type: "agent_name", name: "Pi", raw: "/agent-name Pi" });
+  const agentName = await applyControlCommand(runtime as any, registry, { type: "agent_name", name: "Pi", raw: "/agent-name Pi" });
   expect(agentName.message).toContain("Agent name set");
 
-  const agentAvatar = await applyControlCommand(session as any, runtime as any, registry, { type: "agent_avatar", avatar: "https://example.com/avatar.png", raw: "/agent-avatar https://example.com/avatar.png" });
+  const agentAvatar = await applyControlCommand(runtime as any, registry, { type: "agent_avatar", avatar: "https://example.com/avatar.png", raw: "/agent-avatar https://example.com/avatar.png" });
   expect(agentAvatar.message).toContain("Agent avatar set");
 });
 
@@ -400,26 +400,26 @@ test("agent control idempotent mode commands stay stable across repeats", async 
   const session = new TestAgentControlSession(ws.workspace, registry);
   const runtime = createTestSessionRuntime(session);
 
-  const autoCompactFirst = await applyControlCommand(session as any, runtime as any, registry, { type: "auto_compact", enabled: true, raw: "/auto-compact on" });
-  const autoCompactSecond = await applyControlCommand(session as any, runtime as any, registry, { type: "auto_compact", enabled: true, raw: "/auto-compact on" });
+  const autoCompactFirst = await applyControlCommand(runtime as any, registry, { type: "auto_compact", enabled: true, raw: "/auto-compact on" });
+  const autoCompactSecond = await applyControlCommand(runtime as any, registry, { type: "auto_compact", enabled: true, raw: "/auto-compact on" });
   expect(autoCompactFirst.status).toBe("success");
   expect(autoCompactSecond.status).toBe("success");
   expect(session.autoCompactionEnabled).toBe(true);
 
-  const autoRetryFirst = await applyControlCommand(session as any, runtime as any, registry, { type: "auto_retry", enabled: false, raw: "/auto-retry off" });
-  const autoRetrySecond = await applyControlCommand(session as any, runtime as any, registry, { type: "auto_retry", enabled: false, raw: "/auto-retry off" });
+  const autoRetryFirst = await applyControlCommand(runtime as any, registry, { type: "auto_retry", enabled: false, raw: "/auto-retry off" });
+  const autoRetrySecond = await applyControlCommand(runtime as any, registry, { type: "auto_retry", enabled: false, raw: "/auto-retry off" });
   expect(autoRetryFirst.status).toBe("success");
   expect(autoRetrySecond.status).toBe("success");
   expect(session.autoRetryEnabled).toBe(false);
 
-  const steeringFirst = await applyControlCommand(session as any, runtime as any, registry, { type: "steering_mode", mode: "all", raw: "/steering-mode all" });
-  const steeringSecond = await applyControlCommand(session as any, runtime as any, registry, { type: "steering_mode", mode: "all", raw: "/steering-mode all" });
+  const steeringFirst = await applyControlCommand(runtime as any, registry, { type: "steering_mode", mode: "all", raw: "/steering-mode all" });
+  const steeringSecond = await applyControlCommand(runtime as any, registry, { type: "steering_mode", mode: "all", raw: "/steering-mode all" });
   expect(steeringFirst.message).toContain("all");
   expect(steeringSecond.message).toContain("all");
   expect(session.steeringMode).toBe("all");
 
-  const followupFirst = await applyControlCommand(session as any, runtime as any, registry, { type: "followup_mode", mode: "one-at-a-time", raw: "/followup-mode one" });
-  const followupSecond = await applyControlCommand(session as any, runtime as any, registry, { type: "followup_mode", mode: "one-at-a-time", raw: "/followup-mode one" });
+  const followupFirst = await applyControlCommand(runtime as any, registry, { type: "followup_mode", mode: "one-at-a-time", raw: "/followup-mode one" });
+  const followupSecond = await applyControlCommand(runtime as any, registry, { type: "followup_mode", mode: "one-at-a-time", raw: "/followup-mode one" });
   expect(followupFirst.status).toBe("success");
   expect(followupSecond.status).toBe("success");
   expect(session.followUpMode).toBe("one-at-a-time");

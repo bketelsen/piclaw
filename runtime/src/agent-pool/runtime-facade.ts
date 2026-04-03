@@ -60,7 +60,7 @@ export class AgentRuntimeFacade {
     const session = runtime.session;
     const channel = detectChannel(chatJid);
     const apply = this.options.applyControlCommandFn ?? applyControlCommand;
-    const result = await withChatContext(chatJid, channel, () => apply(session, runtime, this.options.modelRegistry, command));
+    const result = await withChatContext(chatJid, channel, () => apply(runtime, this.options.modelRegistry, command));
     if (runtime.session !== session) {
       await this.options.refreshRuntime(chatJid, runtime);
     }
