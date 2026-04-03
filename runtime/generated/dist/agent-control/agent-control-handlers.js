@@ -1,9 +1,9 @@
 /**
  * agent-control/agent-control-handlers.ts – Dispatch parsed commands to handlers.
  *
- * The applyControlCommand() function is the main dispatcher: it receives a
- * parsed AgentControlCommand and routes it to the appropriate handler function
- * from handlers/*.ts based on the command type.
+ * The applyControlCommand() function is the main dispatcher: it receives the
+ * active AgentSessionRuntime plus a parsed AgentControlCommand and routes it to
+ * the appropriate handler function from handlers/*.ts based on the command type.
  *
  * Consumers:
  *   - agent-pool.ts calls applyControlCommand() to execute control commands.
