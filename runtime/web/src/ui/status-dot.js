@@ -13,13 +13,24 @@ export function buildComposeStatusDotClass({ pulsing = false } = {}) {
     return classes.join(' ');
 }
 
-export function shouldShowRunningStatusDot(status, { isLastActivity = false } = {}) {
-    if (isLastActivity) return false;
+export function resolveRunningStatusIndicator(status, { isLastActivity = false, pendingRequest = false } = {}) {
+    if (pendingRequest) return 'dot';
+    if (isLastActivity) return 'none';
+    if (status?.type === 'error') return 'none';
+    if (status?.type === 'intent') return 'dot';
+
     const type = typeof status?.type === 'string' ? status.type : '';
     const hasToolMetadata = Boolean(
         (typeof status?.tool_name === 'string' && status.tool_name.trim())
         || status?.tool_args,
     );
-    if (hasToolMetadata) return false;
-    return type !== 'tool_call' && type !== 'tool_status';
+    if (hasToolMetadata) return 'spinner';
+    if (type === 'tool_call' || type === 'tool_status' || type === 'thinking' || type === 'waiting') {
+        return 'spinner';
+    }
+    return 'dot';
+}
+
+export function shouldShowRunningStatusDot(status, options = {}) {
+    return resolveRunningStatusIndicator(status, options) === 'dot';
 }

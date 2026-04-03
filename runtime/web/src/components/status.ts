@@ -3,7 +3,7 @@ import { html, useEffect, useMemo, useState } from '../vendor/preact-htm.js';
 import { addToWhitelist, getWorkspaceBranch, respondToAgentRequest } from '../api.js';
 import { renderThinkingMarkdown } from '../markdown.js';
 import { getTurnColor } from '../ui/agent-utils.js';
-import { buildTurnDotClass, shouldShowRunningStatusDot } from '../ui/status-dot.js';
+import { buildTurnDotClass, resolveRunningStatusIndicator, shouldShowRunningStatusDot } from '../ui/status-dot.js';
 import { getStatusElapsedLabel, isCompactionStatus, resolveStatusPanelTitle } from '../ui/status-duration.js';
 import { extractToolContextPath } from '../ui/tool-git-context.js';
 
@@ -148,6 +148,8 @@ export function AgentStatus({ status, draft, plan, thought, pendingRequest, inte
     const panelTitle = (label) => label;
     const isLastActivity = Boolean(status?.last_activity || status?.lastActivity);
     const showRunningStatusDot = shouldShowRunningStatusDot(status, { isLastActivity });
+    const runningIndicatorMode = resolveRunningStatusIndicator(status, { isLastActivity });
+    const pendingIndicatorMode = resolveRunningStatusIndicator(null, { pendingRequest: true });
     const resolveIntentColor = (kind) => kind === 'warning'
         ? '#f59e0b'
         : kind === 'error'
@@ -576,8 +578,8 @@ export function AgentStatus({ status, draft, plan, thought, pendingRequest, inte
             ${showCorePanels && status?.type === 'intent' && renderIntentPanel(status, statusIntentColor, compactionElapsedLabel)}
             ${showCorePanels && pendingRequest && html`
                 <div class="agent-status agent-status-request" aria-live="polite" style=${turnColor ? `--turn-color: ${turnColor};` : ''}>
-                    <span class=${dotClass} aria-hidden="true"></span>
-                    <div class="agent-status-spinner"></div>
+                    ${pendingIndicatorMode === 'dot' && html`<span class=${dotClass} aria-hidden="true"></span>`}
+                    ${pendingIndicatorMode === 'spinner' && html`<div class="agent-status-spinner"></div>`}
                     <span class="agent-status-text">${pendingMessage}</span>
                 </div>
             `}
@@ -609,7 +611,9 @@ export function AgentStatus({ status, draft, plan, thought, pendingRequest, inte
             ${showCorePanels && status && status?.type !== 'intent' && html`
                 <div class=${`agent-status${isLastActivity ? ' agent-status-last-activity' : ''}${status?.type === 'error' ? ' agent-status-error' : ''}${toolRepoLabel ? ' agent-status-multiline' : ''}`} aria-live="polite" style=${turnColor ? `--turn-color: ${turnColor};` : ''}>
                     ${turnColor && showRunningStatusDot && html`<span class=${dotClass} aria-hidden="true"></span>`}
-                    ${status?.type === 'error' ? html`<span class="agent-status-error-icon" aria-hidden="true">⚠</span>` : (!isLastActivity && html`<div class="agent-status-spinner"></div>`)}
+                    ${status?.type === 'error'
+                        ? html`<span class="agent-status-error-icon" aria-hidden="true">⚠</span>`
+                        : (runningIndicatorMode === 'spinner' && html`<div class="agent-status-spinner"></div>`)}
                     <div class="agent-status-copy">
                         <span class="agent-status-text">${content}</span>
                         ${toolRepoLabel && html`
