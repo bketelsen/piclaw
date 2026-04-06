@@ -4,14 +4,17 @@ title: Harden Azure / Foundry model routing and stability
 status: next
 priority: high
 created: 2026-03-10
-updated: 2026-03-28
+updated: 2026-04-06
 target_release: next
+estimate: M
+risk: medium
 tags:
   - work-item
   - kanban
   - azure
   - llm
   - harness
+  - foundry
 owner: pi
 ---
 
@@ -19,24 +22,203 @@ owner: pi
 
 ## Summary
 
-Use the Azure harness to close the remaining Azure-model issues:
+Use the Azure harness evidence to ship a **narrow first production port** for
+Azure / Foundry model stability instead of leaving the remaining work as one
+large blended bucket.
 
-- `gpt-5-4-pro` is Responses-only and must not route through chat completions.
-- `gpt-5-mini` is unstable on repeated tool/history exchanges.
-- Foundry needs compat handling for request shape, message ordering, and rate-limit behavior.
+The first shipped tranche should focus on three concrete outcomes:
 
-## Blockers
+1. `gpt-5-4-pro` is treated as **Responses-only** and never routed through chat completions.
+2. `gpt-5-mini` gets explicit **tool-flow guardrails** based on the harness findings instead of being left as an unstable default path.
+3. Foundry compat fixes proven in the harness for `mistral-large-3` are ported into the live provider path in a minimal, targeted way.
 
-- Blocked on time availability / competing priorities before the next implementation pass.
+## Problem Statement
+
+The harness work already reduced the uncertainty substantially, but the ticket
+still mixes three different kinds of follow-up:
+
+- pure routing correctness (`gpt-5-4-pro`)
+- model-specific stability policy (`gpt-5-mini`)
+- provider compatibility handling (Foundry / `mistral-large-3`)
+
+That is enough to be actionable, but it is still too broad unless the first
+production slice is explicitly chosen.
+
+## Harness findings to carry forward
+
+From `notes/azure-openai-harness.md` and the recorded artifacts:
+
+### Stable controls
+- `gpt-5-4`
+- `gpt-5-4-pro`
+- `gpt-5-3-codex`
+- `gpt-4o-mini`
+
+### Main unstable case
+- `gpt-5-mini`
+
+### Specific conclusions
+- `gpt-5-4-pro` is stable but must stay on the **Responses** path.
+- `gpt-5-mini` instability correlates most strongly with **tool-heavy runs at reasoning=high**.
+- `gpt-5-mini` is much more stable at `minimal`, and workable-but-not-perfect at `medium`.
+- Foundry `mistral-large-3` becomes functionally compatible with the harness compat fixes, but remains sensitive to 429 pressure and benefits from larger cooldown/backoff.
+- `gpt-5-4` remains a stable control and validates the harness itself.
+
+## First production-port slice (locked)
+
+Lock the first implementation pass to:
+
+### Slice 1 — Responses-only route guarantee for `gpt-5-4-pro`
+- ensure model selection and request shaping always pick the Responses path
+- add an explicit regression test so chat-completions routing cannot regress silently
+
+### Slice 2 — Guardrail policy for `gpt-5-mini` tool flows
+- do **not** treat `gpt-5-mini` as a normal unrestricted tool-flow model
+- cap or normalize the effective reasoning level for tool-heavy runs
+- prefer the smallest policy that matches the harness evidence:
+  - avoid `reasoning=high` on tool-heavy paths
+  - keep `tool_choice=required` available if needed where the harness showed benefit
+- if the policy still leaves known instability, document and guard it explicitly rather than pretending it is solved
+
+### Slice 3 — Minimal Foundry compat port
+- port only the proven compat changes needed for the live provider path:
+  - request-shape differences
+  - tool/result ordering expectations
+  - rate-limit-aware retry/backoff handling where appropriate
+- do **not** broaden this first slice into a full compat-matrix refactor yet
+
+## Out of scope for the first slice
+
+- a full declarative compat-matrix/config refactor across all Azure providers
+- generic policy engines above every provider
+- broad N-provider config cleanup unless required directly by the first port
+- solving all quota/throughput behavior for Foundry beyond the minimal live guardrails needed for correctness and repeatability
+- broad Azure feature work unrelated to the harness findings
+
+## Desired Behavior
+
+- `gpt-5-4-pro` never uses the wrong transport.
+- `gpt-5-mini` no longer defaults into its most failure-prone tool-flow configuration.
+- Foundry models that passed in the harness can use equivalent compat behavior in the live provider path.
+- The harness can be rerun against the same targets and still justify the live policy choices.
+- Any intentionally deferred broader refactor is called out explicitly rather than implicitly left inside this ticket.
 
 ## Acceptance Criteria
 
-- `gpt-5-4-pro` always routes through the correct Responses path.
-- `gpt-5-mini` repeated tool/history runs are understood and either stabilized or explicitly guarded/documented.
-- Foundry compat fixes proven in the harness are ported into the real provider path where appropriate.
-- Harness results are repeatable and documented, with all fixes identified before porting over to our core code.
+- [ ] `gpt-5-4-pro` always routes through the correct Responses path.
+- [ ] A focused regression test exists for Responses-only routing.
+- [ ] `gpt-5-mini` repeated tool/history runs are either stabilized enough for the shipped policy or explicitly guarded/documented.
+- [ ] The shipped `gpt-5-mini` policy reflects the harness evidence rather than a generic guess.
+- [ ] Foundry compat fixes proven in the harness are ported into the real provider path where appropriate.
+- [ ] At least one production-like provider configuration is validated after the port.
+- [ ] Harness results are repeatable and documented, with the chosen live guardrails linked in `## Updates`.
+- [ ] Deferred broader compat/config work is captured explicitly if not shipped in this first slice.
+
+## Implementation Paths
+
+### Path A — targeted production port of proven guardrails (recommended)
+1. Port the minimal proven Foundry compat knobs into the live provider path.
+2. Add an explicit Responses-only route guarantee for `gpt-5-4-pro`.
+3. Add a narrow `gpt-5-mini` policy for tool-heavy runs based on the harness matrix.
+4. Add focused tests for routing, payload shape, guardrails, and failure handling.
+
+**Pros:**
+- smallest path from harness evidence to shipped reliability
+- keeps the first tranche measurable
+- avoids over-refactoring before the policy is proven useful in the live path
+
+**Cons:**
+- still introduces model-specific logic that must be documented clearly
+- may leave some technical debt for later compat generalization
+
+### Path B — unified compatibility matrix in config
+1. Introduce formal compat schema per model/provider in the live extension.
+2. Encode request-shape differences declaratively.
+3. Drive routing, max-token fields, tool ordering, and reasoning support from compat flags.
+
+**Pros:**
+- scalable long-term shape
+- cleaner for future Azure/Foundry growth
+
+**Cons:**
+- larger refactor than the immediate production need
+- risks delaying fixes that are already well understood
+
+### Path C — provider-agnostic policy layer above transport
+1. Add a preflight policy resolver that adjusts stream options by model/case.
+2. Keep provider transport thinner and centralize fallback/retry behavior above it.
+
+**Pros:**
+- reusable abstraction if many providers need policy overlays
+
+**Cons:**
+- can obscure transport-specific nuances that are central to the current Azure / Foundry findings
+
+## Recommended Path
+
+Execute **Path A** now.
+
+Shape the code so it can grow toward **Path B** later, but do not hold the first
+production port hostage to the larger refactor.
+
+## Likely implementation surfaces
+
+- `runtime/extensions/integrations/azure-openai.ts`
+  - live provider path to harden
+- `runtime/extensions/experimental/azure-openai.harness.ts`
+  - harness-only comparison source for proven compat behavior
+- `runtime/scripts/azure-openai-harness.ts`
+  - repeatability / rerun surface for validation
+- `runtime/src/extensions/azure-openai-api.ts`
+  - shared request-shaping transport utilities
+- `runtime/test/extensions/azure-openai-streaming.test.ts`
+- `runtime/test/extensions/azure-openai-tool-call-limit.test.ts`
+
+## Risks and Mitigations
+
+| Risk | Impact | Mitigation |
+|---|---|---|
+| `gpt-5-mini` still has residual instability even after the first guardrails | medium | document the shipped policy limits explicitly and keep the policy narrow and evidence-based |
+| Foundry quota pressure hides functional correctness | medium | separate functional compat from throughput/quota concerns in tests and notes |
+| The first slice grows into a full compat refactor | medium | keep the DoD tied to the three locked slices only |
+| Model-specific rules become hard to reason about | medium | record the harness evidence directly in ticket updates and tests |
+
+## Test Plan
+
+- Re-run harness matrices for the targeted Azure / Foundry models with documented settings:
+  - `gpt-5-4-pro` control
+  - `gpt-5-mini` tool/history stress
+  - `mistral-large-3` Foundry compat pass
+- Add or extend provider tests for:
+  - Responses-only routing
+  - payload-shape differences
+  - retry/guardrail behavior
+  - failure handling
+- Validate at least one production-like provider configuration after porting the proven harness fixes.
+- Record exact commands/artifacts in `## Updates` when the work lands.
+
+## Definition of Done
+
+- [ ] All acceptance criteria satisfied and verified
+- [ ] Harness evidence recorded in `## Updates`
+- [ ] Live provider path updated and tested where applicable
+- [ ] Deferred compat follow-ups captured as tickets if not shipped
+- [ ] Quality score ≥ 9 recorded in final update
+- [ ] Ticket front matter updated (`status`, `updated`, `completed`)
+- [ ] Ticket moved to `50-done/`
 
 ## Updates
+
+### 2026-04-06
+- Refinement pass completed to lock the first production-port slice instead of leaving the Azure / Foundry work as one blended next-up item.
+- Locked the first shipped tranche to three deliverables:
+  - Responses-only route guarantee for `gpt-5-4-pro`
+  - explicit guardrail policy for `gpt-5-mini` tool-heavy flows
+  - minimal Foundry compat port for the proven `mistral-large-3` harness fixes
+- Carried forward the strongest harness conclusions directly into the ticket so the implementation path is now evidence-led rather than exploratory.
+- Kept the broader compat-matrix/config refactor explicitly out of the first slice.
+- Quality: ★★★★☆ 8/10 (problem: 2, scope: 2, test: 2, deps: 1, risk: 1)
+- Gap: the remaining open execution choice is the exact `gpt-5-mini` shipped policy (for example medium-cap only vs stronger restriction on some tool paths).
 
 ### 2026-03-28
 - Lane retained: `10-next` via web next-card decision.
@@ -65,11 +247,11 @@ Use the Azure harness to close the remaining Azure-model issues:
 
 ### 2026-03-11 (late)
 - v1.2.0 released without Azure routing changes (non-harness work shipped).
-- Harness artifacts remain untracked: `extensions/experimental/azure-openai.harness.ts`, `scripts/azure-openai-harness.ts`.
+- Harness artifacts remain untracked: `runtime/extensions/experimental/azure-openai.harness.ts`, `runtime/scripts/azure-openai-harness.ts`.
 - Matrix test results in `/workspace/tmp/aoai-matrix-20260310/`.
 - ~50% complete. Remaining: port proven guardrails into real provider code.
 - Identified need: refactor extension to support N providers from config instead of hardcoded primary/secondary blocks. Current `azure-openai-2` East US provider was added as a copy-paste block — should become data-driven (array of `{ resource, region, modelIds, api }`) so adding a third region or swapping models is config-only.
-- This aligns with **Path B** (unified compat matrix) and should be done as part of the port.
+- This aligns with **Path B** (unified compat matrix) and should be done as part of a later broader refactor unless the first slice forces it sooner.
 
 ### 2026-03-11
 - Added explicit implementation-path analysis for production porting.
@@ -89,59 +271,13 @@ Use the Azure harness to close the remaining Azure-model issues:
 ### 2026-03-10
 - Promoted from next to doing.
 - Renamed to a clearer slug filename.
-- Harness created at `piclaw/scripts/azure-openai-harness.ts`.
-- Harness provider copy created at `piclaw/extensions/experimental/azure-openai.harness.ts`.
+- Harness created at `runtime/scripts/azure-openai-harness.ts`.
+- Harness provider copy created at `runtime/extensions/experimental/azure-openai.harness.ts`.
 - Notes captured in `notes/azure-openai-harness.md`.
 - Current findings:
   - Stable controls: `gpt-5-4`, `gpt-5-4-pro`, `gpt-5-3-codex`, `gpt-4o-mini`
   - Unstable: `gpt-5-mini`
   - Foundry `mistral-large-3` can pass with compat + retry/cooldown in the harness.
-
-## Implementation Paths
-
-### Path A — Targeted provider guardrails + compat port (recommended)
-1. Port proven Foundry compat knobs from harness copy into live provider path.
-2. Add explicit routing guarantees for Responses-only models (`gpt-5-4-pro`).
-3. Add model-specific guardrail for `gpt-5-mini` tool-heavy flows (reasoning cap/fallback retry strategy).
-4. Add tests for routing, payload shape, and failure handling.
-
-Pros: direct path to production stability.
-Cons: requires careful model-specific policy documentation.
-
-### Path B — Unified compatibility matrix in config
-1. Introduce formal `compat` schema per model/provider in live extension.
-2. Encode request-shape differences declaratively (max token field, tool ordering, reasoning support).
-3. Keep stream path generic and drive behavior by compat flags.
-
-Pros: scalable for future providers/models.
-Cons: larger refactor than immediate needs.
-
-### Path C — Policy layer above provider
-1. Add preflight policy resolver that adjusts stream options by model/case.
-2. Keep provider mostly unchanged; centralize fallback/retry behavior.
-
-Pros: reusable policy mechanism.
-Cons: can hide model-specific transport nuances.
-
-## Recommended Path
-
-Execute **Path A** now, while shaping compat objects so the code can evolve toward **Path B**.
-
-## Test Plan
-
-- Re-run harness matrices for the targeted Azure / Foundry models with documented settings.
-- Add or extend provider tests for routing, payload shape, retry/guardrail behavior, and failure handling.
-- Validate at least one production-like provider configuration after porting proven harness fixes.
-
-## Definition of Done
-
-- [ ] All acceptance criteria satisfied and verified
-- [ ] Harness evidence recorded in `## Updates`
-- [ ] Live provider path updated and tested where applicable
-- [ ] Deferred compat follow-ups captured as tickets if not shipped
-- [ ] Quality score ≥ 9 recorded in final update
-- [ ] Ticket front matter updated (`status`, `updated`, `completed`)
-- [ ] Ticket moved to `50-done/`
 
 ## Notes
 
@@ -159,7 +295,9 @@ Payload captures for failing runs:
 ## Links
 
 - `notes/azure-openai-harness.md`
-- `notes/azure-openai-harness/azure-openai-harness.ts`
-- `piclaw/scripts/azure-openai-harness.ts`
-- `piclaw/extensions/experimental/azure-openai.harness.ts`
-- `piclaw/extensions/integrations/azure-openai.ts`
+- `runtime/scripts/azure-openai-harness.ts`
+- `runtime/extensions/experimental/azure-openai.harness.ts`
+- `runtime/extensions/integrations/azure-openai.ts`
+- `runtime/src/extensions/azure-openai-api.ts`
+- `runtime/test/extensions/azure-openai-streaming.test.ts`
+- `runtime/test/extensions/azure-openai-tool-call-limit.test.ts`

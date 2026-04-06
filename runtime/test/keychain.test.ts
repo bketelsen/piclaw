@@ -146,6 +146,57 @@ test("supports provider overrides and reports disabled keychain when no key mate
   });
 });
 
+test("auto-injects env-style keychain entries for shell use", async () => {
+  await withKeychainContext(async ({ keychain }) => {
+    await keychain.setKeychainEntry({
+      name: "STRIPE_KEY",
+      type: "token",
+      secret: "stripe-secret",
+    });
+    await keychain.setKeychainEntry({
+      name: "ssh/prod",
+      type: "secret",
+      secret: "PRIVATE_KEY_DATA",
+    });
+
+    expect(keychain.isInjectableKeychainEnvName("STRIPE_KEY")).toBe(true);
+    expect(keychain.isInjectableKeychainEnvName("ssh/prod")).toBe(false);
+    expect(keychain.listInjectableKeychainEnvNames()).toEqual(["STRIPE_KEY"]);
+    await expect(keychain.loadAutoInjectedKeychainEnv()).resolves.toEqual({ STRIPE_KEY: "stripe-secret" });
+
+    const env = await keychain.buildInjectedShellEnv({ includeProcessEnv: false });
+    expect(env).toEqual({ STRIPE_KEY: "stripe-secret" });
+  });
+});
+
+test("builds injected POSIX and PowerShell exec commands and redacts secret values", async () => {
+  await withKeychainContext(async ({ keychain }) => {
+    await keychain.setKeychainEntry({
+      name: "STRIPE_KEY",
+      type: "token",
+      secret: "stripe-secret",
+    });
+
+    const shellSecrets = await import("../src/secure/shell-secrets.js");
+    const wrapped = await shellSecrets.buildInjectedPosixCommand("echo", ["$STRIPE_KEY", "keychain:STRIPE_KEY"]);
+    expect(wrapped.command).toBe("sh");
+    expect(wrapped.commandArgs).toHaveLength(2);
+    expect(wrapped.commandArgs[0]).toBe("-lc");
+    expect(wrapped.commandArgs[1]).toContain("STRIPE_KEY='stripe-secret'");
+    expect(wrapped.commandArgs[1]).toContain("exec 'echo' '$STRIPE_KEY' 'stripe-secret'");
+
+    const wrappedPowerShell = await shellSecrets.buildInjectedPowerShellCommand("Write-Output", ["$env:STRIPE_KEY", "keychain:STRIPE_KEY"]);
+    expect(wrappedPowerShell.command).toBe("powershell");
+    expect(wrappedPowerShell.commandArgs).toHaveLength(3);
+    expect(wrappedPowerShell.commandArgs[0]).toBe("-NoProfile");
+    expect(wrappedPowerShell.commandArgs[1]).toBe("-Command");
+    expect(wrappedPowerShell.commandArgs[2]).toContain("$env:STRIPE_KEY = 'stripe-secret'");
+    expect(wrappedPowerShell.commandArgs[2]).toContain("& 'Write-Output' '$env:STRIPE_KEY' 'stripe-secret'");
+
+    await expect(shellSecrets.redactKeychainSecretsInText("value=stripe-secret")).resolves.toBe("value=[REDACTED:STRIPE_KEY]");
+  });
+});
+
 test("resolves keychain env references and inline placeholders", async () => {
   await withKeychainContext(async ({ keychain }) => {
     await keychain.setKeychainEntry({

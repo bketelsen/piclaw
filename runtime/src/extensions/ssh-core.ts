@@ -14,7 +14,8 @@ import {
   type WriteOperations,
 } from "@mariozechner/pi-coding-agent";
 
-import { getKeychainEntry } from "../secure/keychain.js";
+import { buildInjectedShellEnv, getKeychainEntry, resolveKeychainPlaceholders } from "../secure/keychain.js";
+import { createKeychainOutputRedactor, createStreamingTextRedactor, type StreamingTextRedactor } from "../secure/shell-secrets.js";
 import type { SshConfig } from "../types.js";
 
 interface SshBootstrapConnection {
@@ -53,6 +54,8 @@ interface RunningCommand {
   abortHandler?: () => void;
   stdoutChunks: Buffer[];
   stderrChunks: Buffer[];
+  stdoutRedactor: StreamingTextRedactor;
+  stderrRedactor: StreamingTextRedactor;
   resolve: (value: { exitCode: number | null }) => void;
   reject: (error: Error) => void;
 }
@@ -68,6 +71,14 @@ function shellQuote(value: string): string {
 
 function escapeRegex(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+export function buildScopedBashCommand(command: string, env?: NodeJS.ProcessEnv): string {
+  const envEntries = Object.entries(env ?? {}).filter(([, value]) => value !== undefined);
+  const envPrefix = envEntries.length > 0
+    ? `env ${envEntries.map(([key, value]) => `${key}=${shellQuote(String(value))}`).join(" ")} `
+    : "";
+  return `${envPrefix}bash --noprofile --norc -lc ${shellQuote(command)}`;
 }
 
 function parseDelimitedShellOutput(
@@ -276,7 +287,7 @@ class PersistentRemoteShell {
     this.child = null;
   }
 
-  exec(command: string, cwd: string, options: { onData: (data: Buffer) => void; signal?: AbortSignal; timeout?: number }): Promise<{ exitCode: number | null }> {
+  exec(command: string, cwd: string, options: { onData: (data: Buffer) => void; signal?: AbortSignal; timeout?: number; env?: NodeJS.ProcessEnv }): Promise<{ exitCode: number | null }> {
     return this.execOne(command, cwd, options);
   }
 
@@ -308,6 +319,7 @@ class PersistentRemoteShell {
     this.child = child;
     this.child.stdin.write(
       "stty -echo 2>/dev/null || true; unset PROMPT_COMMAND 2>/dev/null || true; PS1=''; PS2=''; PROMPT=''; RPROMPT=''; " +
+        "unset HISTFILE 2>/dev/null || true; export HISTFILE=/dev/null; set +o history 2>/dev/null || true; " +
         "export PAGER=cat; export GIT_PAGER=cat; export GIT_TERMINAL_PROMPT=0; " +
         "if [ -n \"${ZSH_VERSION-}\" ]; then precmd_functions=(); preexec_functions=(); chpwd_functions=(); unset zle_bracketed_paste 2>/dev/null || true; fi; " +
         "if [ -n \"${BASH_VERSION-}\" ]; then bind 'set enable-bracketed-paste off' 2>/dev/null || true; fi\n",
@@ -319,7 +331,6 @@ class PersistentRemoteShell {
     const running = this.running;
     if (!running) return;
     running.stdoutChunks.push(chunk);
-    this.streamIncremental();
     this.tryCompleteRunning();
   }
 
@@ -372,7 +383,8 @@ class PersistentRemoteShell {
     if (safeLen > this.streamedBytes) {
       const newData = outputSoFar.slice(this.streamedBytes, safeLen);
       if (newData.length > 0) {
-        running.onData(Buffer.from(newData, "utf-8"));
+        const redacted = running.stdoutRedactor.push(newData);
+        if (redacted) running.onData(Buffer.from(redacted, "utf-8"));
         this.streamedBytes = safeLen;
       }
     }
@@ -388,11 +400,18 @@ class PersistentRemoteShell {
 
     if (this.streamedBytes < parsed.output.length) {
       const remaining = parsed.output.slice(this.streamedBytes);
-      running.onData(Buffer.from(remaining, "utf-8"));
+      const redacted = running.stdoutRedactor.push(remaining);
+      if (redacted) running.onData(Buffer.from(redacted, "utf-8"));
     }
 
-    const stderr = Buffer.concat(running.stderrChunks);
-    if (stderr.length > 0) running.onData(stderr);
+    const stdoutTail = running.stdoutRedactor.flush();
+    if (stdoutTail) running.onData(Buffer.from(stdoutTail, "utf-8"));
+
+    const stderrText = Buffer.concat(running.stderrChunks).toString("utf-8");
+    if (stderrText.length > 0) {
+      const redactedStderr = `${running.stderrRedactor.push(stderrText)}${running.stderrRedactor.flush()}`;
+      if (redactedStderr) running.onData(Buffer.from(redactedStderr, "utf-8"));
+    }
 
     const exitCode = parsed.exitCode;
     const timedOut = running.timedOut;
@@ -429,7 +448,7 @@ class PersistentRemoteShell {
   private async execOne(
     command: string,
     cwd: string,
-    options: { onData: (data: Buffer) => void; signal?: AbortSignal; timeout?: number },
+    options: { onData: (data: Buffer) => void; signal?: AbortSignal; timeout?: number; env?: NodeJS.ProcessEnv },
   ): Promise<{ exitCode: number | null }> {
     await this.ensureStarted();
     if (!this.child || this.child.killed) throw new Error("Failed to start persistent SSH shell");
@@ -439,9 +458,10 @@ class PersistentRemoteShell {
     const endMarker = `__PICLAW_SSH_DONE_${unique}__`;
     const remoteCwd = mapLocalPathToRemote(cwd, this.connection);
     const needsEncoding = command.includes("\n");
-    const execPart = needsEncoding
+    const innerCommand = needsEncoding
       ? `eval \"$(printf '%s' '${Buffer.from(command).toString("base64")}' | base64 -d)\"`
-      : `{ ${command}; }`;
+      : command;
+    const execPart = buildScopedBashCommand(innerCommand, options.env);
 
     const wrappedCommand = [
       `printf '${startMarker}\\n'`,
@@ -453,6 +473,7 @@ class PersistentRemoteShell {
     this.seenStartMarker = false;
     this.startMarkerEnd = 0;
     const effectiveTimeout = options.timeout ?? DEFAULT_EXEC_TIMEOUT_SECONDS;
+    const outputRedactor = await createKeychainOutputRedactor();
 
     return await new Promise((resolve, reject) => {
       const running: RunningCommand = {
@@ -465,6 +486,8 @@ class PersistentRemoteShell {
         timedOut: false,
         stdoutChunks: [],
         stderrChunks: [],
+        stdoutRedactor: createStreamingTextRedactor(outputRedactor),
+        stderrRedactor: createStreamingTextRedactor(outputRedactor),
         resolve,
         reject,
       };
@@ -496,7 +519,7 @@ interface RemoteTransport {
   exec(
     command: string,
     cwd: string,
-    options: { onData: (data: Buffer) => void; signal?: AbortSignal; timeout?: number },
+    options: { onData: (data: Buffer) => void; signal?: AbortSignal; timeout?: number; env?: NodeJS.ProcessEnv },
   ): Promise<{ exitCode: number | null }>;
   readFile(remotePath: string): Promise<Buffer>;
   ensureReadable(remotePath: string): Promise<void>;
@@ -536,7 +559,7 @@ class SshTransport implements RemoteTransport {
   exec(
     command: string,
     cwd: string,
-    options: { onData: (data: Buffer) => void; signal?: AbortSignal; timeout?: number },
+    options: { onData: (data: Buffer) => void; signal?: AbortSignal; timeout?: number; env?: NodeJS.ProcessEnv },
   ): Promise<{ exitCode: number | null }> {
     return this.queue.enqueue(() => this.shell.exec(command, cwd, options));
   }
@@ -650,7 +673,14 @@ function createRemoteEditOps(conn: SshConnection, transport: RemoteTransport): E
 
 function createRemoteBashOps(transport: RemoteTransport): BashOperations {
   return {
-    exec: (command, cwd, { onData, signal, timeout }) => transport.exec(command, cwd, { onData, signal, timeout }),
+    exec: async (command, cwd, { onData, signal, timeout, env }) => {
+      const resolvedCommand = await resolveKeychainPlaceholders(command);
+      const resolvedEnv = await buildInjectedShellEnv({
+        explicitEnv: env,
+        includeProcessEnv: false,
+      });
+      return transport.exec(resolvedCommand, cwd, { onData, signal, timeout, env: resolvedEnv });
+    },
   };
 }
 

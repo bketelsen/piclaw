@@ -105,11 +105,44 @@ Example:
 }
 ```
 
-Only explicitly declared env vars are resolved. Nothing is injected automatically.
+## Automatic bash environment injection
+
+To align local and SSH bash flows, Piclaw now auto-injects keychain entries whose names are already valid shell env vars (for example `STRIPE_KEY` or `DATABASE_URL`) into every bash environment.
+
+This applies to:
+
+- local `bash`
+- local Windows `powershell`
+- `/bash` and `/shell`
+- SSH-backed `bash` sessions via the `ssh` tool
+- exec-style wrappers for supported Proxmox/Portainer flows
+
+Example:
+
+```bash
+PICLAW_KEYCHAIN_KEY="your-master-key" \
+  piclaw keychain set STRIPE_KEY \
+    --type token \
+    --secret "sk_live_xxx"
+
+# Later, in bash or SSH-backed bash:
+curl -H "Authorization: Bearer $STRIPE_KEY" https://api.stripe.com
+
+# In PowerShell:
+$env:STRIPE_KEY
+```
+
+Notes:
+
+- Only entry names that already match shell env syntax are auto-injected: `^[A-Za-z_][A-Za-z0-9_]*$`
+- Entries like `ssh/prod` are not auto-exported
+- Explicit env maps using `keychain:...` still work for arbitrary entry names
+- For `vm.agent.exec` and `container.exec`, use `shell_family=posix` for Linux/Unix targets and `shell_family=powershell` for Windows targets
+- Tool output is redacted against known keychain secret values for normal tool execution paths (bash, read, request results, SSH exec output, guest/container exec output)
 
 ## Using keychain placeholders in bash commands
 
-The tracked bash runner also replaces `keychain:<name>` placeholders directly in command strings. This lets `/bash` and `/shell` calls reference secrets without manually exporting env vars:
+The tracked bash runner also replaces `keychain:<name>` placeholders directly in command strings. This remains available as a fallback for arbitrary key names, but env-style auto-injection is the preferred path for bash and SSH bash:
 
 ```bash
 /bash echo keychain:github/deploy
@@ -143,6 +176,17 @@ PICLAW_KEYCHAIN_KEY="your-master-key" \
 ```
 
 The runtime writes these values to temporary files with restrictive permissions and uses them for the SSH control connection.
+
+## Agent prompt hints
+
+When the keychain extension is active, the agent also gets prompt hints for:
+
+- auto-injected env-style secret names
+- likely SSH profiles from `ssh/*`
+- likely Proxmox profiles from `proxmox/*`
+- likely Portainer profiles from `portainer/*`
+
+This is intended to steer the agent toward the `ssh`, `proxmox`, and `portainer` tools instead of fetching raw credential material.
 
 ## Notes
 

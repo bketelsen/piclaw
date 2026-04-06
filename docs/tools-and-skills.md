@@ -143,7 +143,7 @@ When a live session already exists, `ssh set` and `ssh clear` apply immediately 
 - `disk` / `size` — disk identifier and target size for disk workflows such as `vm.disk.resize`
 - `download_url` / `filename` / `content` — inputs for `storage.download_url`
 - `checksum` / `checksum_algorithm` / `compression` / `verify_certificates` — optional integrity and transfer controls for `storage.download_url`
-- `command` / `command_args` / `input_data` — guest-agent exec inputs for `vm.agent.exec`
+- `command` / `command_args` / `input_data` / `shell_family` — guest-agent exec inputs for `vm.agent.exec` (`shell_family=posix` for Linux/Unix guests, `shell_family=powershell` for Windows guests)
 - `limit` — result limit for list-style workflows like `task.list`
 - `lines` — line count for `node.log`
 
@@ -239,7 +239,7 @@ The `proxmox` tool deliberately keeps both a raw `request` path and a higher-lev
 - `tail` — tail line count for `container.logs`
 - `timestamps` — include timestamps for `container.logs`
 - `timeout_sec` — stop/restart timeout seconds for container workflows including `container.upgrade`
-- `command` / `command_args` — bounded exec inputs for `container.exec`
+- `command` / `command_args` / `shell_family` — bounded exec inputs for `container.exec` (`shell_family=posix` for Linux/Unix containers, `shell_family=powershell` for Windows containers)
 - `driver` / `internal` / `attachable` / `enable_ipv6` / `labels` / `options` — network/volume creation inputs
 - `names` — container names for bulk workflows like `container.upgrade_many`
 

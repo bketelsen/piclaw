@@ -177,6 +177,10 @@ const PortainerToolSchema = Type.Object({
   timeout_sec: Type.Optional(Type.Integer({ minimum: 1, description: "Stop/restart timeout seconds for container workflows." })),
   command: Type.Optional(Type.String({ description: "Command for bounded container.exec workflows." })),
   command_args: Type.Optional(Type.Array(Type.String(), { description: "Command arguments for bounded container.exec workflows." })),
+  shell_family: Type.Optional(Type.Union([
+    Type.Literal("posix"),
+    Type.Literal("powershell"),
+  ], { description: "Shell wrapper family for exec-style workflows like container.exec." })),
   driver: Type.Optional(Type.String({ description: "Network driver for network.create." })),
   internal: Type.Optional(Type.Boolean({ description: "Whether network.create should create an internal network." })),
   attachable: Type.Optional(Type.Boolean({ description: "Whether network.create should create an attachable network." })),
@@ -240,7 +244,7 @@ const PORTAINER_WORKFLOW_CAPABILITIES: Record<string, WorkflowCapabilitySpec> = 
   "container.restart": { category: "container", summary: "Restart a container.", required_fields: ["endpoint_id"], optional_fields: ["container_id", "name", "timeout_sec"], mutating: true },
   "container.logs": { category: "container", summary: "Read bounded container logs.", required_fields: ["endpoint_id"], optional_fields: ["container_id", "name", "tail", "timestamps"] },
   "container.mounts": { category: "container", summary: "Inspect container mount attachments.", required_fields: ["endpoint_id"], optional_fields: ["container_id", "name"] },
-  "container.exec": { category: "container", summary: "Run a bounded non-interactive exec command.", required_fields: ["endpoint_id", "command"], optional_fields: ["container_id", "name", "command_args"], mutating: true, recommended_for: ["one-off diagnostics inside a container without opening a terminal"], guidance: ["Keep commands short and non-interactive; streaming attach is not supported here."] },
+  "container.exec": { category: "container", summary: "Run a bounded non-interactive exec command.", required_fields: ["endpoint_id", "command"], optional_fields: ["container_id", "name", "command_args", "shell_family"], mutating: true, recommended_for: ["one-off diagnostics inside a container without opening a terminal"], guidance: ["Keep commands short and non-interactive; streaming attach is not supported here.", "Use shell_family=powershell for Windows containers and shell_family=posix for Linux/Unix containers."] },
   "container.upgrade": { category: "container", summary: "Upgrade one standalone container in place with rollback on start failure.", required_fields: ["endpoint_id"], optional_fields: ["container_id", "name", "image", "timeout_sec", "force"], mutating: true, recommended_for: ["refreshing standalone containers"], guidance: ["Prefer stack.pull_and_update for stack-managed workloads."] },
   "container.upgrade_many": { category: "container", summary: "Upgrade multiple standalone containers using the single-container upgrade flow.", required_fields: ["endpoint_id", "names"], optional_fields: ["image", "timeout_sec", "force"], mutating: true, recommended_for: ["batch refreshing standalone containers"], guidance: ["Prefer stack.pull_and_update for stack-managed workloads."] },
   "container.delete": { category: "container", summary: "Delete a container.", required_fields: ["endpoint_id"], optional_fields: ["container_id", "name", "force"], mutating: true, destructive: true },
@@ -403,7 +407,7 @@ function buildPortainerCommonOptionalExample(workflow: string): Record<string, u
     case "container.logs":
       return { name: "gitea", tail: 200, timestamps: true };
     case "container.exec":
-      return { name: "gitea", command_args: ["ok"] };
+      return { name: "gitea", command_args: ["ok"], shell_family: "posix" };
     case "container.upgrade_many":
       return { timeout_sec: 20 };
     case "image.prune":
@@ -915,6 +919,7 @@ export const portainerTool: ExtensionFactory = (pi: ExtensionAPI) => {
           ...(typeof params.timeout_sec === "number" ? { timeout_sec: params.timeout_sec } : {}),
           ...(typeof params.command === "string" ? { command: params.command } : {}),
           ...(Array.isArray(params.command_args) ? { command_args: params.command_args } : {}),
+          ...(params.shell_family === "powershell" || params.shell_family === "posix" ? { shell_family: params.shell_family } : {}),
           ...(typeof params.driver === "string" ? { driver: params.driver } : {}),
           ...(typeof params.internal === "boolean" ? { internal: params.internal } : {}),
           ...(typeof params.attachable === "boolean" ? { attachable: params.attachable } : {}),

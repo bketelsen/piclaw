@@ -227,6 +227,10 @@ const ProxmoxToolSchema = Type.Object({
   command: Type.Optional(Type.String({ description: "Guest-agent command for vm.agent.exec." })),
   command_args: Type.Optional(Type.Array(Type.String(), { description: "Command arguments for vm.agent.exec." })),
   input_data: Type.Optional(Type.String({ description: "Optional stdin payload for vm.agent.exec." })),
+  shell_family: Type.Optional(Type.Union([
+    Type.Literal("posix"),
+    Type.Literal("powershell"),
+  ], { description: "Shell wrapper family for exec-style workflows like vm.agent.exec." })),
   limit: Type.Optional(Type.Integer({ minimum: 1, description: "Result limit for workflows like task.list." })),
   lines: Type.Optional(Type.Integer({ minimum: 1, description: "Line count for node.log." })),
 });
@@ -301,7 +305,7 @@ const PROXMOX_WORKFLOW_CAPABILITIES: Record<string, WorkflowCapabilitySpec> = {
   "vm.snapshot.delete": { category: "vm", summary: "Delete a VM snapshot.", required_fields: ["vmid", "snapshot_name"], optional_fields: ["node", "timeout_ms", "poll_ms"], mutating: true, destructive: true },
   "vm.clone": { category: "vm", summary: "Clone a VM to a new VMID.", required_fields: ["vmid", "newid"], optional_fields: ["node", "new_name", "target_node", "target_storage", "full", "description", "timeout_ms", "poll_ms"], mutating: true, recommended_for: ["creating a mutable copy before risky changes", "provisioning from an existing VM"] },
   "vm.template.create": { category: "vm", summary: "Mark a VM as a template.", required_fields: ["vmid"], optional_fields: ["node", "timeout_ms", "poll_ms"], mutating: true, recommended_for: ["golden image preparation", "template conversion before clone-based provisioning"], guidance: ["Convert to a template only when you no longer need to boot the source as a normal mutable VM."] },
-  "vm.agent.exec": { category: "guest-agent", summary: "Execute a bounded command through the QEMU guest agent.", required_fields: ["vmid", "command"], optional_fields: ["node", "command_args", "input_data", "timeout_ms", "poll_ms"], mutating: true, recommended_for: ["bounded in-guest checks without SSH", "one-off guest diagnostics"], guidance: ["Keep commands short and non-interactive; this workflow is not a streaming shell."] },
+  "vm.agent.exec": { category: "guest-agent", summary: "Execute a bounded command through the QEMU guest agent.", required_fields: ["vmid", "command"], optional_fields: ["node", "command_args", "input_data", "shell_family", "timeout_ms", "poll_ms"], mutating: true, recommended_for: ["bounded in-guest checks without SSH", "one-off guest diagnostics"], guidance: ["Keep commands short and non-interactive; this workflow is not a streaming shell.", "Use shell_family=powershell for Windows guests and shell_family=posix for Linux/Unix guests."] },
   "vm.agent.osinfo": { category: "guest-agent", summary: "Read guest OS information.", required_fields: ["vmid"], optional_fields: ["node"] },
   "vm.agent.fsinfo": { category: "guest-agent", summary: "Read guest filesystem information.", required_fields: ["vmid"], optional_fields: ["node"] },
   "vm.agent.users": { category: "guest-agent", summary: "Read logged-in guest users.", required_fields: ["vmid"], optional_fields: ["node"] },
@@ -533,7 +537,7 @@ function buildProxmoxCommonOptionalExample(workflow: string): Record<string, unk
     case "vm.migrate":
       return { online: true, timeout_ms: 120000, poll_ms: 2000 };
     case "vm.agent.exec":
-      return { command_args: ["ok"], timeout_ms: 30000, poll_ms: 1000 };
+      return { command_args: ["ok"], shell_family: "posix", timeout_ms: 30000, poll_ms: 1000 };
     case "metrics.node":
       return { timeframe: "day", metric: "cpu" };
     case "metrics.vm":
@@ -1082,6 +1086,7 @@ export const proxmoxTool: ExtensionFactory = (pi: ExtensionAPI) => {
           ...(typeof params.command === "string" ? { command: params.command } : {}),
           ...(Array.isArray(params.command_args) ? { command_args: params.command_args } : {}),
           ...(typeof params.input_data === "string" ? { input_data: params.input_data } : {}),
+          ...(params.shell_family === "powershell" || params.shell_family === "posix" ? { shell_family: params.shell_family } : {}),
           ...(typeof params.limit === "number" ? { limit: params.limit } : {}),
           ...(typeof params.lines === "number" ? { lines: params.lines } : {}),
         });

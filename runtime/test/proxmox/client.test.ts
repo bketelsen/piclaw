@@ -72,6 +72,143 @@ test("resolveProxmoxToken supports username+secret keychain entries and encoded 
   });
 });
 
+test("guest agent exec injects env-style keychain entries and redacts output", async () => {
+  await withProxmoxContext(async ({ keychain, proxmox }) => {
+    await keychain.setKeychainEntry({
+      name: "proxmox/direct",
+      type: "secret",
+      secret: "token-secret",
+      username: "root@pam!piclaw",
+    });
+    await keychain.setKeychainEntry({
+      name: "STRIPE_KEY",
+      type: "token",
+      secret: "stripe-secret",
+    });
+
+    let seenExecBody: URLSearchParams | null = null;
+    proxmox.setProxmoxCurlExecutorForTests(async (command) => {
+      const url = command[command.length - 1] || "";
+      if (url.endsWith("/nodes/pve2/qemu/117/agent/exec")) {
+        const bodyIndex = command.findIndex((entry) => entry === "--data-raw");
+        seenExecBody = new URLSearchParams(bodyIndex >= 0 ? command[bodyIndex + 1] || "" : "");
+        return { exitCode: 0, stdout: '{"data":123}\n__PICLAW_PROXMOX_STATUS__:200', stderr: "" };
+      }
+      if (url.endsWith("/nodes/pve2/qemu/117/agent/exec-status?pid=123")) {
+        return { exitCode: 0, stdout: '{"data":{"exited":true,"exitcode":0,"out-data":"c3RyaXBlLXNlY3JldA==","err-data":""}}\n__PICLAW_PROXMOX_STATUS__:200', stderr: "" };
+      }
+      throw new Error(`unexpected url ${url}`);
+    });
+
+    const client = new proxmox.ProxmoxClient({
+      base_url: "https://proxmox.example.com:8006/api2/json",
+      api_token_keychain: "proxmox/direct",
+      allow_insecure_tls: true,
+    });
+
+    await expect(client.execVmAgentCommand("pve2", 117, {
+      command: "sh",
+      command_args: ["-lc", 'printf %s "$STRIPE_KEY"'],
+      timeoutMs: 1000,
+      pollMs: 1,
+    })).resolves.toMatchObject({
+      pid: 123,
+      exitcode: 0,
+      out_data: "[REDACTED:STRIPE_KEY]",
+      err_data: "",
+      raw: {
+        exited: true,
+        exitcode: 0,
+        "out-data": "[REDACTED]",
+      },
+    });
+
+    expect(seenExecBody?.get("command")).toBe("sh");
+    expect(seenExecBody?.getAll("extra-args")).toEqual([
+      "-lc",
+      expect.stringContaining("STRIPE_KEY='stripe-secret'"),
+    ]);
+  });
+});
+
+test("guest agent exec supports PowerShell wrappers", async () => {
+  await withProxmoxContext(async ({ keychain, proxmox }) => {
+    await keychain.setKeychainEntry({
+      name: "proxmox/direct",
+      type: "secret",
+      secret: "token-secret",
+      username: "root@pam!piclaw",
+    });
+    await keychain.setKeychainEntry({
+      name: "STRIPE_KEY",
+      type: "token",
+      secret: "stripe-secret",
+    });
+
+    let seenExecBody: URLSearchParams | null = null;
+    proxmox.setProxmoxCurlExecutorForTests(async (command) => {
+      const url = command[command.length - 1] || "";
+      if (url.endsWith("/nodes/pve2/qemu/117/agent/exec")) {
+        const bodyIndex = command.findIndex((entry) => entry === "--data-raw");
+        seenExecBody = new URLSearchParams(bodyIndex >= 0 ? command[bodyIndex + 1] || "" : "");
+        return { exitCode: 0, stdout: '{"data":123}\n__PICLAW_PROXMOX_STATUS__:200', stderr: "" };
+      }
+      if (url.endsWith("/nodes/pve2/qemu/117/agent/exec-status?pid=123")) {
+        return { exitCode: 0, stdout: '{"data":{"exited":true,"exitcode":0,"out-data":"b2s=","err-data":""}}\n__PICLAW_PROXMOX_STATUS__:200', stderr: "" };
+      }
+      throw new Error(`unexpected url ${url}`);
+    });
+
+    const client = new proxmox.ProxmoxClient({
+      base_url: "https://proxmox.example.com:8006/api2/json",
+      api_token_keychain: "proxmox/direct",
+      allow_insecure_tls: true,
+    });
+
+    await client.execVmAgentCommand("pve2", 117, {
+      command: "Write-Output",
+      command_args: ["$env:STRIPE_KEY"],
+      shell_family: "powershell",
+      timeoutMs: 1000,
+      pollMs: 1,
+    });
+
+    expect(seenExecBody?.get("command")).toBe("powershell");
+    expect(seenExecBody?.getAll("extra-args")).toEqual([
+      "-NoProfile",
+      "-Command",
+      expect.stringContaining("$env:STRIPE_KEY = 'stripe-secret'"),
+    ]);
+  });
+});
+
+test("requestProxmoxApi redacts secret values in HTTP error bodies", async () => {
+  await withProxmoxContext(async ({ keychain, proxmox }) => {
+    await keychain.setKeychainEntry({
+      name: "proxmox/direct",
+      type: "secret",
+      secret: "token-secret",
+      username: "root@pam!piclaw",
+    });
+    await keychain.setKeychainEntry({
+      name: "STRIPE_KEY",
+      type: "token",
+      secret: "stripe-secret",
+    });
+
+    proxmox.setProxmoxCurlExecutorForTests(async () => ({
+      exitCode: 0,
+      stdout: '{"errors":"stripe-secret"}\n__PICLAW_PROXMOX_STATUS__:500',
+      stderr: "",
+    }));
+
+    await expect(proxmox.requestProxmoxApi(
+      { base_url: "https://proxmox.example.com:8006/api2/json", api_token_keychain: "proxmox/direct", allow_insecure_tls: true },
+      { method: "GET", path: "/cluster/status" },
+    )).rejects.toThrow("[REDACTED:STRIPE_KEY]");
+  });
+});
+
 test("discoverProxmoxInstances finds the default token-backed instance", async () => {
   await withProxmoxContext(async ({ keychain, proxmox }) => {
     await keychain.setKeychainEntry({

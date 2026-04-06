@@ -4,7 +4,14 @@
 import { Type } from "@sinclair/typebox";
 import type { ExtensionAPI, ExtensionFactory } from "@mariozechner/pi-coding-agent";
 
-import { deleteKeychainEntry, getKeychainEntry, listKeychainEntries, setKeychainEntry } from "../secure/keychain.js";
+import {
+  deleteKeychainEntry,
+  getKeychainEntry,
+  listInjectableKeychainEnvNames,
+  listKeychainEntries,
+  setKeychainEntry,
+} from "../secure/keychain.js";
+import { createKeychainOutputRedactor } from "../secure/shell-secrets.js";
 
 const KeychainToolSchema = Type.Object({
   action: Type.Union([Type.Literal("list"), Type.Literal("get"), Type.Literal("set"), Type.Literal("delete")], {
@@ -38,13 +45,77 @@ const KEYCHAIN_HINT = [
   "Use keychain for listing available key names and retrieving entry secrets/usernames.",
   "You can also store/update entries and delete obsolete ones.",
   "Only reveal secrets to the user when explicitly requested.",
+  "Tool outputs are automatically redacted for known keychain secret values except for direct keychain tool reads.",
 ].join("\n");
+
+function listPrefixedEntries(prefix: string, options: { excludeSuffixes?: string[] } = {}): string[] {
+  return listKeychainEntries()
+    .map((entry) => entry.name)
+    .filter((name) => name.startsWith(prefix))
+    .filter((name) => !(options.excludeSuffixes || []).some((suffix) => name.endsWith(suffix)))
+    .sort();
+}
+
+function buildProfileHint(title: string, entries: string[], guidance: string): string {
+  if (entries.length === 0) {
+    return [title, `No matching profiles discovered. ${guidance}`].join("\n");
+  }
+  const preview = entries.slice(0, 10).map((name) => `- ${name}`).join("\n");
+  const more = entries.length > 10 ? `\n- … ${entries.length - 10} more` : "";
+  return [title, preview + more, guidance].join("\n");
+}
+
+function buildIntegrationProfileHints(): string {
+  const sshProfiles = listPrefixedEntries("ssh/", { excludeSuffixes: [".known_hosts", ".pub"] });
+  const proxmoxProfiles = listPrefixedEntries("proxmox/");
+  const portainerProfiles = listPrefixedEntries("portainer/");
+  return [
+    "## Integration profiles",
+    buildProfileHint("### SSH keychain profiles", sshProfiles, "Use the ssh tool with private_key_keychain/known_hosts_keychain references instead of fetching key material."),
+    buildProfileHint("### Proxmox token profiles", proxmoxProfiles, "Use the proxmox tool with api_token_keychain references instead of fetching token material."),
+    buildProfileHint("### Portainer token profiles", portainerProfiles, "Use the portainer tool with api_token_keychain references instead of fetching token material."),
+  ].join("\n\n");
+}
+
+function buildInjectedBashEnvHint(): string {
+  const names = listInjectableKeychainEnvNames();
+  if (names.length === 0) {
+    return [
+      "## Bash secret env",
+      "Keychain entries whose names are valid shell env vars are auto-injected into local bash and SSH bash environments when present.",
+    ].join("\n");
+  }
+
+  const preview = names.slice(0, 20).map((name) => `- $${name}`).join("\n");
+  const more = names.length > 20 ? `\n- … ${names.length - 20} more` : "";
+  return [
+    "## Bash secret env",
+    "The following keychain entries are auto-injected into local bash and SSH bash environments:",
+    `${preview}${more}`,
+    "Use the env var names directly in bash commands; the values stay in keychain storage.",
+  ].join("\n");
+}
 
 /** Extension factory that registers keychain. */
 export const keychainTools: ExtensionFactory = (pi: ExtensionAPI) => {
   pi.on("before_agent_start", async (event) => ({
-    systemPrompt: `${event.systemPrompt}\n\n${KEYCHAIN_HINT}`,
+    systemPrompt: `${event.systemPrompt}\n\n${KEYCHAIN_HINT}\n\n${buildInjectedBashEnvHint()}\n\n${buildIntegrationProfileHints()}`,
   }));
+
+  pi.on("tool_result", async (event) => {
+    if (event.toolName === "keychain") return;
+    const redactor = await createKeychainOutputRedactor();
+    const redactValue = (value: unknown): unknown => {
+      if (typeof value === "string") return redactor.redact(value);
+      if (Array.isArray(value)) return value.map((entry) => redactValue(entry));
+      if (!value || typeof value !== "object") return value;
+      return Object.fromEntries(Object.entries(value as Record<string, unknown>).map(([key, entry]) => [key, redactValue(entry)]));
+    };
+    return {
+      content: event.content.map((block) => block.type === "text" ? { ...block, text: redactor.redact(block.text) } : block),
+      details: redactValue(event.details),
+    };
+  });
 
   pi.registerTool({
     name: "keychain",

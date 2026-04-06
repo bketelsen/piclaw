@@ -17,7 +17,8 @@
 import { spawn } from "child_process";
 import { existsSync } from "fs";
 import type { BashOperations } from "@mariozechner/pi-coding-agent";
-import { resolveKeychainEnv, resolveKeychainPlaceholders } from "../secure/keychain.js";
+import { buildInjectedShellEnv, resolveKeychainPlaceholders } from "../secure/keychain.js";
+import { createKeychainOutputRedactor, type TextRedactor } from "../secure/shell-secrets.js";
 import { killProcessTree, registerProcess, unregisterProcess } from "../utils/process-tracker.js";
 
 export interface ShellConfig {
@@ -98,9 +99,14 @@ function createTrackedShellOperations(resolveCandidates: () => ShellConfig[]): B
 
           let resolvedEnv: NodeJS.ProcessEnv;
           let resolvedCommand: string;
+          let outputRedactor: TextRedactor;
           try {
-            resolvedEnv = env ? await resolveKeychainEnv(env) : { ...process.env };
+            resolvedEnv = await buildInjectedShellEnv({
+              explicitEnv: env,
+              includeProcessEnv: true,
+            });
             resolvedCommand = await resolveKeychainPlaceholders(command);
+            outputRedactor = await createKeychainOutputRedactor();
           } catch (error) {
             reject(error as Error);
             return;
@@ -178,11 +184,16 @@ function createTrackedShellOperations(resolveCandidates: () => ShellConfig[]): B
               registerProcess(spawned.pid);
             }
 
+            let capturedOutput = "";
             if (spawned.stdout) {
-              spawned.stdout.on("data", onData);
+              spawned.stdout.on("data", (chunk) => {
+                capturedOutput += chunk.toString("utf8");
+              });
             }
             if (spawned.stderr) {
-              spawned.stderr.on("data", onData);
+              spawned.stderr.on("data", (chunk) => {
+                capturedOutput += chunk.toString("utf8");
+              });
             }
 
             let shellUnavailable = false;
@@ -200,6 +211,9 @@ function createTrackedShellOperations(resolveCandidates: () => ShellConfig[]): B
             spawned.on("close", (code) => {
               if (spawned.pid) unregisterProcess(spawned.pid);
               if (shellUnavailable) return;
+
+              const redactedOutput = outputRedactor.redact(capturedOutput);
+              if (redactedOutput) onData(Buffer.from(redactedOutput, "utf8"));
 
               if (aborted || signal?.aborted) {
                 settleError(new Error("aborted"));

@@ -89,6 +89,42 @@ test("tracked bash times out and cancels", async () => {
   expect(duration).toBeLessThan(1000);
 });
 
+test("tracked bash auto-injects env-style keychain entries", async () => {
+  const ws = getTestWorkspace();
+  const restore = setEnv({ PICLAW_KEYCHAIN_KEY: "test-key" });
+  initDatabase();
+
+  await setKeychainEntry({
+    name: "STRIPE_KEY",
+    type: "token",
+    secret: "stripe-secret",
+  });
+  await setKeychainEntry({
+    name: "ssh/prod",
+    type: "secret",
+    secret: "PRIVATE_KEY_DATA",
+  });
+
+  const ops = createTrackedBashOperations();
+  let output = "";
+
+  try {
+    const result = await ops.exec("echo \"$STRIPE_KEY|${ssh_prod-unset}\"", ws.workspace, {
+      onData: (data) => {
+        output += data.toString("utf8");
+      },
+      timeout: 5,
+    });
+
+    expect(result.exitCode).toBe(0);
+    expect(output.trim()).toBe("[REDACTED:STRIPE_KEY]|unset");
+  } finally {
+    deleteKeychainEntry("STRIPE_KEY");
+    deleteKeychainEntry("ssh/prod");
+    restore();
+  }
+});
+
 test("tracked bash resolves keychain env", async () => {
   const ws = getTestWorkspace();
   const restore = setEnv({ PICLAW_KEYCHAIN_KEY: "test-key" });
@@ -118,7 +154,7 @@ test("tracked bash resolves keychain env", async () => {
     });
 
     expect(result.exitCode).toBe(0);
-    expect(output.trim()).toContain("bash-secret|bash-user");
+    expect(output.trim()).toContain("[REDACTED:bash-env]|bash-user");
   } finally {
     deleteKeychainEntry("bash-env");
     restore();
@@ -149,7 +185,7 @@ test("tracked bash resolves keychain placeholders in commands", async () => {
     });
 
     expect(result.exitCode).toBe(0);
-    expect(output.trim()).toBe("cmd-secret cmd-user");
+    expect(output.trim()).toBe("[REDACTED:bash-cmd] cmd-user");
   } finally {
     deleteKeychainEntry("bash-cmd");
     restore();

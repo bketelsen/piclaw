@@ -30,6 +30,7 @@ const decoder = new TextDecoder();
 
 const KEYCHAIN_PREFIX = "keychain:";
 const KEYCHAIN_PLACEHOLDER = /keychain:[A-Za-z0-9._\/-]+(?::[A-Za-z0-9._-]+)?/g;
+const SHELL_ENV_NAME = /^[A-Za-z_][A-Za-z0-9_]*$/;
 const KDF_ALGO = "pbkdf2-sha256";
 const KDF_ITERATIONS = 150_000;
 const SALT_BYTES = 16;
@@ -246,6 +247,53 @@ function parseKeychainReference(value: string): { name: string; field: "secret" 
     return { name, field: "secret" };
   }
   throw new Error(`Invalid keychain reference: ${value}`);
+}
+
+export function isInjectableKeychainEnvName(name: string): boolean {
+  return SHELL_ENV_NAME.test(name);
+}
+
+function isImplicitKeychainUnavailableError(error: unknown): boolean {
+  if (!(error instanceof Error)) return false;
+  return error.message.includes("Keychain is disabled")
+    || error.message.includes("Cannot use a closed database")
+    || error.message.includes("no such table: keychain_entries");
+}
+
+export function listInjectableKeychainEnvNames(): string[] {
+  return listKeychainEntries()
+    .map((entry) => entry.name)
+    .filter((name) => isInjectableKeychainEnvName(name));
+}
+
+export async function loadAutoInjectedKeychainEnv(): Promise<Record<string, string>> {
+  const injectableNames = listInjectableKeychainEnvNames();
+  const resolved: Record<string, string> = {};
+  for (const name of injectableNames) {
+    const entry = await getKeychainEntry(name);
+    resolved[name] = entry.secret;
+  }
+  return resolved;
+}
+
+export async function buildInjectedShellEnv(options: {
+  explicitEnv?: Record<string, string | undefined>;
+  includeProcessEnv?: boolean;
+} = {}): Promise<Record<string, string>> {
+  const merged: Record<string, string> = options.includeProcessEnv ? { ...process.env } as Record<string, string> : {};
+
+  try {
+    const autoInjected = await loadAutoInjectedKeychainEnv();
+    for (const [key, value] of Object.entries(autoInjected)) {
+      if (merged[key] === undefined) merged[key] = value;
+    }
+  } catch (error) {
+    if (!isImplicitKeychainUnavailableError(error)) throw error;
+  }
+
+  if (!options.explicitEnv) return merged;
+  const resolvedExplicitEnv = await resolveKeychainEnv(options.explicitEnv);
+  return { ...merged, ...resolvedExplicitEnv };
 }
 
 /** Replace "keychain:name" values in an env record with decrypted secrets. */

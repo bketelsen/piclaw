@@ -36,12 +36,17 @@ describe("keychain-tools extension", () => {
     ws.cleanup();
   });
 
-  async function getTool() {
+  async function registerKeychainExtension() {
     const { keychainTools } = await importFresh<typeof import("../src/extensions/keychain-tools.js")>(
       "../src/extensions/keychain-tools.js",
     );
     const fake = createFakeExtensionApi();
     keychainTools(fake.api);
+    return fake;
+  }
+
+  async function getTool() {
+    const fake = await registerKeychainExtension();
     return fake.tools.get("keychain");
   }
 
@@ -90,6 +95,74 @@ describe("keychain-tools extension", () => {
 
     const missing = await tool.execute("k8", { action: "delete", name: "ssh/piclaw" });
     expect(missing.content[0].text).toContain("Keychain entry not found: ssh/piclaw");
+  });
+
+  test("before_agent_start includes env and integration profile hints", async () => {
+    const db = await importFresh<typeof import("../src/db.js")>("../src/db.js");
+    const keychain = await importFresh<typeof import("../src/secure/keychain.js")>("../src/secure/keychain.js");
+    db.initDatabase();
+    await keychain.setKeychainEntry({
+      name: "STRIPE_KEY",
+      type: "token",
+      secret: "stripe-secret",
+    });
+    await keychain.setKeychainEntry({
+      name: "proxmox/lab",
+      type: "secret",
+      secret: "token-secret",
+      username: "root@pam!lab",
+    });
+    await keychain.setKeychainEntry({
+      name: "portainer/relay",
+      type: "secret",
+      secret: "portainer-token",
+      username: "https://portainer.example.com:9443",
+    });
+
+    const fake = await registerKeychainExtension();
+    const beforeAgentStart = fake.handlers.find((entry) => entry.event === "before_agent_start")?.handler;
+    const result = await beforeAgentStart?.({ systemPrompt: "base prompt" });
+    expect(result?.systemPrompt).toContain("$STRIPE_KEY");
+    expect(result?.systemPrompt).toContain("ssh/piclaw");
+    expect(result?.systemPrompt).toContain("proxmox/lab");
+    expect(result?.systemPrompt).toContain("portainer/relay");
+  });
+
+  test("tool_result redacts non-keychain tool content and details", async () => {
+    const db = await importFresh<typeof import("../src/db.js")>("../src/db.js");
+    const keychain = await importFresh<typeof import("../src/secure/keychain.js")>("../src/secure/keychain.js");
+    db.initDatabase();
+    await keychain.setKeychainEntry({
+      name: "STRIPE_KEY",
+      type: "token",
+      secret: "stripe-secret",
+    });
+
+    const fake = await registerKeychainExtension();
+    const toolResult = fake.handlers.find((entry) => entry.event === "tool_result")?.handler;
+    const result = await toolResult?.({
+      toolName: "bash",
+      content: [{ type: "text", text: "value=stripe-secret" }],
+      details: { nested: "stripe-secret" },
+      input: {},
+      isError: false,
+      toolCallId: "tool-1",
+      type: "tool_result",
+    });
+
+    expect(result?.content?.[0]?.text).toBe("value=[REDACTED:STRIPE_KEY]");
+    expect(result?.details).toEqual({ nested: "[REDACTED:STRIPE_KEY]" });
+
+    const keychainPassthrough = await toolResult?.({
+      toolName: "keychain",
+      content: [{ type: "text", text: "stripe-secret" }],
+      details: { nested: "stripe-secret" },
+      input: {},
+      isError: false,
+      toolCallId: "tool-2",
+      type: "tool_result",
+    });
+    expect(keychainPassthrough).toBeUndefined();
   });
 
   test("set/delete actions validate required fields", async () => {

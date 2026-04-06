@@ -50,6 +50,131 @@ test("resolvePortainerAuth supports current keychain layout", async () => {
   });
 });
 
+test("container exec injects env-style keychain entries and redacts output", async () => {
+  await withPortainerContext(async ({ keychain, portainer }) => {
+    await keychain.setKeychainEntry({
+      name: "portainer/relay",
+      type: "secret",
+      username: "https://portainer.example.com:9443",
+      secret: "portainer-token",
+    });
+    await keychain.setKeychainEntry({
+      name: "STRIPE_KEY",
+      type: "token",
+      secret: "stripe-secret",
+    });
+
+    let seenExecBody: any = null;
+    portainer.setPortainerRequestExecutorForTests(async (input) => {
+      if (input.url.endsWith("/api/endpoints/2/docker/containers/abc123/exec")) {
+        seenExecBody = JSON.parse(input.body || "{}");
+        return { status: 201, statusText: "Created", bodyText: '{"Id":"exec1"}' };
+      }
+      if (input.url.endsWith("/api/endpoints/2/docker/exec/exec1/start")) {
+        return { status: 200, statusText: "OK", bodyText: "stripe-secret" };
+      }
+      if (input.url.endsWith("/api/endpoints/2/docker/exec/exec1/json")) {
+        return { status: 200, statusText: "OK", bodyText: '{"ExitCode":0,"Running":false}' };
+      }
+      throw new Error(`unexpected url ${input.url}`);
+    });
+
+    const client = new portainer.PortainerClient({
+      base_url: "https://portainer.example.com:9443",
+      api_token_keychain: "portainer/relay",
+      allow_insecure_tls: true,
+    });
+
+    await expect(client.execContainer(2, "abc123", {
+      command: "sh",
+      command_args: ["-lc", 'printf %s "$STRIPE_KEY"'],
+    })).resolves.toEqual({
+      exec_id: "exec1",
+      output: "[REDACTED:STRIPE_KEY]",
+      inspect: { ExitCode: 0, Running: false },
+    });
+
+    expect(seenExecBody?.Cmd?.[0]).toBe("sh");
+    expect(seenExecBody?.Cmd?.[1]).toBe("-lc");
+    expect(seenExecBody?.Cmd?.[2]).toContain("STRIPE_KEY='stripe-secret'");
+  });
+});
+
+test("container exec supports PowerShell wrappers", async () => {
+  await withPortainerContext(async ({ keychain, portainer }) => {
+    await keychain.setKeychainEntry({
+      name: "portainer/relay",
+      type: "secret",
+      username: "https://portainer.example.com:9443",
+      secret: "portainer-token",
+    });
+    await keychain.setKeychainEntry({
+      name: "STRIPE_KEY",
+      type: "token",
+      secret: "stripe-secret",
+    });
+
+    let seenExecBody: any = null;
+    portainer.setPortainerRequestExecutorForTests(async (input) => {
+      if (input.url.endsWith("/api/endpoints/2/docker/containers/abc123/exec")) {
+        seenExecBody = JSON.parse(input.body || "{}");
+        return { status: 201, statusText: "Created", bodyText: '{"Id":"exec1"}' };
+      }
+      if (input.url.endsWith("/api/endpoints/2/docker/exec/exec1/start")) {
+        return { status: 200, statusText: "OK", bodyText: "ok" };
+      }
+      if (input.url.endsWith("/api/endpoints/2/docker/exec/exec1/json")) {
+        return { status: 200, statusText: "OK", bodyText: '{"ExitCode":0,"Running":false}' };
+      }
+      throw new Error(`unexpected url ${input.url}`);
+    });
+
+    const client = new portainer.PortainerClient({
+      base_url: "https://portainer.example.com:9443",
+      api_token_keychain: "portainer/relay",
+      allow_insecure_tls: true,
+    });
+
+    await client.execContainer(2, "abc123", {
+      command: "Write-Output",
+      command_args: ["$env:STRIPE_KEY"],
+      shell_family: "powershell",
+    });
+
+    expect(seenExecBody?.Cmd?.[0]).toBe("powershell");
+    expect(seenExecBody?.Cmd?.[1]).toBe("-NoProfile");
+    expect(seenExecBody?.Cmd?.[2]).toBe("-Command");
+    expect(seenExecBody?.Cmd?.[3]).toContain("$env:STRIPE_KEY = 'stripe-secret'");
+  });
+});
+
+test("requestPortainerApi redacts secret values in HTTP error bodies", async () => {
+  await withPortainerContext(async ({ keychain, portainer }) => {
+    await keychain.setKeychainEntry({
+      name: "portainer/relay",
+      type: "secret",
+      username: "https://portainer.example.com:9443",
+      secret: "portainer-token",
+    });
+    await keychain.setKeychainEntry({
+      name: "STRIPE_KEY",
+      type: "token",
+      secret: "stripe-secret",
+    });
+
+    portainer.setPortainerRequestExecutorForTests(async () => ({
+      status: 500,
+      statusText: "Internal Server Error",
+      bodyText: '{"message":"stripe-secret"}',
+    }));
+
+    await expect(portainer.requestPortainerApi(
+      { base_url: "https://portainer.example.com:9443", api_token_keychain: "portainer/relay", allow_insecure_tls: true },
+      { method: "GET", path: "/api/endpoints" },
+    )).rejects.toThrow("[REDACTED:STRIPE_KEY]");
+  });
+});
+
 test("requestPortainerApi builds requests with X-API-Key auth", async () => {
   await withPortainerContext(async ({ keychain, portainer }) => {
     await keychain.setKeychainEntry({

@@ -12,6 +12,7 @@ import sshCoreExtension, {
   setSshConnectionResolverForTests,
   unregisterLiveChatSshSession,
 } from "../../extensions/integrations/ssh-core/index.ts";
+import { buildScopedBashCommand } from "../../src/extensions/ssh-core.js";
 
 type FakeState = {
   tools: Map<string, any>;
@@ -69,6 +70,13 @@ describe("ssh-core helpers", () => {
       sshTarget: "alice@example.com",
       remotePath: "/srv/app",
     });
+  });
+
+  test("buildScopedBashCommand wraps commands in a clean bash scope and env", () => {
+    expect(buildScopedBashCommand("echo hi")).toContain("bash --noprofile --norc -lc 'echo hi'");
+    expect(buildScopedBashCommand("echo $TOKEN", { TOKEN: "secret", USERNAME: "alice" })).toContain(
+      "env TOKEN='secret' USERNAME='alice' bash --noprofile --norc -lc 'echo $TOKEN'"
+    );
   });
 
   test("parseSshPort and host key mode validate inputs", () => {
