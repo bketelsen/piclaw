@@ -4,7 +4,7 @@ title: Add workspace FTS indexing status and feedback in the UI
 status: next
 priority: medium
 created: 2026-03-12
-updated: 2026-03-31
+updated: 2026-04-06
 estimate: M
 risk: medium
 tags:
@@ -229,6 +229,11 @@ This should **not** block the header-status MVP.
 - broad search UX overhaul beyond the header status + manual reindex control
 
 ## Updates
+
+### 2026-04-06
+- Board quality review: added the missing readiness score after the backend-status MVP shape and implementation order were captured.
+- Quality: ★★★★★ 9/10 (problem: 2, scope: 2, test: 2, deps: 2, risk: 1)
+- Gap: the remaining work is mostly execution; stale invalidation and the persisted status seam are the main unresolved implementation details.
 
 ### 2026-03-31
 - Refined against the actual current implementation rather than the original desired UX alone.

@@ -4,7 +4,7 @@ title: Ensure pop-out consistency and backend routing across all editors and vie
 status: doing
 priority: high
 created: 2026-04-01
-updated: 2026-04-01
+updated: 2026-04-06
 target_release: next
 estimate: L
 risk: medium
@@ -181,6 +181,11 @@ For each editor/viewer surface, the project should answer explicitly:
 - `runtime/extensions/viewers/drawio-editor/index.ts`
 
 ## Updates
+
+### 2026-04-06
+- Board quality review: added the missing readiness score for the active audit/cleanup tranche.
+- Quality: ★★★★☆ 8/10 (problem: 2, scope: 2, test: 2, deps: 1, risk: 1)
+- Gap: the broad direction is clear, but the full pane inventory plus packaged-route/asset audit still needs to be completed before dependencies count as fully mapped.
 
 ### 2026-04-02
 - Added a focused contract regression test at

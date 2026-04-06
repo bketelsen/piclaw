@@ -4,7 +4,7 @@ title: Add per-chat /extensions command and adaptive-card extension manager
 status: next
 priority: medium
 created: 2026-03-31
-updated: 2026-03-31
+updated: 2026-04-06
 target_release: next
 estimate: L
 risk: high
@@ -363,6 +363,11 @@ When a new chat is created:
 - [ ] Ticket history records the implementation evidence and moved files/surfaces.
 
 ## Updates
+
+### 2026-04-06
+- Board quality review: added the missing readiness score for the current refined shape.
+- Quality: ★★★★☆ 8/10 (problem: 2, scope: 2, test: 2, deps: 1, risk: 1)
+- Gap: the runtime dependency-inference/rebind seam is well sketched but not yet proven enough to count dependencies as fully mapped.
 
 ### 2026-03-31
 - Created from feature-refinement pass for per-chat extension selection.
