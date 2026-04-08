@@ -27,6 +27,15 @@ const routes = [];
 export function registerExtensionRoute(prefix, handler, extensionPath) {
     // Normalise: ensure prefix starts with /
     const normalised = prefix.startsWith("/") ? prefix : `/${prefix}`;
+    const existing = routes.find((route) => route.prefix === normalised && route.extensionPath === extensionPath);
+    if (existing) {
+        existing.handler = handler;
+        log.debug("Updated existing extension route registration", {
+            prefix: normalised,
+            extensionPath,
+        });
+        return;
+    }
     routes.push({ prefix: normalised, handler, extensionPath });
 }
 /**

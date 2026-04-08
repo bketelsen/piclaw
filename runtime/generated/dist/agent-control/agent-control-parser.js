@@ -12,7 +12,7 @@
  *   - channels/web/request-router.ts uses it for web-channel messages.
  */
 import { normalizeControlCommandName } from "./command-registry.js";
-import { stripTrigger } from "./parser-utils.js";
+import { stripTransportAttachmentFooter, stripTrigger } from "./parser-utils.js";
 import { COMMAND_PARSERS } from "./command-parsers.js";
 /** Parse a raw text message into an AgentControlCommand, or return null if not a command. */
 export function parseControlCommand(text, triggerPattern) {
@@ -21,11 +21,18 @@ export function parseControlCommand(text, triggerPattern) {
     const cleaned = stripTrigger(text, triggerPattern);
     if (!cleaned.startsWith("/"))
         return null;
-    const [command, ...rest] = cleaned.split(/\s+/);
-    const args = rest.join(" ").trim();
+    const commandMatch = cleaned.match(/^\S+/);
+    const command = commandMatch?.[0];
+    if (!command)
+        return null;
+    const rawArgs = cleaned.slice(command.length).replace(/^\s+/, "");
+    const normalizedArgs = rawArgs.split(/\s+/).filter(Boolean).join(" ").trim();
     const commandLower = normalizeControlCommandName(command.toLowerCase());
     const parser = COMMAND_PARSERS[commandLower];
     if (!parser)
         return null;
-    return parser(args, cleaned);
+    const parserArgs = commandLower === "/shell" || commandLower === "/bash"
+        ? stripTransportAttachmentFooter(rawArgs)
+        : normalizedArgs;
+    return parser(parserArgs, cleaned);
 }
