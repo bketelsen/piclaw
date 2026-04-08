@@ -17,7 +17,10 @@ export interface SilentSwallowMetrics {
 }
 
 export function shouldSkipPath(filePath: string): boolean {
-  return filePath.includes("/vendor/") || filePath.includes("/static/") || filePath.endsWith(".min.js");
+  return filePath.includes("/vendor/")
+    || filePath.includes("/static/")
+    || filePath.includes("/node_modules/")
+    || filePath.endsWith(".min.js");
 }
 
 export function collectFiles(roots: string[]): string[] {

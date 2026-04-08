@@ -35,6 +35,26 @@ describe("silent-swallow-metrics", () => {
     });
   });
 
+  test("ignores vendored node_modules trees", async () => {
+    await withTempDir("silent-swallow-node-modules-", async (dir) => {
+      mkdirSync(join(dir, "runtime", "extensions", "node_modules", "pkg"), { recursive: true });
+      writeFileSync(join(dir, "runtime", "extensions", "node_modules", "pkg", "sample.js"), [
+        "try { work(); } catch {}",
+        "Promise.resolve().catch(() => {});",
+      ].join("\n"));
+
+      const metrics = getSilentSwallowMetrics({
+        repoDirs: [join(dir, "runtime", "extensions")],
+        runtimeCoreDirs: [join(dir, "runtime", "extensions")],
+      });
+
+      expect(metrics.repoSilentCatchBlocks).toBe(0);
+      expect(metrics.repoSilentPromiseCatches).toBe(0);
+      expect(metrics.repoFilesWithSilentCatches).toBe(0);
+      expect(metrics.runtimeCoreSilentCatches).toBe(0);
+    });
+  });
+
   test("detects empty catch blocks and empty promise catches", async () => {
     await withTempDir("silent-swallow-detect-", async (dir) => {
       mkdirSync(join(dir, "src"), { recursive: true });
