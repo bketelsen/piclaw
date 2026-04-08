@@ -538,7 +538,7 @@ export class StandaloneEditorInstance implements PaneInstance {
         });
     }
 
-    private buildEditableEditorExtensions(): any[] {
+    private buildEditableEditorExtensions(options: { scrollPastEnd?: boolean } = {}): any[] {
         const isDark = getThemeMode(this.ownerDocument) === 'dark';
         const lang = languageForPath(this.path);
         const extensions: any[] = [
@@ -549,7 +549,7 @@ export class StandaloneEditorInstance implements PaneInstance {
             this.whitespaceCompartment.of(this.showWhitespace ? highlightWhitespace() : []),
             this.livePreviewCompartment.of([]),
             this.wrappingCompartment.of(EditorView.lineWrapping),
-            scrollPastEnd(),
+            ...(options.scrollPastEnd === false ? [] : [scrollPastEnd()]),
             indentOnInput(),
             closeBrackets(),
             autocompletion(),
@@ -609,7 +609,7 @@ export class StandaloneEditorInstance implements PaneInstance {
         this.setEditorSurfaceMode(null);
         const state = EditorState.create({
             doc: content,
-            extensions: this.buildEditableEditorExtensions(),
+            extensions: this.buildEditableEditorExtensions({ scrollPastEnd: true }),
         });
         this.view = new EditorView({ state, parent: this.cmHost });
         if (viewState) requestAnimationFrame(() => this.restoreViewState(viewState));
@@ -627,7 +627,7 @@ export class StandaloneEditorInstance implements PaneInstance {
             },
             b: {
                 doc: currentContent,
-                extensions: this.buildEditableEditorExtensions(),
+                extensions: this.buildEditableEditorExtensions({ scrollPastEnd: false }),
             },
             parent: this.diffMergeHost,
             root: this.ownerDocument,

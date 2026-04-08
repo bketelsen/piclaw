@@ -283,11 +283,13 @@
     opacity: 0.35;
 }
 
-.editor-codemirror .cm-gutters {
+.editor-codemirror .cm-gutters,
+.editor-diff-merge .cm-gutters {
     background: transparent;
     color: var(--text-secondary);
     border-right: 1px solid var(--border-color);
-    font-size: 0.8em;
+    font-size: 0.92em;
+    line-height: 1.35;
     opacity: 0.5;
 }
 
