@@ -4,16 +4,97 @@ import { BodyPortal } from './body-portal.js';
 import { getMediaText, getMediaUrl } from '../api.js';
 import { renderMarkdown, renderMermaidDiagrams } from '../markdown.js';
 import { formatFileSize, formatTimestamp } from '../utils/format.js';
+import { highlightCodeToHtml, normalizeCodeLanguageLabel } from '../utils/code-highlighting.js';
 import { getAttachmentPreviewKind, getAttachmentPreviewLabel, isMarkdownAttachmentPreview } from '../ui/attachment-preview.js';
 
-function buildMetadata(info) {
+function buildMetadata(info, languageLabel = null) {
     const size = info?.metadata?.size;
     const contentType = info?.content_type || 'application/octet-stream';
     return [
         { label: 'Type', value: contentType },
+        { label: 'Syntax', value: languageLabel },
         { label: 'Size', value: typeof size === 'number' ? formatFileSize(size) : null },
         { label: 'Added', value: info?.created_at ? formatTimestamp(info.created_at) : null },
     ].filter((entry) => entry.value);
+}
+
+function previewLanguageFromAttachment(info, filename) {
+    const normalizedType = String(info?.content_type || '').trim().toLowerCase();
+    const normalizedName = String(filename || '').trim().toLowerCase();
+    const basename = normalizedName.split('/').pop() || normalizedName;
+
+    if (normalizedName.endsWith('.yaml') || normalizedName.endsWith('.yml') || normalizedType === 'text/yaml' || normalizedType === 'application/yaml') {
+        return 'yaml';
+    }
+    if (normalizedName.endsWith('.json') || normalizedName.endsWith('.jsonl') || normalizedType === 'application/json') {
+        return 'json';
+    }
+    if (normalizedName.endsWith('.xml') || normalizedName.endsWith('.svg') || normalizedType === 'application/xml' || normalizedType === 'text/xml' || normalizedType === 'image/svg+xml') {
+        return 'xml';
+    }
+    if (normalizedName.endsWith('.html') || normalizedName.endsWith('.htm') || normalizedType === 'text/html') {
+        return 'html';
+    }
+    if (normalizedName.endsWith('.css') || normalizedType === 'text/css') {
+        return 'css';
+    }
+    if (normalizedName.endsWith('.ts') || normalizedName.endsWith('.tsx') || normalizedType === 'text/typescript') {
+        return normalizedName.endsWith('.tsx') ? 'tsx' : 'ts';
+    }
+    if (normalizedName.endsWith('.js') || normalizedName.endsWith('.jsx') || normalizedType === 'text/javascript' || normalizedType === 'application/javascript') {
+        return normalizedName.endsWith('.jsx') ? 'jsx' : 'js';
+    }
+    if (normalizedName.endsWith('.py') || normalizedType === 'text/x-python' || normalizedType === 'application/x-python-code') {
+        return 'python';
+    }
+    if (normalizedName.endsWith('.go') || normalizedType === 'text/x-go') {
+        return 'go';
+    }
+    if (normalizedName.endsWith('.rb') || normalizedType === 'text/x-ruby') {
+        return 'ruby';
+    }
+    if (normalizedName.endsWith('.rs') || normalizedType === 'text/x-rustsrc') {
+        return 'rust';
+    }
+    if (normalizedName.endsWith('.ps1') || normalizedName.endsWith('.psm1') || normalizedName.endsWith('.psd1') || normalizedType === 'text/x-powershell') {
+        return 'powershell';
+    }
+    if (basename === 'dockerfile' || normalizedName.endsWith('.dockerfile')) {
+        return 'dockerfile';
+    }
+    if (normalizedName.endsWith('.md') || normalizedName.endsWith('.markdown') || normalizedType === 'text/markdown') {
+        return 'markdown';
+    }
+    if (
+        normalizedName.endsWith('.sh')
+        || normalizedName.endsWith('.bash')
+        || normalizedName.endsWith('.zsh')
+        || basename === '.bashrc'
+        || basename === '.bash_profile'
+        || basename === '.profile'
+        || basename === '.zshrc'
+        || basename === '.zprofile'
+        || basename === '.zshenv'
+        || basename === '.env'
+        || basename.startsWith('.env.')
+        || normalizedType === 'text/x-shellscript'
+    ) {
+        return 'bash';
+    }
+    if (normalizedName.endsWith('.sql')) {
+        return 'sql';
+    }
+    if (
+        normalizedName.endsWith('.toml')
+        || normalizedName.endsWith('.ini')
+        || normalizedName.endsWith('.cfg')
+        || normalizedName.endsWith('.conf')
+        || normalizedName.endsWith('.properties')
+        || normalizedType === 'text/toml'
+    ) {
+        return 'toml';
+    }
+    return null;
 }
 
 function buildFrameUrl(mediaId, filename, previewKind) {
@@ -45,12 +126,18 @@ export function AttachmentPreviewModal({ mediaId, info, onClose }) {
     const [textContent, setTextContent] = useState('');
     const [error, setError] = useState(null);
     const markdownContainerRef = useRef(null);
-    const metadata = useMemo(() => buildMetadata(info), [info]);
+    const previewLanguage = useMemo(() => previewLanguageFromAttachment(info, filename), [info, filename]);
+    const previewLanguageLabel = useMemo(() => previewLanguage ? normalizeCodeLanguageLabel(previewLanguage) : null, [previewLanguage]);
+    const metadata = useMemo(() => buildMetadata(info, !isMarkdown ? previewLanguageLabel : null), [info, isMarkdown, previewLanguageLabel]);
     const frameUrl = useMemo(() => buildFrameUrl(mediaId, filename, previewKind), [mediaId, filename, previewKind]);
     const renderedMarkdown = useMemo(() => {
         if (!isMarkdown || !textContent) return '';
         return renderMarkdown(textContent);
     }, [isMarkdown, textContent]);
+    const highlightedText = useMemo(() => {
+        if (isMarkdown || !textContent || !previewLanguage) return '';
+        return highlightCodeToHtml(textContent, previewLanguage);
+    }, [isMarkdown, textContent, previewLanguage]);
 
     useEffect(() => {
         const handleEsc = (e) => {
@@ -146,7 +233,10 @@ export function AttachmentPreviewModal({ mediaId, info, onClose }) {
                                 dangerouslySetInnerHTML=${{ __html: renderedMarkdown }}
                             />
                         `}
-                        ${!loading && !error && previewKind === 'text' && !isMarkdown && html`
+                        ${!loading && !error && previewKind === 'text' && !isMarkdown && highlightedText && html`
+                            <pre class="attachment-preview-text attachment-preview-code"><code dangerouslySetInnerHTML=${{ __html: highlightedText }} /></pre>
+                        `}
+                        ${!loading && !error && previewKind === 'text' && !isMarkdown && !highlightedText && html`
                             <pre class="attachment-preview-text">${textContent}</pre>
                         `}
                         ${!loading && !error && previewKind === 'unsupported' && html`

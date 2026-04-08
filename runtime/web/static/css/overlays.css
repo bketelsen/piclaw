@@ -131,6 +131,17 @@
     line-height: 1.5;
 }
 
+.attachment-preview-code {
+    background: var(--bg-primary);
+    color: var(--text-primary);
+}
+
+.attachment-preview-code code {
+    display: block;
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+
 .attachment-preview-markdown {
     padding: var(--spacing-md);
 }
