@@ -11,14 +11,13 @@ export function readViewportHeight(runtime = {}) {
   const viewportHeight = Number(win?.visualViewport?.height || 0);
   const viewportOffsetTop = Number(win?.visualViewport?.offsetTop || 0);
   const viewportBottom = viewportHeight + Math.max(0, viewportOffsetTop);
+  if (Number.isFinite(viewportBottom) && viewportBottom > 0) {
+    return Math.round(viewportBottom);
+  }
+
   const innerHeight = Number(win?.innerHeight || 0);
-
-  const candidates = [viewportBottom, innerHeight]
-    .filter((value) => Number.isFinite(value) && value > 0)
-    .map((value) => Math.round(value));
-
-  if (candidates.length > 0) {
-    return Math.min(...candidates);
+  if (Number.isFinite(innerHeight) && innerHeight > 0) {
+    return Math.round(innerHeight);
   }
   return null;
 }

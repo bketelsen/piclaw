@@ -41,7 +41,7 @@ test('shouldUseStandaloneMobileViewportFix enables for mobile runtimes and skips
   })).toBe(false);
 });
 
-test('readViewportHeight uses the smallest visible mobile viewport bound', () => {
+test('readViewportHeight uses the visible viewport bottom when available', () => {
   expect(readViewportHeight({
     window: {
       visualViewport: { height: 612.4 },
@@ -61,7 +61,7 @@ test('readViewportHeight uses the smallest visible mobile viewport bound', () =>
       visualViewport: { height: 844, offsetTop: 34 },
       innerHeight: 512,
     },
-  })).toBe(512);
+  })).toBe(878);
 
   expect(readViewportHeight({
     window: {
