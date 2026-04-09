@@ -1,9 +1,9 @@
 // @ts-nocheck
 
-import { isMobileBrowserMode, isStandaloneWebAppMode } from './chat-window.js';
+import { isMobileBrowserMode } from './chat-window.js';
 
 export function shouldUseStandaloneMobileViewportFix(runtime = {}) {
-  return isStandaloneWebAppMode(runtime) && isMobileBrowserMode(runtime);
+  return isMobileBrowserMode(runtime);
 }
 
 export function readViewportHeight(runtime = {}) {
@@ -46,7 +46,7 @@ export function syncStandaloneMobileViewport(runtime = {}, options = {}) {
         win.scrollTo(0, 0);
       }
     } catch {
-      /* expected: standalone mobile shells can reject forced scroll resets. */
+      /* expected: mobile browsers can reject forced scroll resets. */
     }
 
     try {

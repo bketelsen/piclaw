@@ -6,11 +6,22 @@ import {
   syncStandaloneMobileViewport,
 } from '../../web/src/ui/mobile-viewport.js';
 
-test('shouldUseStandaloneMobileViewportFix only enables for standalone mobile runtimes', () => {
+test('shouldUseStandaloneMobileViewportFix enables for mobile runtimes and skips desktop runtimes', () => {
   expect(shouldUseStandaloneMobileViewportFix({
     navigator: {
       standalone: true,
       userAgent: 'Mozilla/5.0 (iPad; CPU OS 17_0 like Mac OS X)',
+      maxTouchPoints: 5,
+    },
+    window: {
+      matchMedia: () => ({ matches: true }),
+    },
+  })).toBe(true);
+
+  expect(shouldUseStandaloneMobileViewportFix({
+    navigator: {
+      standalone: false,
+      userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X)',
       maxTouchPoints: 5,
     },
     window: {
@@ -60,8 +71,8 @@ test('syncStandaloneMobileViewport writes app height without resetting page scro
 
   const height = syncStandaloneMobileViewport({
     navigator: {
-      standalone: true,
-      userAgent: 'Mozilla/5.0 (iPad; CPU OS 17_0 like Mac OS X)',
+      standalone: false,
+      userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X)',
       maxTouchPoints: 5,
     },
     window: {
@@ -103,8 +114,8 @@ test('syncStandaloneMobileViewport can reset page scroll when explicitly request
 
   const height = syncStandaloneMobileViewport({
     navigator: {
-      standalone: true,
-      userAgent: 'Mozilla/5.0 (iPad; CPU OS 17_0 like Mac OS X)',
+      standalone: false,
+      userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X)',
       maxTouchPoints: 5,
     },
     window: {

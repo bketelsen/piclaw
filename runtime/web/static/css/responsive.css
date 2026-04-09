@@ -34,7 +34,7 @@
     }
 
     .compose-box {
-        padding: var(--spacing-sm) var(--spacing-md) 2px;
+        padding: var(--spacing-sm) var(--spacing-md) calc(2px + env(safe-area-inset-bottom, 0px));
     }
 
     .compose-box textarea {
