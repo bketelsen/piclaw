@@ -9,6 +9,7 @@ import { afterEach, expect, test } from "bun:test";
 import { getTestWorkspace, setEnv, waitFor } from "../../../helpers.js";
 
 let restoreEnv: (() => void) | null = null;
+const TEST_PREVIEW_BASE_URL = "https://93.184.216.34";
 
 afterEach(() => {
   restoreEnv?.();
@@ -34,7 +35,7 @@ test("scheduleLinkPreviews stores metadata, caches image, and broadcasts update"
     chat_jid: "web:default",
     sender: "user",
     sender_name: "User",
-    content: "See https://example.com/schedule-docs.",
+    content: `See ${TEST_PREVIEW_BASE_URL}/schedule-docs.`, 
     timestamp: new Date().toISOString(),
     is_from_me: false,
     is_bot_message: false,
@@ -48,7 +49,7 @@ test("scheduleLinkPreviews stores metadata, caches image, and broadcasts update"
       <head>
         <meta property="og:title" content="Example Docs" />
         <meta property="og:description" content="Docs for testing." />
-        <meta property="og:image" content="https://example.com/schedule-image.png" />
+        <meta property="og:image" content="${TEST_PREVIEW_BASE_URL}/schedule-image.png" />
         <meta property="og:site_name" content="Example" />
       </head>
       <body>Test</body>
@@ -58,13 +59,13 @@ test("scheduleLinkPreviews stores metadata, caches image, and broadcasts update"
   const originalFetch = globalThis.fetch;
   globalThis.fetch = async (input: RequestInfo | URL) => {
     const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
-    if (url === "https://example.com/schedule-docs") {
+    if (url === `${TEST_PREVIEW_BASE_URL}/schedule-docs`) {
       return new Response(html, {
         status: 200,
         headers: { "content-type": "text/html; charset=utf-8" },
       });
     }
-    if (url === "https://example.com/schedule-image.png") {
+    if (url === `${TEST_PREVIEW_BASE_URL}/schedule-image.png`) {
       return new Response(new Uint8Array([137, 80, 78, 71]), {
         status: 200,
         headers: { "content-type": "image/png", "content-length": "4" },
@@ -110,7 +111,7 @@ test("fetchLinkPreview reuses cached image before expiry", async () => {
   const html = `
     <html><head>
       <meta property="og:title" content="Example Docs" />
-      <meta property="og:image" content="https://example.com/reuse-image.png" />
+      <meta property="og:image" content="${TEST_PREVIEW_BASE_URL}/reuse-image.png" />
     </head><body>Test</body></html>
   `;
 
@@ -118,13 +119,13 @@ test("fetchLinkPreview reuses cached image before expiry", async () => {
   let imageFetches = 0;
   globalThis.fetch = async (input: RequestInfo | URL) => {
     const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
-    if (url === "https://example.com/reuse-docs") {
+    if (url === `${TEST_PREVIEW_BASE_URL}/reuse-docs`) {
       return new Response(html, {
         status: 200,
         headers: { "content-type": "text/html; charset=utf-8" },
       });
     }
-    if (url === "https://example.com/reuse-image.png") {
+    if (url === `${TEST_PREVIEW_BASE_URL}/reuse-image.png`) {
       imageFetches += 1;
       return new Response(new Uint8Array([137, 80, 78, 71]), {
         status: 200,
@@ -135,8 +136,8 @@ test("fetchLinkPreview reuses cached image before expiry", async () => {
   };
 
   try {
-    const first = await fetchLinkPreview("https://example.com/reuse-docs");
-    const second = await fetchLinkPreview("https://example.com/reuse-docs");
+    const first = await fetchLinkPreview(`${TEST_PREVIEW_BASE_URL}/reuse-docs`);
+    const second = await fetchLinkPreview(`${TEST_PREVIEW_BASE_URL}/reuse-docs`);
     expect(first?.image).toMatch(/^\/media\/\d+$/);
     expect(second?.image).toBe(first?.image);
     expect(imageFetches).toBe(1);
@@ -157,7 +158,7 @@ test("expired cached preview images are purged and refreshed", async () => {
   const html = `
     <html><head>
       <meta property="og:title" content="Example Docs" />
-      <meta property="og:image" content="https://example.com/expire-image.png" />
+      <meta property="og:image" content="${TEST_PREVIEW_BASE_URL}/expire-image.png" />
     </head><body>Test</body></html>
   `;
 
@@ -165,13 +166,13 @@ test("expired cached preview images are purged and refreshed", async () => {
   let imageFetches = 0;
   globalThis.fetch = async (input: RequestInfo | URL) => {
     const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
-    if (url === "https://example.com/expire-docs") {
+    if (url === `${TEST_PREVIEW_BASE_URL}/expire-docs`) {
       return new Response(html, {
         status: 200,
         headers: { "content-type": "text/html; charset=utf-8" },
       });
     }
-    if (url === "https://example.com/expire-image.png") {
+    if (url === `${TEST_PREVIEW_BASE_URL}/expire-image.png`) {
       imageFetches += 1;
       return new Response(new Uint8Array([137, 80, 78, 71, imageFetches]), {
         status: 200,
@@ -182,13 +183,13 @@ test("expired cached preview images are purged and refreshed", async () => {
   };
 
   try {
-    const first = await fetchLinkPreview("https://example.com/expire-docs");
+    const first = await fetchLinkPreview(`${TEST_PREVIEW_BASE_URL}/expire-docs`);
     const firstMediaId = Number(String(first?.image).replace("/media/", ""));
     db.getDb()
       .prepare("UPDATE link_preview_image_cache SET expires_at = ? WHERE source_url = ?")
-      .run("2000-01-01T00:00:00.000Z", "https://example.com/expire-image.png");
+      .run("2000-01-01T00:00:00.000Z", `${TEST_PREVIEW_BASE_URL}/expire-image.png`);
 
-    const second = await fetchLinkPreview("https://example.com/expire-docs");
+    const second = await fetchLinkPreview(`${TEST_PREVIEW_BASE_URL}/expire-docs`);
     const secondMediaId = Number(String(second?.image).replace("/media/", ""));
 
     expect(second?.image).toMatch(/^\/media\/\d+$/);
