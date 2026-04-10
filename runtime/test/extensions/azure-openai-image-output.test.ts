@@ -1,6 +1,7 @@
 import { expect, test } from "bun:test";
 
 import {
+  buildAzureImageGeneratePayload,
   formatGeneratedImageMessage,
   formatImageGenerationError,
   type SavedImageFile,
@@ -41,4 +42,25 @@ test("formatImageGenerationError preserves structured HTTP details", () => {
   const raw = '400 {"error":{"code":"bad_request","message":"Model rejected prompt"}}';
   expect(formatImageGenerationError("Azure OpenAI", new Error(raw)))
     .toBe("❌ Image generation failed (Azure OpenAI): [bad_request] Model rejected prompt");
+});
+
+test("buildAzureImageGeneratePayload enables transparent PNG output when requested", () => {
+  const payload = buildAzureImageGeneratePayload("gpt-image-1-5", {
+    prompt: "icon of a glass flask",
+    size: "1400x900",
+    quality: "medium",
+    style: "natural",
+    transparent: true,
+  }, true);
+
+  expect(payload).toEqual({
+    model: "gpt-image-1-5",
+    prompt: "icon of a glass flask",
+    size: "1536x1024",
+    quality: "medium",
+    n: 1,
+    style: "natural",
+    background: "transparent",
+    output_format: "png",
+  });
 });

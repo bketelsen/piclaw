@@ -626,6 +626,7 @@ type ImageArgs = {
   count?: number;
   quality?: "low" | "medium" | "high";
   style?: "natural" | "vivid";
+  transparent?: boolean;
 };
 
 function readCache(): TokenCache {
@@ -745,6 +746,10 @@ function parseArgs(input: string): ImageArgs | null {
       i += 1;
       continue;
     }
+    if (token === "--transparent") {
+      args.transparent = true;
+      continue;
+    }
     promptParts.push(token);
   }
 
@@ -795,10 +800,7 @@ function snapToSupportedSize(size: string | undefined): string {
   return best;
 }
 
-async function generateImage(baseUrl: string, model: string, args: ImageArgs, includeStyle: boolean) {
-  await getAccessToken();
-  const client = createAzureClient(baseUrl, {});
-
+export function buildAzureImageGeneratePayload(model: string, args: ImageArgs, includeStyle: boolean): Record<string, any> {
   const payload: Record<string, any> = {
     model,
     prompt: args.prompt,
@@ -807,6 +809,18 @@ async function generateImage(baseUrl: string, model: string, args: ImageArgs, in
     n: args.count || 1,
   };
   if (includeStyle && args.style) payload.style = args.style;
+  if (args.transparent) {
+    payload.background = "transparent";
+    payload.output_format = "png";
+  }
+  return payload;
+}
+
+async function generateImage(baseUrl: string, model: string, args: ImageArgs, includeStyle: boolean) {
+  await getAccessToken();
+  const client = createAzureClient(baseUrl, {});
+
+  const payload = buildAzureImageGeneratePayload(model, args, includeStyle);
 
   const response = await client.images.generate(payload);
   const images = response.data || [];
@@ -1505,7 +1519,7 @@ export default function (pi: ExtensionAPI) {
         pi.sendMessage({
           customType: "image",
           content:
-            "Usage: /image <prompt> [--size 1024x1024] [--count 1] [--quality low|medium|high] [--style natural|vivid]",
+            "Usage: /image <prompt> [--size 1024x1024] [--count 1] [--quality low|medium|high] [--style natural|vivid] [--transparent]",
           display: true,
         });
         return;
@@ -1513,7 +1527,8 @@ export default function (pi: ExtensionAPI) {
 
       const snappedSize = snapToSupportedSize(parsed.size);
       const sizeNote = parsed.size && parsed.size !== snappedSize ? ` (${parsed.size} → ${snappedSize})` : "";
-      const statusText = `⏳ Generating image… (${AOAI_IMAGE_MODEL_ID}, ${snappedSize}${sizeNote})`;
+      const transparencyNote = parsed.transparent ? ", transparent background" : "";
+      const statusText = `⏳ Generating image… (${AOAI_IMAGE_MODEL_ID}, ${snappedSize}${sizeNote}${transparencyNote})`;
       const placeholderId = await postPlaceholder(statusText);
       if (!placeholderId) {
         pi.sendMessage({ customType: "image", content: statusText, display: true });
@@ -1541,6 +1556,15 @@ export default function (pi: ExtensionAPI) {
           customType: "flux",
           content:
             "Usage: /flux <prompt> [--size 1024x1024] [--count 1] [--quality low|medium|high]",
+          display: true,
+        });
+        return;
+      }
+
+      if (parsed.transparent) {
+        pi.sendMessage({
+          customType: "flux",
+          content: "❌ Image generation failed (Azure Foundry): Transparent background is not supported for /flux yet.",
           display: true,
         });
         return;
