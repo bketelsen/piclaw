@@ -91,16 +91,14 @@ function loadTreeWidgetHtml(): string | null {
   }
 }
 
-function buildTreeWidgetBlock(chatJid?: string): Record<string, unknown> | null {
+function buildTreeWidgetBlock(treeData: { leafId: string | null; nodes: unknown[] }): Record<string, unknown> | null {
   const html = loadTreeWidgetHtml();
   if (!html) return null;
-  // Inject chat_jid as a query param for the fetch
-  const injected = chatJid
-    ? html.replace(
-        "var chatJid = '';",
-        `var chatJid = ${JSON.stringify(chatJid)};`,
-      )
-    : html;
+  // Inject tree data directly instead of fetching — srcdoc iframes can't fetch same-origin
+  const injected = html.replace(
+    "var treeData = null;",
+    `var treeData = ${JSON.stringify(treeData)};`,
+  );
   return {
     type: "generated_widget",
     widget_id: `session-tree-${Date.now()}`,
@@ -171,7 +169,20 @@ export async function handleTree(session: AgentSession, command: TreeCommand): P
     }
 
     lines.push("Use /tree <entryId> to navigate. Add --summarize or --summary \"...\" for branch summaries.");
-    const widgetBlock = buildTreeWidgetBlock();
+
+    // Serialize full tree for the interactive widget
+    const serialise = (node: SessionTreeNode): unknown => ({
+      id: node.entry.id,
+      parentId: node.entry.parentId ?? null,
+      type: node.entry.type,
+      timestamp: node.entry.timestamp,
+      label: node.label ?? null,
+      active: node.entry.id === leafId,
+      preview: describeEntry(node.entry),
+      children: (node.children || []).map(serialise),
+    });
+    const treeData = { leafId, nodes: roots.map(serialise) };
+    const widgetBlock = buildTreeWidgetBlock(treeData);
     const contentBlocks = widgetBlock ? [widgetBlock] : undefined;
     return { status: "success", message: lines.join("\n"), contentBlocks };
   }

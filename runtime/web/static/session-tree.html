@@ -162,6 +162,12 @@ function esc(s) {
 
 function loadTree() {
   var root = document.getElementById('tree-root');
+  if (treeData && treeData.nodes && treeData.nodes.length > 0) {
+    root.innerHTML = '';
+    renderNodes(root, treeData.nodes, []);
+    return;
+  }
+  // Fallback: try fetching from the API (works when opened as a standalone page)
   root.innerHTML = '<div class="loading">Loading session tree\u2026</div>';
   var chatJid = '';
   try {
