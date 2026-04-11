@@ -6,11 +6,12 @@
 <title>Session Tree</title>
 <style>
 :root {
+  /* Dark theme (default) */
   --bg: #1a1a2e;
   --bg-hover: #252540;
   --bg-active: rgba(29,155,240,0.12);
   --text: #e0e0e0;
-  --text-dim: #888;
+  --text-dim: #999;
   --accent: #1d9bf0;
   --border: #333;
   --branch: #555;
@@ -20,12 +21,15 @@
   --font: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
 }
-@media (prefers-color-scheme: light) {
-  :root {
-    --bg: #fafafa; --bg-hover: #f0f0f0; --bg-active: rgba(29,155,240,0.08);
-    --text: #1a1a1a; --text-dim: #777; --border: #ddd; --branch: #bbb;
-    --label-bg: rgba(29,155,240,0.1);
-  }
+html.light {
+  --bg: #ffffff;
+  --bg-hover: #f5f5f5;
+  --bg-active: rgba(29,155,240,0.08);
+  --text: #1a1a1a;
+  --text-dim: #666;
+  --border: #e0e0e0;
+  --branch: #bbb;
+  --label-bg: rgba(29,155,240,0.1);
 }
 * { box-sizing: border-box; margin: 0; padding: 0; }
 body {
@@ -61,7 +65,7 @@ body {
   background: var(--branch); flex-shrink: 0; margin: 0 7px 0 3px;
 }
 .node-dot.active { background: var(--accent); box-shadow: 0 0 0 3px rgba(29,155,240,0.25); }
-.node-dot.branch { background: var(--accent); opacity: 0.5; }
+.node-dot.branch-point { background: var(--accent); opacity: 0.5; }
 .node-body { min-width: 0; flex: 1; display: flex; align-items: baseline; gap: 6px; }
 .node-preview {
   font-size: 12px; line-height: 1.3;
@@ -117,20 +121,33 @@ body {
   </div>
 </div>
 <script>
+// Detect theme from parent document or OS preference
+(function() {
+  var isDark = true;
+  try {
+    var parentRoot = window.parent && window.parent.document && window.parent.document.documentElement;
+    if (parentRoot) {
+      var theme = (parentRoot.getAttribute('data-theme') || '').toLowerCase();
+      if (theme === 'light') isDark = false;
+      else if (theme === 'dark') isDark = true;
+      else if (parentRoot.classList.contains('light')) isDark = false;
+      else if (parentRoot.classList.contains('dark')) isDark = true;
+      else isDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+    } else {
+      isDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+    }
+  } catch(e) {
+    isDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+  }
+  if (!isDark) document.documentElement.classList.add('light');
+})();
+
 var treeData = null;
 var selectedId = null;
 
-function esc(s) {
-  var d = document.createElement('div');
-  d.textContent = s || '';
-  return d.innerHTML;
-}
-
 // Build nested tree from flat parentId-linked array (iterative)
 function buildTreeFromFlat(flatNodes) {
-  var byId = {};
-  var roots = [];
-  var i, n, node;
+  var byId = {}, roots = [], i, n, node;
   for (i = 0; i < flatNodes.length; i++) {
     n = flatNodes[i];
     byId[n.id] = { id: n.id, parentId: n.parentId, type: n.type, timestamp: n.timestamp,
@@ -160,9 +177,7 @@ function buildTreeFromFlat(flatNodes) {
 
 // Flatten nested tree into render order (iterative DFS)
 function flattenTree(roots) {
-  var result = [];
-  var stack = [];
-  var i;
+  var result = [], stack = [], i;
   for (i = roots.length - 1; i >= 0; i--) stack.push(roots[i]);
   while (stack.length > 0) {
     var node = stack.pop();
@@ -207,7 +222,7 @@ function renderTree() {
     // Dot
     var dot = document.createElement('div');
     var hasBranch = (node.children || []).length > 1;
-    dot.className = 'node-dot' + (node.active ? ' active' : hasBranch ? ' branch' : '');
+    dot.className = 'node-dot' + (node.active ? ' active' : hasBranch ? ' branch-point' : '');
     row.appendChild(dot);
 
     // Body
