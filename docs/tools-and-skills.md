@@ -62,6 +62,7 @@ You can extend that baseline with `.piclaw/config.json`:
 - `open_drawio_editor` — open a `.drawio` diagram file in the self-hosted draw.io editor (creates the file if it doesn't exist)
 - `send_adaptive_card` — post an agent-owned Adaptive Card message in the web UI timeline
 - `send_dashboard_widget` — post the built-in host-backed live dashboard widget to the web UI timeline
+- `open_workspace_file` — ask the active web UI to open a workspace file in an editor tab or popout window; popout requests are blocked on small viewports so the agent does not force unusable layouts
 - `exec_batch` — run multiple shell commands and return concise summaries for each
 - `powershell` — Windows-only replacement for the default shell tool; active instead of `bash` on Windows hosts
 - `bun_run` — run a workspace Bun script directly; kept in the default active baseline on Windows so there is still a first-party script runner alongside PowerShell

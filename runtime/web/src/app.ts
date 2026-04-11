@@ -52,6 +52,9 @@ import {
     useMainAppPaneComposition,
 } from './ui/app-main-pane-composition.js';
 import {
+    handleOpenWorkspaceFileBrowserRequest,
+} from './ui/app-extension-ui-browser-actions.js';
+import {
     OOBE_PROVIDER_MISSING_DISMISSED_KEY,
     OOBE_PROVIDER_READY_COMPLETED_KEY,
     resolveOobePanelState,
@@ -505,6 +508,22 @@ function MainApp({ locationParams, navigate }) {
             panePopoutPath,
         );
     }, [pane.paneRuntime.activePaneTab, panePopoutLabel, panePopoutMode, panePopoutPath]);
+
+    useEffect(() => {
+        if (typeof window === 'undefined') return undefined;
+        const handleExtensionUiRequest = (event: Event) => {
+            void handleOpenWorkspaceFileBrowserRequest(event as CustomEvent, {
+                currentChatJid,
+                openEditor: pane.editorState.openEditor,
+                popOutPane: branchPaneActions.handlePopOutPane,
+                showIntentToast: interaction.composeReferenceActions.showIntentToast,
+            });
+        };
+        window.addEventListener('piclaw-extension-ui:request', handleExtensionUiRequest as EventListener);
+        return () => {
+            window.removeEventListener('piclaw-extension-ui:request', handleExtensionUiRequest as EventListener);
+        };
+    }, [branchPaneActions.handlePopOutPane, currentChatJid, interaction.composeReferenceActions.showIntentToast, pane.editorState.openEditor]);
 
     return renderResolvedAppShell(composeRenderedMainAppOptions({
         routeState: {

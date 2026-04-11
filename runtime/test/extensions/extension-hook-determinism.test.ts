@@ -22,6 +22,7 @@ describe("built-in extension hook determinism", () => {
       "workspaceMemoryBootstrap",
       "sendAdaptiveCard",
       "sendDashboardWidget",
+      "openWorkspaceFile",
       "exitProcess",
       "autoresearchSupervisor",
     ]);

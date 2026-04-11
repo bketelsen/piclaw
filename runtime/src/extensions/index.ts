@@ -17,6 +17,7 @@
  *   - dreamMaintenance: /dream memory-consolidation slash command.
  *   - sendAdaptiveCard: send_adaptive_card for agent-owned Adaptive Card posting.
  *   - sendDashboardWidget: send_dashboard_widget for posting the built-in live dashboard widget.
+ *   - openWorkspaceFile: open_workspace_file for browser-side editor tab/popout launches.
  *
  * Note: bun_run, keychain, ssh, proxmox, and portainer now live as packaged
  * runtime extensions under runtime/extensions/integrations/* and are loaded via
@@ -40,6 +41,7 @@ import { uiThemeExtension } from "./ui-theme.js";
 import { smartCompaction } from "./smart-compaction.js";
 import { sendAdaptiveCard } from "./send-adaptive-card.js";
 import { sendDashboardWidget } from "./send-dashboard-widget.js";
+import { openWorkspaceFile } from "./open-workspace-file.js";
 import { exitProcess } from "./exit-process.js";
 import { autoresearchSupervisor } from "./autoresearch-supervisor.js";
 
@@ -59,6 +61,7 @@ export const builtinExtensionFactories: ExtensionFactory[] = [
   smartCompaction,
   sendAdaptiveCard,
   sendDashboardWidget,
+  openWorkspaceFile,
   exitProcess,
   autoresearchSupervisor,
 ];

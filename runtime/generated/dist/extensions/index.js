@@ -12,6 +12,7 @@ import { uiThemeExtension } from "./ui-theme.js";
 import { smartCompaction } from "./smart-compaction.js";
 import { sendAdaptiveCard } from "./send-adaptive-card.js";
 import { sendDashboardWidget } from "./send-dashboard-widget.js";
+import { openWorkspaceFile } from "./open-workspace-file.js";
 import { exitProcess } from "./exit-process.js";
 import { autoresearchSupervisor } from "./autoresearch-supervisor.js";
 /** Array of all built-in extension factories to register on session creation. */
@@ -30,6 +31,7 @@ export const builtinExtensionFactories = [
     smartCompaction,
     sendAdaptiveCard,
     sendDashboardWidget,
+    openWorkspaceFile,
     exitProcess,
     autoresearchSupervisor,
 ];

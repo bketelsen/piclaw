@@ -292,7 +292,7 @@ export interface PopOutPaneActionOptions {
   baseHref?: string;
 }
 
-export async function popOutPaneAction(options: PopOutPaneActionOptions): Promise<void> {
+export async function popOutPaneAction(options: PopOutPaneActionOptions): Promise<boolean> {
   const {
     isWebAppMode,
     path,
@@ -317,7 +317,7 @@ export async function popOutPaneAction(options: PopOutPaneActionOptions): Promis
 
   const detachTransfer = buildPaneDetachTransfer?.(path) || null;
 
-  await popOutPane({
+  return await popOutPane({
     hasWindow,
     isWebAppMode,
     path,
@@ -694,7 +694,7 @@ export function useBranchPaneLifecycle(options: UseBranchPaneLifecycleOptions) {
   }, [chatOnlyMode, currentChatJid, forkChatBranch, navigate, refreshActiveChatAgents, refreshCurrentChatBranches, showIntentToast]);
 
   const handlePopOutPane = useCallback(async (path: string, label?: string | null) => {
-    await popOutPaneAction({
+    return await popOutPaneAction({
       isWebAppMode,
       path,
       label,

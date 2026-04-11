@@ -180,8 +180,14 @@ export class UiBridge {
       setTitle: (title) => {
         this.channel.broadcastEvent("extension_ui_title", { chat_jid: chatJid, title });
       },
-      custom: async <T>(_factory: unknown, _options?: unknown) => {
-        const result = await requestUiResponse("custom", { title: "Custom UI" });
+      custom: async <T>(_factory: unknown, options?: unknown) => {
+        // The web channel does not render arbitrary TUI components. Instead we
+        // forward a typed browser-action payload via the generic custom request
+        // path and let the authenticated browser decide how to handle it.
+        const timeoutMs = typeof (options as { timeout?: unknown } | undefined)?.timeout === "number"
+          ? Number((options as { timeout?: number }).timeout)
+          : 120000;
+        const result = await requestUiResponse("custom", { title: "Custom UI", options: options || null }, timeoutMs);
         return result as T;
       },
       pasteToEditor: (text) => {

@@ -65,6 +65,20 @@ describe("ui-context", () => {
     pending.resolve("edited");
     expect(await editorPromise).toBe("edited");
 
+    const customPromise = (ui.custom as any)(() => null, {
+      timeout: 25,
+      action: "open_workspace_file",
+      path: "notes/index.md",
+      target: "popout",
+    });
+    requestId = Array.from(uiBridge.pendingUiRequests.keys())[0] as string;
+    pending = uiBridge.pendingUiRequests.get(requestId)!;
+    clearTimeout(pending.timeoutId);
+    expect(events.filter((event) => event.type === "extension_ui_request").at(-1)?.payload?.options?.action).toBe("open_workspace_file");
+    uiBridge.pendingUiRequests.delete(requestId);
+    pending.resolve({ ok: true, opened: true });
+    expect(await customPromise).toEqual({ ok: true, opened: true });
+
     ui.setStatus("key", "Working");
     ui.setWorkingMessage("Busy");
     ui.setTitle("Title");

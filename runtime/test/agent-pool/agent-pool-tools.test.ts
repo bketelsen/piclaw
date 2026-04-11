@@ -69,6 +69,7 @@ describe("builtin extension factories", () => {
     expect(fake.tools.has("send_adaptive_card")).toBe(true);
     expect(fake.tools.has("send_dashboard_widget")).toBe(true);
     expect(fake.tools.has("exit_process")).toBe(true);
+    expect(fake.tools.has("open_workspace_file")).toBe(true);
     expect(fake.tools.has("start_autoresearch")).toBe(true);
     expect(fake.tools.has("stop_autoresearch")).toBe(true);
     expect(fake.tools.has("autoresearch_status")).toBe(true);
@@ -81,6 +82,6 @@ describe("builtin extension factories", () => {
   });
 
   test("factories array has expected length", () => {
-    expect(builtinExtensionFactories.length).toBe(16);
+    expect(builtinExtensionFactories.length).toBe(17);
   });
 });
