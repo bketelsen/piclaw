@@ -85,7 +85,7 @@ All interactive widgets get `window.piclawWidget` automatically:
 
 ```js
 piclawWidget.submit({ text: "message" })   // Send text back into the chat
-piclawWidget.close({ reason: "done" })      // Dismiss the widget pane
+piclawWidget.close({ reason: "done" })      // Programmatic dismiss (pane already has its own close button)
 piclawWidget.requestRefresh({ key: "val" }) // Ask host for data
 
 // Listen for host responses:
