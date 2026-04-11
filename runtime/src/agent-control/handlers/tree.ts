@@ -10,6 +10,9 @@
 import type { AgentSession } from "@mariozechner/pi-coding-agent";
 import type { AgentControlCommand, AgentControlResult } from "../agent-control-types.js";
 import { extractTextFromContent, formatCompactNumber, truncateText } from "../agent-control-helpers.js";
+import { readFileSync } from "fs";
+import { resolve, dirname } from "path";
+import { fileURLToPath } from "url";
 
 type TreeCommand = Extract<AgentControlCommand, { type: "tree" }>;
 type LabelCommand = Extract<AgentControlCommand, { type: "label" }>;
@@ -69,6 +72,50 @@ function describeEntry(entry: SessionTreeEntry): string {
   return "[entry]";
 }
 
+function loadTreeWidgetHtml(): string | null {
+  try {
+    const thisDir = dirname(fileURLToPath(import.meta.url));
+    // Walk up from agent-control/handlers/ to runtime root, then into web/static/
+    const candidates = [
+      resolve(thisDir, "..", "..", "..", "web", "static", "session-tree.html"),
+      resolve(thisDir, "..", "..", "..", "..", "web", "static", "session-tree.html"),
+    ];
+    for (const p of candidates) {
+      try {
+        return readFileSync(p, "utf8");
+      } catch { /* try next */ }
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+function buildTreeWidgetBlock(chatJid?: string): Record<string, unknown> | null {
+  const html = loadTreeWidgetHtml();
+  if (!html) return null;
+  // Inject chat_jid as a query param for the fetch
+  const injected = chatJid
+    ? html.replace(
+        "var chatJid = '';",
+        `var chatJid = ${JSON.stringify(chatJid)};`,
+      )
+    : html;
+  return {
+    type: "generated_widget",
+    widget_id: `session-tree-${Date.now()}`,
+    title: "Session Tree",
+    subtitle: "Interactive session tree viewer",
+    description: "Navigate branches, view labels, and jump to any entry.",
+    open_label: "Open tree viewer",
+    capabilities: ["interactive"],
+    artifact: {
+      kind: "html",
+      html: injected,
+    },
+  };
+}
+
 /** Handle /tree: render the session message tree in text format. */
 export async function handleTree(session: AgentSession, command: TreeCommand): Promise<AgentControlResult> {
   const sessionManager = session.sessionManager;
@@ -124,9 +171,9 @@ export async function handleTree(session: AgentSession, command: TreeCommand): P
     }
 
     lines.push("Use /tree <entryId> to navigate. Add --summarize or --summary \"...\" for branch summaries.");
-    lines.push("");
-    lines.push("Interactive tree viewer: /static/session-tree.html");
-    return { status: "success", message: lines.join("\n") };
+    const widgetBlock = buildTreeWidgetBlock();
+    const contentBlocks = widgetBlock ? [widgetBlock] : undefined;
+    return { status: "success", message: lines.join("\n"), contentBlocks };
   }
 
   const options = {

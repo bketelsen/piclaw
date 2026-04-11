@@ -166,7 +166,7 @@ function loadTree() {
   var chatJid = '';
   try {
     var params = new URLSearchParams(window.location.search);
-    chatJid = params.get('chat_jid') || '';
+    chatJid = chatJid || params.get('chat_jid') || '';
   } catch(e) {}
   var url = '/agent/session-tree' + (chatJid ? '?chat_jid=' + encodeURIComponent(chatJid) : '');
   fetch(url, { credentials: 'same-origin' })
