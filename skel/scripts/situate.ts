@@ -138,7 +138,9 @@ if (UPDATE_NOTES) {
       `--db ${shellEscape(DB_PATH)}`,
     ].join(" ");
     execSync(cmd, { timeout: 30000 });
-  } catch {}
+  } catch {
+    // Daily note refresh is best-effort here.
+  }
 }
 
 // ── 1. Read daily notes and classify ────────────────────────────────────
@@ -362,7 +364,9 @@ let skills = "(could not list)";
 try {
   skills = execSync("ls /workspace/.pi/skills/", { timeout: 3000 })
     .toString().trim().split("\n").map(s => `\`${s}\``).join(", ");
-} catch {}
+} catch {
+  // Skill listing is optional for this situational report.
+}
 
 const agentMemory = refreshAgentMemoryFromDailyNotes({ recentDays: Math.max(DAYS, 7) });
 const agentMemoryCurrentStateRaw = readFile(agentMemory.currentStatePath);

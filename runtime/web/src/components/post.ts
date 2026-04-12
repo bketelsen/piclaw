@@ -245,9 +245,13 @@ function GeneratedWidgetLaunch({ block, post, onOpenWidget }) {
         if (postTime && (Date.now() - postTime) > 10_000) return;
         // Prevent re-open across page refreshes using sessionStorage
         const key = `widget_opened_${block.widget_id || post?.id || ''}`;
-        try { if (sessionStorage.getItem(key)) return; } catch {}
+        try { if (sessionStorage.getItem(key)) return; } catch {
+            // sessionStorage may be unavailable in some embedded/browser modes.
+        }
         autoOpened.current = true;
-        try { sessionStorage.setItem(key, '1'); } catch {}
+        try { sessionStorage.setItem(key, '1'); } catch {
+            // sessionStorage may be unavailable in some embedded/browser modes.
+        }
         onOpenWidget?.(payload);
     }, [block?.auto_open, payload, supportsRender]);
 
