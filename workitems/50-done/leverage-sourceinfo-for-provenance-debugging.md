@@ -1,11 +1,10 @@
 ---
 id: leverage-sourceinfo-for-provenance-debugging
 title: "Use sourceInfo provenance in debug/introspection views"
-status: next
+status: done
 priority: low
 created: 2026-03-23
 updated: 2026-04-12
-tags:
   - work-item
   - kanban
   - upstream
@@ -33,6 +32,17 @@ PiClaw could surface this provenance in:
 - Consider a "provenance" debug panel or tooltip in the web UI
 
 ## Updates
+
+### 2026-04-12
+- Implemented in commit `91f38c42`.
+- `/commands` now shows `sourceInfo.scope` and `sourceInfo.source` for
+  extension commands, prompt templates, and skills.
+- New `GET /agent/debug` endpoint returns full provenance snapshot:
+  extensions (with command/tool/handler counts), tools, commands,
+  prompt templates, and skills — each with complete SourceInfo.
+- `AgentPool.getSessionForIntrospection()` added for read-only access.
+- Wired through dispatch-agent → web-channel-contracts → http-surface-service
+  → prototype → endpoint-facade.
 
 ### 2026-03-23
 - Identified as opportunity from pi 0.62.0 changelog
