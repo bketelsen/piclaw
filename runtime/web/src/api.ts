@@ -108,6 +108,10 @@ export async function getThread(threadId, chatJid = null) {
     return request(`/thread/${threadId}${query}`);
 }
 
+export async function getSystemMetrics() {
+    return request('/agent/system-metrics');
+}
+
 /**
  * Create a new post
  */
@@ -854,6 +858,7 @@ export class SSEClient {
         bindJsonEvent('agent_thought_delta');
         bindJsonEvent('model_changed');
         bindJsonEvent('ui_theme');
+        bindJsonEvent('ui_meters');
 
         [
             'extension_ui_request',

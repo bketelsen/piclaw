@@ -11,6 +11,7 @@ import { handleAgentDebugRequest } from "../agent/agent-debug.js";
 import {
   handleSessionTreeRequest,
 } from "../agent/session-tree.js";
+import { handleSystemMetricsRequest } from "../agent/system-metrics.js";
 import {
   handleHashtagRequest,
   handleSearchRequest,
@@ -166,6 +167,12 @@ export class WebChannelEndpointFacadeService {
       defaultChatJid,
       json: (payload, status = 200) => this.options.json(payload, status),
       getSessionTreeForChat: (chatJid) => this.options.getSessionTreeForChat?.(chatJid) ?? null,
+    });
+  }
+
+  handleSystemMetrics(): Response {
+    return handleSystemMetricsRequest({
+      json: (payload, status = 200) => this.options.json(payload, status),
     });
   }
 

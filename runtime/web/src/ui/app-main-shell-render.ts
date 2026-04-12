@@ -9,6 +9,7 @@ import { Timeline } from '../components/timeline.js';
 import { WorkspaceExplorer } from '../components/workspace-explorer.js';
 import { TabStrip } from '../components/tab-strip.js';
 import { MarkdownPreview } from '../components/markdown-preview.js';
+import { SystemMetersHud } from '../components/system-meters-hud.js';
 
 export interface MainShellRenderOptions {
   [key: string]: any;
@@ -260,6 +261,7 @@ export function renderMainShell(options: MainShellRenderOptions): any {
 
   return html`
     <div class=${buildMainShellClassName({ workspaceOpen, editorOpen, chatOnlyMode, zenMode })} ref=${appShellRef}>
+      <${SystemMetersHud} />
       ${isRenameBranchFormOpen && html`
         <div class="rename-branch-overlay" onPointerDown=${(event: any) => {
           if (event.target === event.currentTarget) {

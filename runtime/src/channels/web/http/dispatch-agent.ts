@@ -82,6 +82,11 @@ const EXACT_AGENT_ROUTES: ExactAgentRoute[] = [
   },
   {
     method: "GET",
+    path: "/agent/system-metrics",
+    handle: (channel, req) => channel.handleSystemMetrics(req),
+  },
+  {
+    method: "GET",
     path: "/agent/models",
     handle: (channel, req) => channel.handleAgentModels(req),
   },

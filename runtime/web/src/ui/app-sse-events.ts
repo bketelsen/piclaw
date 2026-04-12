@@ -1,4 +1,5 @@
 import { applyThemeFromEvent } from './theme.js';
+import { applyMetersFromEvent } from './meters.js';
 import {
   applyDraftDeltaBuffer,
   applyThoughtDeltaBuffer,
@@ -182,6 +183,11 @@ export function handleAppSseEvent(
 
   if (eventType === 'ui_theme') {
     applyThemeFromEvent(data);
+    return;
+  }
+
+  if (eventType === 'ui_meters') {
+    applyMetersFromEvent(data);
     return;
   }
 

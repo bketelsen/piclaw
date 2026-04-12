@@ -161,6 +161,7 @@ export interface WebChannelLike
   handleAgentQueueSteer(req: Request): Promise<Response>;
   handleAgentModels(req: Request): Promise<Response>;
   handleSessionTree(req: Request): Response;
+  handleSystemMetrics(req: Request): Response;
   handleAgentActiveChats(req: Request): Promise<Response>;
   handleAgentBranches(req: Request): Promise<Response>;
   handleAgentBranchFork(req: Request): Promise<Response>;

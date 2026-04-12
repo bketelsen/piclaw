@@ -514,6 +514,11 @@ export function installWebChannelPrototype(
       writable: true,
       value: withHttpSurface((service, req: Request) => service.handleSessionTree(req)),
     },
+    handleSystemMetrics: {
+      configurable: true,
+      writable: true,
+      value: withHttpSurface((service, req: Request) => service.handleSystemMetrics(req)),
+    },
     handleAgentActiveChats: {
       configurable: true,
       writable: true,

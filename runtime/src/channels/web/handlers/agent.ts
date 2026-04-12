@@ -21,6 +21,7 @@ import {
   storeAgentUserMessage,
 } from "../messaging/agent-message-service.js";
 import { handleUiThemeCommand } from "../theming/ui-theme-commands.js";
+import { handleUiMetersCommand } from "../ui-meters-commands.js";
 import {
   beginChatRun,
   endChatRun,
@@ -118,6 +119,7 @@ export async function handleAgentMessage(
   const command = parseControlCommand(content, getRoutingConfig().triggerPattern);
   const trimmed = content.trim();
   const themeCommand = handleUiThemeCommand(trimmed);
+  const metersCommand = handleUiMetersCommand(trimmed);
   const isStreaming = typeof channel.agentPool.isStreaming === "function"
     ? channel.agentPool.isStreaming(chatJid)
     : false;
@@ -227,7 +229,7 @@ export async function handleAgentMessage(
     contentPreview: content.slice(0, 60),
   });
 
-  if (!command && !themeCommand && isStreaming && requestMode === "steer") {
+  if (!command && !themeCommand && !metersCommand && isStreaming && requestMode === "steer") {
     const steerResponse = await queueDeferredSteer(content, "compose");
     if (steerResponse) return steerResponse;
   }
@@ -269,6 +271,30 @@ export async function handleAgentMessage(
 
     return channel.json(
       { thread_id: null, command: themeCommand, ui_only: true },
+      200
+    );
+  }
+
+  if (metersCommand) {
+    if (metersCommand.payload) {
+      channel.broadcastEvent("ui_meters", { chat_jid: chatJid, ...metersCommand.payload });
+    }
+
+    const formattedMetersMessage = formatOutbound(metersCommand.message, "web");
+    if (formattedMetersMessage) {
+      try {
+        await channel.sendMessage(chatJid, formattedMetersMessage, { forceRoot: true });
+      } catch (error) {
+        log.error("Failed to send /meters response", {
+          operation: "handle_agent_message.meters_response",
+          chatJid,
+          err: error,
+        });
+      }
+    }
+
+    return channel.json(
+      { thread_id: null, command: metersCommand, ui_only: true },
       200
     );
   }
@@ -323,6 +349,7 @@ export async function handleAgentMessage(
   const shouldDeferQueuedFollowup =
     !command &&
     !themeCommand &&
+    !metersCommand &&
     (isActive || hasQueuedBacklog) &&
     (requestMode === "queue" || requestMode === "auto");
 

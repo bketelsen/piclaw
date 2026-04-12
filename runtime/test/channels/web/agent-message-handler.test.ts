@@ -4,6 +4,48 @@ import { initDatabase } from "../../../src/db.js";
 import { handleAgentMessage } from "../../../src/channels/web/handlers/agent.ts";
 
 describe("web agent message handler", () => {
+  test("handles /meters as a UI-only command while still returning command output as an assistant message", async () => {
+    const broadcasts: Array<{ event: string; payload: unknown }> = [];
+    const sentMessages: Array<{ chatJid: string; content: string; options: unknown }> = [];
+
+    const channel = {
+      agentPool: {
+        isStreaming: () => false,
+      },
+      json: (payload: unknown, status = 200) =>
+        new Response(JSON.stringify(payload), {
+          status,
+          headers: { "Content-Type": "application/json" },
+        }),
+      enqueueQueuedFollowupItem: () => 999,
+      getQueuedFollowupCount: () => 0,
+      broadcastEvent: (event: string, payload: unknown) => {
+        broadcasts.push({ event, payload });
+      },
+      storeMessage: () => null,
+      sendMessage: async (chatJid: string, content: string, options: unknown) => {
+        sentMessages.push({ chatJid, content, options });
+      },
+    } as any;
+
+    const req = new Request("https://example.com/agent/default/message", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ content: "/meters on" }),
+    });
+
+    const response = await handleAgentMessage(channel, req, "/agent/default/message", "web:default", "default");
+    expect(response.status).toBe(200);
+
+    const body = await response.json();
+    expect(body.ui_only).toBe(true);
+    expect(body.command?.status).toBe("success");
+    expect(body.command?.payload).toEqual({ mode: "set", enabled: true });
+    expect(broadcasts.some((entry) => entry.event === "ui_meters")).toBe(true);
+    expect(sentMessages).toHaveLength(1);
+    expect(sentMessages[0].content).toBe(body.command.message);
+  });
+
   test("handles /theme as a UI-only command while still returning command output as an assistant message", async () => {
     const queuedFollowups: Array<{ chatJid: string; content: string }> = [];
     const broadcasts: Array<{ event: string; payload: unknown }> = [];
