@@ -13,7 +13,7 @@ import type { AgentControlCommand, AgentControlResult } from "../agent-control-t
 import { formatCompactNumber } from "../agent-control-helpers.js";
 import { createMedia } from "../../db.js";
 import { requestGracefulShutdown } from "../../runtime/shutdown-registry.js";
-import { createLogger } from "../../utils/logger.js";
+import { createLogger, debugSuppressedError } from "../../utils/logger.js";
 import { killTrackedProcesses } from "../../utils/process-tracker.js";
 
 const log = createLogger("agent-control.control");
@@ -86,8 +86,10 @@ function createCompactReportAttachment(
 export async function handleRestart(session: AgentSession, _command: RestartCommand): Promise<AgentControlResult> {
   try {
     await session.abort();
-  } catch {
-    // Ignore abort failures
+  } catch (err) {
+    debugSuppressedError(log, "Failed to abort session before restart; continuing with reload.", err, {
+      operation: "agent_control.restart.abort_before_reload",
+    });
   }
 
   const killed = killTrackedProcesses();
@@ -113,8 +115,10 @@ export async function handleRestart(session: AgentSession, _command: RestartComm
 export async function handleExit(session: AgentSession, _command: ExitCommand): Promise<AgentControlResult> {
   try {
     await session.abort();
-  } catch {
-    // Ignore abort failures for wedged sessions.
+  } catch (err) {
+    debugSuppressedError(log, "Failed to abort session before exit; continuing with shutdown.", err, {
+      operation: "agent_control.exit.abort_before_shutdown",
+    });
   }
 
   killTrackedProcesses();

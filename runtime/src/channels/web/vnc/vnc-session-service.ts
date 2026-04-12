@@ -2,6 +2,7 @@ import { createConnection, type Socket } from "node:net";
 import type { ServerWebSocket } from "bun";
 
 import { DEFAULT_WEB_USER_ID, getWebSession } from "../../../db.js";
+import { createLogger, debugSuppressedError } from "../../../utils/logger.js";
 import { WebSocketTcpBridge } from "../remote-display/websocket-tcp-bridge.js";
 import { getSessionTokenFromRequest } from "../auth/session-auth.js";
 
@@ -55,6 +56,7 @@ const FALLBACK_VNC_OWNER = {
   userId: DEFAULT_WEB_USER_ID,
 };
 const DEFAULT_VNC_HANDOFF_TTL_MS = 15_000;
+const log = createLogger("web.vnc-session-service");
 
 function sanitizeId(value: string): string {
   return String(value || "")
@@ -155,7 +157,8 @@ export function parseVncTargets(raw?: string | null): VncTargetRecord[] {
   let parsed: unknown;
   try {
     parsed = JSON.parse(text);
-  } catch {
+  } catch (error) {
+    debugSuppressedError(log, "failed to parse configured VNC targets", error);
     return [];
   }
 
@@ -184,7 +187,8 @@ function defaultCreateSocket(target: VncTargetRecord): Socket {
 function createHandoffToken(): string {
   try {
     return crypto.randomUUID();
-  } catch {
+  } catch (error) {
+    debugSuppressedError(log, "crypto.randomUUID unavailable for VNC handoff token", error);
     return `vnc-handoff-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
   }
 }
@@ -220,20 +224,32 @@ export class VncSessionService {
     this.bridge = new WebSocketTcpBridge<VncSocketData, VncTargetRecord>({
       createSocket: (target) => this.createSocketWithHandshakeTimeout(target),
       onConnect: (ws, target) => {
-        try { ws.send(JSON.stringify({ type: "vnc.connected", target: { id: target.id, label: target.label } })); } catch { /* expected: browser websocket may close before connect ack is delivered. */ }
+        try {
+          ws.send(JSON.stringify({ type: "vnc.connected", target: { id: target.id, label: target.label } }));
+        } catch (error) {
+          debugSuppressedError(log, "failed to send VNC connect acknowledgement", error, { targetId: target.id });
+        }
       },
       onError: (ws, _target, error) => {
-        try { ws.send(JSON.stringify({ type: "vnc.error", error: error.message || String(error) })); } catch { /* expected: browser websocket may already be closed while surfacing upstream errors. */ }
+        try {
+          ws.send(JSON.stringify({ type: "vnc.error", error: error.message || String(error) }));
+        } catch (sendError) {
+          debugSuppressedError(log, "failed to send VNC upstream error to client", sendError, { upstreamError: error.message || String(error) });
+        }
       },
       handleControlMessage: (ws, message) => {
         try {
           const payload = JSON.parse(message) as { type?: string };
           if (payload?.type === "ping") {
-            try { ws.send(JSON.stringify({ type: "pong" })); } catch { /* expected: ping/pong races with socket teardown. */ }
+            try {
+              ws.send(JSON.stringify({ type: "pong" }));
+            } catch (error) {
+              debugSuppressedError(log, "failed to send VNC pong", error);
+            }
             return true;
           }
-        } catch {
-          /* expected: non-JSON string frames are forwarded to the upstream socket. */
+        } catch (error) {
+          debugSuppressedError(log, "VNC control frame was not JSON; forwarding upstream", error);
         }
         return false;
       },
@@ -249,7 +265,11 @@ export class VncSessionService {
       clearTimeout(timer);
     };
     const timer = setTimeout(() => {
-      try { socket.destroy(new Error(`Timed out connecting to VNC target ${target.label || target.id}.`)); } catch { /* expected: socket may already be closed when the timeout fires. */ }
+      try {
+        socket.destroy(new Error(`Timed out connecting to VNC target ${target.label || target.id}.`));
+      } catch (error) {
+        debugSuppressedError(log, "failed to destroy timed-out VNC socket", error, { targetId: target.id, targetLabel: target.label || target.id });
+      }
     }, this.connectTimeoutMs);
     socket.once("data", clear);
     socket.once("error", clear);
@@ -387,7 +407,11 @@ export class VncSessionService {
   attachClient(ws: ServerWebSocket<VncSocketData>): void {
     const target = this.resolveTargetReference(ws.data.targetRef);
     if (!target) {
-      try { ws.close(1008, "Unknown VNC target."); } catch { /* expected: websocket may already be gone while rejecting an unknown target. */ }
+      try {
+        ws.close(1008, "Unknown VNC target.");
+      } catch (error) {
+        debugSuppressedError(log, "failed to close websocket for unknown VNC target", error, { targetRef: ws.data.targetRef });
+      }
       return;
     }
 
@@ -398,7 +422,11 @@ export class VncSessionService {
       const sameOwner = this.matchesOwner(handoffOwner, ws.data);
       const sameTarget = Boolean(handoffRecord && (handoffRecord.target as VncTargetRecord)?.id === target.id);
       if (!handoffRecord || !sameOwner || !sameTarget) {
-        try { ws.close(1008, "Invalid or expired VNC handoff."); } catch { /* expected: websocket may already be gone while rejecting an invalid handoff. */ }
+        try {
+          ws.close(1008, "Invalid or expired VNC handoff.");
+        } catch (error) {
+          debugSuppressedError(log, "failed to close websocket for invalid VNC handoff", error, { targetRef: ws.data.targetRef });
+        }
         return;
       }
       this.bridge.attachClient(ws, target, { handoffToken });

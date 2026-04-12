@@ -12,6 +12,12 @@ export interface BuildAutoresearchSubagentCommandParams {
   piScriptPath?: string;
 }
 
+export interface PiCliModel {
+  provider: string;
+  id: string;
+  label: string;
+}
+
 /**
  * Resolve the globally installed pi CLI script path.
  * Falls back to the plain bin name if lookup fails.
@@ -22,6 +28,42 @@ export function resolvePiScriptPath(): string {
     return result.stdout.trim();
   }
   return "pi";
+}
+
+export function parsePiCliModelsOutput(stdout: string): PiCliModel[] {
+  const models: PiCliModel[] = [];
+  const seen = new Set<string>();
+  for (const rawLine of stdout.split(/\r?\n/)) {
+    const line = rawLine.trim();
+    if (!line || line.startsWith("pi - ") || line.startsWith("Usage:") || line.startsWith("Options:")) continue;
+    const match = line.match(/^(\S+)\s+(\S+)\s+/);
+    if (!match) continue;
+    const provider = match[1];
+    const id = match[2];
+    if (!provider || !id || provider === "Provider" || id === "Model") continue;
+    const label = `${provider}/${id}`;
+    if (seen.has(label)) continue;
+    seen.add(label);
+    models.push({ provider, id, label });
+  }
+  return models;
+}
+
+export function listPiCliModels(options: { bunPath?: string; piScriptPath?: string } = {}): PiCliModel[] {
+  const bunPath = options.bunPath || process.execPath || "bun";
+  const piScriptPath = options.piScriptPath || resolvePiScriptPath();
+  const result = spawnSync(bunPath, [piScriptPath, "--list-models"], {
+    encoding: "utf8",
+    stdio: ["ignore", "pipe", "pipe"],
+  });
+  if (result.status !== 0) return [];
+  return parsePiCliModelsOutput(result.stdout);
+}
+
+export function hasPiCliModel(requestedModel: string, availableModels: PiCliModel[]): boolean {
+  const requested = requestedModel.trim().toLowerCase();
+  if (!requested) return true;
+  return availableModels.some((model) => model.label.toLowerCase() === requested);
 }
 
 /**

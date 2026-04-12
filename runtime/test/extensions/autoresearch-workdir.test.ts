@@ -102,4 +102,13 @@ describe("autoresearch workdir helpers", () => {
     expect(existsSync(join(prepared.workDir, "index.ts"))).toBe(true);
     expect(existsSync(join(prepared.workDir, "autoresearch.md"))).toBe(false);
   });
+
+  test("prepareDirectAutoresearchWorktree error message describes git worktree mode", () => {
+    const ws = createTempWorkspace("piclaw-autoresearch-no-git-");
+    cleanups.push(ws.cleanup);
+
+    expect(() => prepareDirectAutoresearchWorktree(ws.workspace, join(ws.workspace, "session"), "autoresearch/test-no-git")).toThrow(
+      "Git worktree mode requires an existing git repository",
+    );
+  });
 });

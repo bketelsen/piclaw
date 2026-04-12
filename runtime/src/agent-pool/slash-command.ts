@@ -21,7 +21,7 @@ import type { AgentControlResult } from "../agent-control/agent-control-types.js
 import { getAgentRuntimeConfig } from "../core/config.js";
 import { withChatContext } from "../core/chat-context.js";
 import { detectChannel } from "../router.js";
-import { createLogger } from "../utils/logger.js";
+import { createLogger, debugSuppressedError } from "../utils/logger.js";
 
 const log = createLogger("agent-pool.slash-command");
 
@@ -147,8 +147,11 @@ export async function executeSlashCommand(
         if (text) {
           customBuffers.push(text);
         }
-      } catch {
-        /* expected: slash-command event snapshots can be incomplete while streaming. */
+      } catch (err) {
+        debugSuppressedError(log, "Failed to capture a slash-command streaming event snapshot.", err, {
+          operation: "execute_slash_command.capture_event",
+          chatJid,
+        });
       }
     };
 
@@ -166,8 +169,12 @@ export async function executeSlashCommand(
         });
         try {
           await session.abort();
-        } catch {
-          /* expected: timed-out slash command session may already be aborting. */
+        } catch (err) {
+          debugSuppressedError(log, "Failed to abort timed-out slash-command session.", err, {
+            operation: "execute_slash_command.timeout_abort",
+            chatJid,
+            timeoutMs: agentRuntimeConfig.timeoutMs,
+          });
         }
       }, agentRuntimeConfig.timeoutMs);
     }

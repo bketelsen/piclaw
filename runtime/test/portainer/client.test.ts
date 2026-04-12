@@ -288,6 +288,33 @@ test("discoverPortainerInstances finds the default relay instance", async () => 
   });
 });
 
+test("discoverPortainerInstances skips unusable relay entries", async () => {
+  await withPortainerContext(async ({ keychain, portainer }) => {
+    await keychain.setKeychainEntry({
+      name: "portainer/relay",
+      type: "secret",
+      username: "https://portainer.example.com:9443",
+      secret: "portainer-token",
+    });
+    await keychain.setKeychainEntry({
+      name: "portainer/broken",
+      type: "secret",
+      username: "https://broken.example.com:9443",
+      secret: "   ",
+    });
+
+    const discovery = await portainer.discoverPortainerInstances();
+    expect(discovery.candidates).toEqual([
+      {
+        source: "default-keychain",
+        base_url: "https://portainer.example.com:9443",
+        api_token_keychain: "portainer/relay",
+        allow_insecure_tls: true,
+      },
+    ]);
+  });
+});
+
 test("runPortainerWorkflow supports endpoint inventory and unmanaged container listing", async () => {
   await withPortainerContext(async ({ keychain, portainer }) => {
     await keychain.setKeychainEntry({
@@ -358,6 +385,54 @@ test("runPortainerWorkflow supports endpoint inventory and unmanaged container l
       "https://portainer.example.com:9443/api/stacks",
       "https://portainer.example.com:9443/api/stacks/59/file",
     ]);
+  });
+});
+
+test("runPortainerWorkflow ignores unreadable stack files during container ownership mapping", async () => {
+  await withPortainerContext(async ({ keychain, portainer }) => {
+    await keychain.setKeychainEntry({
+      name: "portainer/relay",
+      type: "secret",
+      username: "https://portainer.example.com:9443",
+      secret: "portainer-token",
+    });
+
+    portainer.setPortainerRequestExecutorForTests(async (input) => {
+      if (input.url.endsWith("/api/endpoints/2/docker/containers/json?all=1")) {
+        return {
+          status: 200,
+          statusText: "OK",
+          bodyText: '[{"Id":"abc","Names":["/gitea"],"Image":"gitea/gitea:latest","State":"running","Status":"Up"}]',
+        };
+      }
+      if (input.url.endsWith("/api/stacks")) {
+        return { status: 200, statusText: "OK", bodyText: '[{"Id":59,"Name":"broken","EndpointId":2}]' };
+      }
+      if (input.url.endsWith("/api/stacks/59/file")) {
+        return { status: 500, statusText: "Internal Server Error", bodyText: '{"message":"boom"}' };
+      }
+      throw new Error(`unexpected url ${input.url}`);
+    });
+
+    await expect(portainer.runPortainerWorkflow(
+      {
+        base_url: "https://portainer.example.com:9443",
+        api_token_keychain: "portainer/relay",
+        allow_insecure_tls: true,
+      },
+      { workflow: "container.list", endpoint_id: 2 },
+    )).resolves.toEqual({
+      workflow: "container.list",
+      result: [{
+        id: "abc",
+        name: "gitea",
+        image: "gitea/gitea:latest",
+        state: "running",
+        status: "Up",
+        ports: "",
+        stack: null,
+      }],
+    });
   });
 });
 

@@ -20,7 +20,7 @@ import { createMedia, getMediaById } from "../db.js";
 import { WORKSPACE_DIR } from "../core/config.js";
 import { getAttachmentRegistry } from "../agent-pool/attachments.js";
 import { getChatJid } from "../core/chat-context.js";
-import { createLogger } from "../utils/logger.js";
+import { createLogger, debugSuppressedError } from "../utils/logger.js";
 
 const log = createLogger("extensions.file-attachments");
 
@@ -73,7 +73,12 @@ function detectContentType(path: string, fallback?: string): string {
   try {
     const file = Bun.file(path);
     if (file.type) return file.type;
-  } catch { /* ignore */ }
+  } catch (err) {
+    debugSuppressedError(log, "Failed to detect attachment content type from Bun.file metadata.", err, {
+      operation: "file_attachments.detect_content_type",
+      path,
+    });
+  }
   return "application/octet-stream";
 }
 

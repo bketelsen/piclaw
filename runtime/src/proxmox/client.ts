@@ -1,5 +1,8 @@
 import { getKeychainEntry, listKeychainEntries, resolveKeychainPlaceholders } from "../secure/keychain.js";
 import { buildInjectedExecCommand, redactKeychainSecretsInText } from "../secure/shell-secrets.js";
+import { createLogger, debugSuppressedError } from "../utils/logger.js";
+
+const log = createLogger("proxmox.client");
 
 export type ProxmoxApiMethod = "GET" | "POST" | "PUT" | "DELETE";
 export type ProxmoxWorkflowName =
@@ -338,8 +341,10 @@ function parseTokenSecret(secret: string): ProxmoxApiToken | null {
     if (typeof parsed?.username === "string" && parsed.username.trim() && typeof parsed?.secret === "string" && parsed.secret.trim()) {
       return { username: parsed.username.trim(), secret: parsed.secret.trim() };
     }
-  } catch {
-    // ignore JSON parse failures and continue with string fallbacks
+  } catch (err) {
+    debugSuppressedError(log, "Failed to parse Proxmox token secret as JSON; falling back to string formats.", err, {
+      operation: "proxmox.parse_token_secret.parse_json",
+    });
   }
 
   const equalsIndex = trimmed.indexOf("=");
@@ -526,8 +531,11 @@ export async function discoverProxmoxInstances(): Promise<ProxmoxDiscoveryResult
         api_token_keychain: name,
         allow_insecure_tls: true,
       });
-    } catch {
-      // ignore unusable entries during discovery
+    } catch (err) {
+      debugSuppressedError(log, "Skipping unusable Proxmox discovery keychain entry.", err, {
+        operation: "proxmox.discover_instances.resolve_token",
+        apiTokenKeychain: name,
+      });
     }
   }
 
@@ -918,14 +926,23 @@ export class ProxmoxClient {
           if (result.exitstatus && result.exitstatus !== "OK") {
             throw new Error(result.exitstatus);
           }
-        } catch {
-          // Fall back to forced stop below.
+        } catch (err) {
+          debugSuppressedError(log, "Graceful Proxmox VM shutdown did not complete cleanly; falling back to forced stop.", err, {
+            operation: "proxmox.stop_vm.shutdown_fallback",
+            node,
+            vmid,
+            shutdownUpid,
+          });
         }
       }
       try {
         return await this.waitForVmState(node, vmid, { status: "stopped" }, options.timeoutMs, options.pollMs);
-      } catch {
-        // Fall through to forced stop.
+      } catch (err) {
+        debugSuppressedError(log, "Timed out waiting for Proxmox VM shutdown; proceeding to forced stop.", err, {
+          operation: "proxmox.stop_vm.wait_for_state_fallback",
+          node,
+          vmid,
+        });
       }
     }
 

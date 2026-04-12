@@ -21,6 +21,7 @@ import { existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from "
 import { join } from "path";
 import { DATA_DIR } from "./core/config.js";
 import { createUuid } from "./utils/ids.js";
+import { createLogger, debugSuppressedError } from "./utils/logger.js";
 import {
   storeToolOutput,
   insertToolOutputChunk,
@@ -33,6 +34,7 @@ import { buildPreviewLines } from "./utils/preview.js";
 
 /** Directory where tool output log files are stored on disk. */
 const TOOL_OUTPUT_DIR = join(DATA_DIR, "tool-output");
+const log = createLogger("tool-output");
 /** Default chunk size (characters) for FTS indexing. */
 const DEFAULT_CHUNK_SIZE = 4000;
 
@@ -153,7 +155,15 @@ export function pruneToolOutputs(maxAgeDays = 30): number {
   const rows = deleteToolOutputsBefore(cutoff);
   for (const row of rows) {
     if (row.path && existsSync(row.path)) {
-      try { unlinkSync(row.path); } catch { /* expected: cleanup can race with manual deletion or prior pruning. */ }
+      try {
+        unlinkSync(row.path);
+      } catch (err) {
+        debugSuppressedError(log, "Failed to unlink a pruned tool-output file; it may already be gone.", err, {
+          operation: "tool_output.prune.unlink",
+          path: row.path,
+          id: row.id,
+        });
+      }
     }
   }
   return rows.length;

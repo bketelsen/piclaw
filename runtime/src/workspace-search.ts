@@ -18,6 +18,9 @@ import path from "node:path";
 import { getDb } from "./db.js";
 import { WORKSPACE_DIR, getWorkspaceSearchConfig } from "./core/config.js";
 import { prepareFtsQuery } from "./utils/fts-query.js";
+import { createLogger, debugSuppressedError } from "./utils/logger.js";
+
+const log = createLogger("workspace-search");
 
 /** Search scope: restrict to notes/, skills/, or search all indexed roots. */
 export type WorkspaceSearchScope = "notes" | "skills" | "all";
@@ -305,8 +308,11 @@ async function indexWorkspace(roots: string[], maxBytes: number): Promise<void> 
         db.prepare(
           "INSERT INTO workspace_files (path, mtime_ms, size_bytes, indexed_at) VALUES (?, ?, ?, ?) ON CONFLICT(path) DO UPDATE SET mtime_ms = excluded.mtime_ms, size_bytes = excluded.size_bytes, indexed_at = excluded.indexed_at",
         ).run(rel, mtimeMs, stat.size, now);
-      } catch {
-        // ignore unreadable files
+      } catch (err) {
+        debugSuppressedError(log, "Workspace index skipped an unreadable file.", err, {
+          operation: "workspace_search.refresh.read_file",
+          path: rel,
+        });
       }
     }
   }

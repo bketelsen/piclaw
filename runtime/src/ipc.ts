@@ -26,7 +26,7 @@ import { MediaService } from "./channels/web/media/media-service.js";
 import { createTask, deleteTask, getTaskById, updateTask } from "./db.js";
 import type { ScheduledTask } from "./types.js";
 import { createUuid } from "./utils/ids.js";
-import { createLogger } from "./utils/logger.js";
+import { createLogger, debugSuppressedError } from "./utils/logger.js";
 import { validateShellCommand, validateShellCwd } from "./utils/task-validation.js";
 
 const log = createLogger("ipc");
@@ -208,8 +208,12 @@ async function processIpcDir(
       });
       try {
         renameSync(fp, join(ipcDir, `error-${file}`));
-      } catch {
-        /* expected: preserving the original file is acceptable when renaming the failed payload also fails. */
+      } catch (renameErr) {
+        debugSuppressedError(log, "Failed to rename a broken IPC payload into the error bucket; leaving the original file in place.", renameErr, {
+          operation: "process_ipc_dir.rename_failed_payload",
+          kind,
+          file,
+        });
       }
     }
   }

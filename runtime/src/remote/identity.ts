@@ -9,6 +9,9 @@ import { mkdirSync, readFileSync, writeFileSync, existsSync, chmodSync } from "f
 import { join } from "path";
 import { createHash, generateKeyPairSync, createPrivateKey, createPublicKey, sign, verify } from "crypto";
 import { DATA_DIR, getRemoteInteropConfig } from "../core/config.js";
+import { createLogger, debugSuppressedError } from "../utils/logger.js";
+
+const log = createLogger("remote.identity");
 
 /** Persisted local identity record for remote interop communication. */
 export interface InteropIdentity {
@@ -76,8 +79,11 @@ export function loadOrCreateIdentity(): InteropIdentity {
   writeFileSync(IDENTITY_PATH, JSON.stringify(identity, null, 2), "utf8");
   try {
     chmodSync(IDENTITY_PATH, 0o600);
-  } catch {
-    // ignore chmod errors
+  } catch (err) {
+    debugSuppressedError(log, "Failed to chmod remote interop identity file to 0600.", err, {
+      operation: "remote_identity.ensure_identity.chmod",
+      path: IDENTITY_PATH,
+    });
   }
 
   cachedIdentity = identity;

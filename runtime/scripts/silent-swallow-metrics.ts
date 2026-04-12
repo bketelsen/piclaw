@@ -4,8 +4,6 @@ import path from "node:path";
 export const DEFAULT_REPO_DIRS = ["runtime/src", "runtime/web/src", "runtime/scripts", "runtime/extensions", "runtime/test", "skel/scripts"];
 export const DEFAULT_RUNTIME_CORE_DIRS = ["runtime/src", "runtime/web/src"];
 export const VALID_EXT = /\.(ts|tsx|js)$/;
-export const EMPTY_CATCH_PATTERN = /catch\s*(\([^)]*\))?\s*\{\s*\}/g;
-export const EMPTY_PROMISE_CATCH_PATTERN = /\.catch\(\s*(\(\)\s*=>|function\s*\()\s*\{\s*\}\s*\)/g;
 
 type ParserState = "code" | "lineComment" | "blockComment" | "singleQuote" | "doubleQuote" | "template";
 
@@ -14,6 +12,12 @@ export interface SilentSwallowMetrics {
   repoFilesWithSilentCatches: number;
   repoSilentPromiseCatches: number;
   runtimeCoreSilentCatches: number;
+}
+
+export interface SilentSwallowMatch {
+  filePath: string;
+  line: number;
+  snippet: string;
 }
 
 export function shouldSkipPath(filePath: string): boolean {
@@ -171,25 +175,158 @@ export function buildNonCodeMask(source: string): Uint8Array {
   return mask;
 }
 
-export function countMatches(files: string[], pattern: RegExp): { total: number; filesWithMatches: Set<string> } {
-  let total = 0;
-  const filesWithMatches = new Set<string>();
-  for (const filePath of files) {
-    const source = readFileSync(filePath, "utf8");
-    const nonCodeMask = buildNonCodeMask(source);
-    pattern.lastIndex = 0;
-    let fileCount = 0;
-    let match: RegExpExecArray | null;
-    while ((match = pattern.exec(source)) !== null) {
-      const index = match.index;
-      if (nonCodeMask[index]) continue;
-      fileCount++;
-    }
-    if (!fileCount) continue;
-    total += fileCount;
-    filesWithMatches.add(filePath);
+function isIdentifierChar(ch: string | undefined): boolean {
+  return !!ch && /[A-Za-z0-9_$]/.test(ch);
+}
+
+function lineOfIndex(source: string, index: number): number {
+  let line = 1;
+  for (let i = 0; i < index; i++) if (source[i] === "\n") line++;
+  return line;
+}
+
+function snippetAt(source: string, index: number): string {
+  const start = source.lastIndexOf("\n", index) + 1;
+  const endIndex = source.indexOf("\n", index);
+  const end = endIndex === -1 ? source.length : endIndex;
+  return source.slice(start, end).trim();
+}
+
+function isWhitespace(ch: string | undefined): boolean {
+  return !!ch && /\s/.test(ch);
+}
+
+function skipWhitespace(source: string, index: number, mask: Uint8Array): number {
+  let cursor = index;
+  while (cursor < source.length) {
+    const ch = source[cursor];
+    if (!mask[cursor] && !isWhitespace(ch)) break;
+    cursor++;
   }
-  return { total, filesWithMatches };
+  return cursor;
+}
+
+function skipBalancedGroup(source: string, index: number, mask: Uint8Array, open: string, close: string): number {
+  if (source[index] !== open) return index;
+  let depth = 0;
+  for (let cursor = index; cursor < source.length; cursor++) {
+    if (mask[cursor]) continue;
+    if (source[cursor] === open) depth++;
+    else if (source[cursor] === close) {
+      depth--;
+      if (depth === 0) return cursor + 1;
+    }
+  }
+  return source.length;
+}
+
+function stripCommentsAndTrim(body: string): string {
+  return body
+    .replace(/\/\*[\s\S]*?\*\//g, "")
+    .replace(/(^|\n)\s*\/\/.*(?=\n|$)/g, "$1")
+    .trim();
+}
+
+function findSilentCatchBlocksInSource(source: string): Array<{ index: number; line: number; snippet: string }> {
+  const matches: Array<{ index: number; line: number; snippet: string }> = [];
+  const mask = buildNonCodeMask(source);
+
+  for (let i = 0; i < source.length - 5; i++) {
+    if (mask[i]) continue;
+    if (source.slice(i, i + 5) !== "catch") continue;
+    if (isIdentifierChar(source[i - 1]) || isIdentifierChar(source[i + 5])) continue;
+
+    let cursor = skipWhitespace(source, i + 5, mask);
+    if (source[cursor] === "(") {
+      cursor = skipBalancedGroup(source, cursor, mask, "(", ")");
+      cursor = skipWhitespace(source, cursor, mask);
+    }
+    if (source[cursor] !== "{") continue;
+
+    const bodyStart = cursor + 1;
+    const closeBraceExclusive = skipBalancedGroup(source, cursor, mask, "{", "}");
+    const closeBraceIndex = closeBraceExclusive - 1;
+    const body = source.slice(bodyStart, closeBraceIndex);
+    if (stripCommentsAndTrim(body) !== "") {
+      i = closeBraceIndex;
+      continue;
+    }
+
+    matches.push({
+      index: i,
+      line: lineOfIndex(source, i),
+      snippet: snippetAt(source, i),
+    });
+    i = closeBraceIndex;
+  }
+
+  return matches;
+}
+
+function findSilentPromiseCatchesInSource(source: string): Array<{ index: number; line: number; snippet: string }> {
+  const matches: Array<{ index: number; line: number; snippet: string }> = [];
+  const mask = buildNonCodeMask(source);
+
+  for (let i = 0; i < source.length - 7; i++) {
+    if (mask[i]) continue;
+    if (source.slice(i, i + 7) !== ".catch(") continue;
+
+    let cursor = skipWhitespace(source, i + 7, mask);
+    if (source[cursor] === "(") {
+      cursor = skipBalancedGroup(source, cursor, mask, "(", ")");
+      cursor = skipWhitespace(source, cursor, mask);
+      if (source.slice(cursor, cursor + 2) !== "=>") continue;
+      cursor = skipWhitespace(source, cursor + 2, mask);
+    } else if (source.slice(cursor, cursor + 8) === "function") {
+      cursor = skipWhitespace(source, cursor + 8, mask);
+      if (source[cursor] === "(") {
+        cursor = skipBalancedGroup(source, cursor, mask, "(", ")");
+        cursor = skipWhitespace(source, cursor, mask);
+      }
+    } else {
+      continue;
+    }
+
+    if (source[cursor] !== "{") continue;
+    const bodyStart = cursor + 1;
+    const closeBraceExclusive = skipBalancedGroup(source, cursor, mask, "{", "}");
+    const closeBraceIndex = closeBraceExclusive - 1;
+
+    const closeParen = skipWhitespace(source, closeBraceIndex + 1, mask);
+    if (source[closeParen] !== ")") {
+      i = closeBraceIndex;
+      continue;
+    }
+
+    const body = source.slice(bodyStart, closeBraceIndex);
+    if (stripCommentsAndTrim(body) !== "") {
+      i = closeParen;
+      continue;
+    }
+
+    matches.push({
+      index: i,
+      line: lineOfIndex(source, i),
+      snippet: snippetAt(source, i),
+    });
+    i = closeParen;
+  }
+
+  return matches;
+}
+
+export function findSilentCatchBlocks(files: string[]): SilentSwallowMatch[] {
+  return files.flatMap((filePath) => {
+    const source = readFileSync(filePath, "utf8");
+    return findSilentCatchBlocksInSource(source).map((match) => ({ filePath, line: match.line, snippet: match.snippet }));
+  });
+}
+
+export function findSilentPromiseCatches(files: string[]): SilentSwallowMatch[] {
+  return files.flatMap((filePath) => {
+    const source = readFileSync(filePath, "utf8");
+    return findSilentPromiseCatchesInSource(source).map((match) => ({ filePath, line: match.line, snippet: match.snippet }));
+  });
 }
 
 function parseEnvRoots(key: string, fallback: string[]): string[] {
@@ -207,15 +344,15 @@ export function getSilentSwallowMetrics(options: {
 
   const repoFiles = collectFiles(repoDirs);
   const runtimeCoreFiles = collectFiles(runtimeCoreDirs);
-  const repoCatch = countMatches(repoFiles, EMPTY_CATCH_PATTERN);
-  const repoPromise = countMatches(repoFiles, EMPTY_PROMISE_CATCH_PATTERN);
-  const coreCatch = countMatches(runtimeCoreFiles, EMPTY_CATCH_PATTERN);
+  const repoCatch = findSilentCatchBlocks(repoFiles);
+  const repoPromise = findSilentPromiseCatches(repoFiles);
+  const coreCatch = findSilentCatchBlocks(runtimeCoreFiles);
 
   return {
-    repoSilentCatchBlocks: repoCatch.total,
-    repoFilesWithSilentCatches: repoCatch.filesWithMatches.size,
-    repoSilentPromiseCatches: repoPromise.total,
-    runtimeCoreSilentCatches: coreCatch.total,
+    repoSilentCatchBlocks: repoCatch.length,
+    repoFilesWithSilentCatches: new Set(repoCatch.map((match) => match.filePath)).size,
+    repoSilentPromiseCatches: repoPromise.length,
+    runtimeCoreSilentCatches: coreCatch.length,
   };
 }
 
@@ -226,6 +363,16 @@ export function printSilentSwallowMetrics(metrics: SilentSwallowMetrics): void {
   console.log(`METRIC runtime_core_silent_catches=${metrics.runtimeCoreSilentCatches}`);
 }
 
+export function buildSilentSwallowRemediationHint(): string {
+  return [
+    "[check:silent-swallows] Remediation: replace empty/comment-only catches with centralized logging or explicit handling.",
+    "- Expected, low-value races/fallbacks: debugSuppressedError(log, \"message\", error, { ...context })",
+    "- Recoverable degradation / user-visible fallback: log.warn(\"message\", { err: error, ...context })",
+    "- Actionable failure / broken invariant: log.error(\"message\", { err: error, ...context })",
+    "- Do not leave catch blocks empty or comment-only.",
+  ].join("\n");
+}
+
 if (import.meta.main) {
   const checkMode = process.argv.includes("--check");
   const metrics = getSilentSwallowMetrics();
@@ -233,8 +380,9 @@ if (import.meta.main) {
 
   if (checkMode && (metrics.repoSilentCatchBlocks > 0 || metrics.repoSilentPromiseCatches > 0)) {
     console.error(
-      `[check:silent-swallows] Found ${metrics.repoSilentCatchBlocks} empty catch block(s) and ${metrics.repoSilentPromiseCatches} empty promise catch(es).`,
+      `[check:silent-swallows] Found ${metrics.repoSilentCatchBlocks} silent catch block(s) and ${metrics.repoSilentPromiseCatches} silent promise catch(es). Comment-only handlers count as silent and must log or handle the error explicitly.`,
     );
+    console.error(buildSilentSwallowRemediationHint());
     process.exit(1);
   }
 }

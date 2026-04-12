@@ -1,5 +1,8 @@
 import { getKeychainEntry, listKeychainEntries } from "../secure/keychain.js";
 import { buildInjectedExecCommand, redactKeychainSecretsInText } from "../secure/shell-secrets.js";
+import { createLogger, debugSuppressedError } from "../utils/logger.js";
+
+const log = createLogger("portainer.client");
 
 export type PortainerApiMethod = "GET" | "POST" | "PUT" | "DELETE";
 export type PortainerWorkflowName =
@@ -212,7 +215,10 @@ function parseResponseBody(text: string): unknown {
   if (!trimmed) return null;
   try {
     return JSON.parse(trimmed);
-  } catch {
+  } catch (error) {
+    debugSuppressedError(log, "Failed to parse Portainer response body as JSON; returning raw text.", error, {
+      operation: "portainer.parse_response_body.parse_json",
+    });
     return text;
   }
 }
@@ -518,8 +524,11 @@ export async function discoverPortainerInstances(): Promise<PortainerDiscoveryRe
         api_token_keychain: name,
         allow_insecure_tls: true,
       });
-    } catch {
-      // ignore unusable entries during discovery
+    } catch (error) {
+      debugSuppressedError(log, "Skipping unusable Portainer discovery keychain entry.", error, {
+        operation: "portainer.discover_instances.resolve_auth",
+        apiTokenKeychain: name,
+      });
     }
   }
 
@@ -998,8 +1007,13 @@ export class PortainerClient {
       try {
         const content = await this.getStackFile(stackId);
         mappings.push(parseComposeMappings(content, stackId, stackName));
-      } catch {
-        // best-effort ownership mapping only; ignore unreadable stack files
+      } catch (error) {
+        debugSuppressedError(log, "Skipping unreadable Portainer stack file during ownership mapping.", error, {
+          operation: "portainer.get_stack_service_maps.read_stack_file",
+          endpointId,
+          stackId,
+          stackName,
+        });
       }
     }
     return mappings;
@@ -1114,8 +1128,13 @@ export class PortainerClient {
       } catch (error) {
         try {
           await this.deleteContainer(endpointId, newId, true);
-        } catch {
-          // best-effort cleanup before rollback
+        } catch (cleanupError) {
+          debugSuppressedError(log, "Failed to remove the newly created Portainer container during upgrade rollback.", cleanupError, {
+            operation: "portainer.upgrade_container.cleanup_new_container",
+            endpointId,
+            currentName,
+            newId,
+          });
         }
         throw error;
       }
@@ -1146,15 +1165,25 @@ export class PortainerClient {
       if (renamedOld) {
         try {
           await this.renameContainer(endpointId, oldId, currentName);
-        } catch {
-          // best-effort rollback
+        } catch (rollbackError) {
+          debugSuppressedError(log, "Failed to restore the original Portainer container name during upgrade rollback.", rollbackError, {
+            operation: "portainer.upgrade_container.restore_name",
+            endpointId,
+            currentName,
+            oldId,
+          });
         }
       }
       if (stoppedOld) {
         try {
           await this.startContainer(endpointId, oldId);
-        } catch {
-          // best-effort rollback
+        } catch (rollbackError) {
+          debugSuppressedError(log, "Failed to restart the original Portainer container during upgrade rollback.", rollbackError, {
+            operation: "portainer.upgrade_container.restart_original",
+            endpointId,
+            currentName,
+            oldId,
+          });
         }
       }
       throw new Error(

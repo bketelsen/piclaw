@@ -14,6 +14,9 @@ import path from "path";
 import { MAX_TREE_ENTRIES } from "./constants.js";
 import { formatMtime } from "./file-utils.js";
 import { shouldExcludeDir, toRelativePath } from "./paths.js";
+import { createLogger, debugSuppressedError } from "../../../utils/logger.js";
+
+const log = createLogger("web.workspace-tree");
 
 /** State accumulated during recursive tree building. */
 export interface WorkspaceTreeState {
@@ -102,8 +105,11 @@ export function buildTree(
     const childPath = path.join(absPath, entry.name);
     try {
       node.children.push(buildTree(childPath, depth - 1, state, options));
-    } catch {
-      // ignore unreadable paths
+    } catch (err) {
+      debugSuppressedError(log, "Workspace tree skipped an unreadable child path.", err, {
+        operation: "workspace_tree.build_tree.child",
+        childPath,
+      });
     }
   }
 

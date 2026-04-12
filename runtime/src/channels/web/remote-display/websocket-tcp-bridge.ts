@@ -1,6 +1,10 @@
 import type { Socket } from "node:net";
 import type { ServerWebSocket } from "bun";
 
+import { createLogger, debugSuppressedError } from "../../../utils/logger.js";
+
+const log = createLogger("web.remote-display.bridge");
+
 export interface RemoteDisplayBridgeConnectionRecord<TSocketData = unknown, TTarget = unknown> {
   owner: TSocketData;
   target: TTarget;
@@ -155,7 +159,15 @@ export class WebSocketTcpBridge<TSocketData = unknown, TTarget = unknown> {
 
     socket.on("data", (chunk) => {
       record.bytesIn += typeof chunk === "string" ? Buffer.byteLength(chunk) : chunk.byteLength;
-      try { record.ws?.send(chunk); } catch { /* expected: browser websocket may disappear while the upstream socket is still draining. */ }
+      try {
+        record.ws?.send(chunk);
+      } catch (err) {
+        debugSuppressedError(log, "Failed to forward remote-display bytes to the browser websocket.", err, {
+          operation: "remote_display_bridge.socket_data.send",
+          createdAt: record.createdAt,
+          handoffToken: record.handoffToken,
+        });
+      }
     });
 
     socket.on("error", (error) => {
@@ -163,7 +175,15 @@ export class WebSocketTcpBridge<TSocketData = unknown, TTarget = unknown> {
       const activeWs = record.ws;
       if (activeWs) {
         this.options.onError?.(activeWs, target, normalized, record);
-        try { activeWs.close(1011, "Remote display upstream error"); } catch { /* expected: websocket may already be closed when surfacing upstream failures. */ }
+        try {
+          activeWs.close(1011, "Remote display upstream error");
+        } catch (err) {
+          debugSuppressedError(log, "Failed to close browser websocket after a remote-display upstream error.", err, {
+            operation: "remote_display_bridge.socket_error.close_websocket",
+            createdAt: record.createdAt,
+            handoffToken: record.handoffToken,
+          });
+        }
       }
       this.closeRecord(record, true);
     });
@@ -172,7 +192,15 @@ export class WebSocketTcpBridge<TSocketData = unknown, TTarget = unknown> {
       const activeWs = record.ws;
       if (activeWs) {
         this.options.onClose?.(activeWs, target, record);
-        try { activeWs.close(1000, "Remote display upstream closed"); } catch { /* expected: websocket may already be closed when the upstream ends first. */ }
+        try {
+          activeWs.close(1000, "Remote display upstream closed");
+        } catch (err) {
+          debugSuppressedError(log, "Failed to close browser websocket after the remote-display upstream ended.", err, {
+            operation: "remote_display_bridge.socket_close.close_websocket",
+            createdAt: record.createdAt,
+            handoffToken: record.handoffToken,
+          });
+        }
       }
       this.closeRecord(record, false);
     });
@@ -182,7 +210,15 @@ export class WebSocketTcpBridge<TSocketData = unknown, TTarget = unknown> {
     const previousWs = record.ws;
     if (previousWs && previousWs !== ws) {
       this.connections.delete(previousWs);
-      try { previousWs.close(1000, "Remote display session moved to another window"); } catch { /* expected: old websocket may already be gone during handoff. */ }
+      try {
+        previousWs.close(1000, "Remote display session moved to another window");
+      } catch (err) {
+        debugSuppressedError(log, "Failed to close the previous browser websocket during remote-display handoff.", err, {
+          operation: "remote_display_bridge.bind_client.close_previous_websocket",
+          createdAt: record.createdAt,
+          handoffToken: record.handoffToken,
+        });
+      }
     }
     record.owner = ws.data;
     record.ws = ws;
@@ -228,7 +264,15 @@ export class WebSocketTcpBridge<TSocketData = unknown, TTarget = unknown> {
     }
     this.clearHandoff(record);
     if (closeSocket) {
-      try { record.socket.destroy(); } catch { /* expected: upstream socket may already be fully torn down. */ }
+      try {
+        record.socket.destroy();
+      } catch (err) {
+        debugSuppressedError(log, "Failed to destroy the remote-display upstream socket.", err, {
+          operation: "remote_display_bridge.close_record.destroy_socket",
+          createdAt: record.createdAt,
+          handoffToken: record.handoffToken,
+        });
+      }
     }
   }
 

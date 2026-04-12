@@ -46,3 +46,29 @@ test("structured logger respects PICLAW_LOG_LEVEL threshold", async () => {
   expect(stderr).toContain("warn message");
   expect(stderr).toContain("error message");
 });
+
+test("debugSuppressedError emits a suppressed debug record", async () => {
+  restoreEnv = setEnv({ PICLAW_LOG_LEVEL: "debug", LOG_LEVEL: undefined });
+
+  const stdoutChunks: string[] = [];
+  const originalStdoutWrite = process.stdout.write.bind(process.stdout);
+
+  (process.stdout.write as unknown as (chunk: string | Uint8Array) => boolean) = ((chunk: string | Uint8Array) => {
+    stdoutChunks.push(typeof chunk === "string" ? chunk : Buffer.from(chunk).toString("utf8"));
+    return true;
+  }) as typeof process.stdout.write;
+
+  try {
+    const { createLogger, debugSuppressedError } = await importFresh<typeof import("../src/utils/logger.js")>("../src/utils/logger.js");
+    const log = createLogger("test.logger");
+    debugSuppressedError(log, "suppressed message", new Error("boom"), { operation: "logger.test" });
+  } finally {
+    process.stdout.write = originalStdoutWrite;
+  }
+
+  const stdout = stdoutChunks.join("");
+  expect(stdout).toContain("suppressed message");
+  expect(stdout).toContain('"suppressed":true');
+  expect(stdout).toContain('"operation":"logger.test"');
+  expect(stdout).toContain('"message":"boom"');
+});

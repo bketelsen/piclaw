@@ -44,7 +44,9 @@ _All previously tracked structural blockers are now in `50-done/`._
 
 ### Active supporting quality work
 
-_No open P1 supporting blockers remain right now._
+| Priority | Ticket | Item |
+|---|---|---|
+| P1 | `enforce-centralized-logging-for-suppressed-errors` | Standardize best-effort catch handling on centralized logging helpers and eliminate empty/comment-only catches |
 
 ### Former blockers now resolved
 

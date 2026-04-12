@@ -10,6 +10,10 @@
 import { mkdirSync, readFileSync, writeFileSync } from "fs";
 import { dirname } from "path";
 
+import { createLogger, debugSuppressedError } from "../utils/logger.js";
+
+const log = createLogger("core.config-store");
+
 /**
  * Read and parse a JSON file, returning its contents as a plain object.
  * Returns an empty object if the file does not exist, is unreadable, or
@@ -22,8 +26,11 @@ export function readJsonConfig(filePath: string): Record<string, unknown> {
     const raw = readFileSync(filePath, "utf-8");
     const parsed = JSON.parse(raw);
     if (parsed && typeof parsed === "object") return parsed as Record<string, unknown>;
-  } catch {
-    // ignore – file missing or malformed
+  } catch (err) {
+    debugSuppressedError(log, "Failed to read JSON config; returning an empty object.", err, {
+      operation: "config_store.read_json_config",
+      filePath,
+    });
   }
   return {};
 }

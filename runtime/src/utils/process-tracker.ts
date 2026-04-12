@@ -13,6 +13,10 @@
 
 import { spawn } from "child_process";
 
+import { createLogger, debugSuppressedError } from "./logger.js";
+
+const log = createLogger("process-tracker");
+
 /** Internal record for a tracked child process. */
 type TrackedProcess = {
   pid: number;
@@ -52,8 +56,11 @@ export function killProcessTree(pid: number): void {
         stdio: "ignore",
         detached: true,
       });
-    } catch {
-      // Ignore errors if taskkill fails
+    } catch (err) {
+      debugSuppressedError(log, "Failed to invoke taskkill for a tracked process tree.", err, {
+        operation: "process_tracker.kill_process_tree.taskkill",
+        pid,
+      });
     }
     return;
   }
@@ -63,8 +70,11 @@ export function killProcessTree(pid: number): void {
   } catch {
     try {
       process.kill(pid, "SIGKILL");
-    } catch {
-      // Process already dead
+    } catch (err) {
+      debugSuppressedError(log, "Failed to SIGKILL a tracked process after process-group termination failed.", err, {
+        operation: "process_tracker.kill_process_tree.kill_pid",
+        pid,
+      });
     }
   }
 }

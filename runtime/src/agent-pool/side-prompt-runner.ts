@@ -10,6 +10,7 @@ import { detectChannel } from "../router.js";
 import { withChatContext } from "../core/chat-context.js";
 import { recordMessageUsage } from "./usage.js";
 import { resolveModelRequestAuth } from "../utils/model-auth.js";
+import { createLogger, debugSuppressedError } from "../utils/logger.js";
 import {
   extractAssistantText,
   extractAssistantThinking,
@@ -19,6 +20,8 @@ import {
   waitForSessionIdle,
 } from "./prompt-utils.js";
 import type { SidePromptOptions, SidePromptResult } from "./contracts.js";
+
+const log = createLogger("agent-pool.side-prompt-runner");
 
 /** Dependencies required to run side prompts. */
 export interface SidePromptRunnerOptions {
@@ -193,16 +196,23 @@ export async function runSidePrompt(
   });
 
   const abortHandler = () => {
-    void sideSession.abort().catch(() => {
-      /* expected */
+    void sideSession.abort().catch((err) => {
+      debugSuppressedError(log, "Failed to abort side-prompt session after caller cancellation.", err, {
+        operation: "run_side_prompt.abort_handler",
+        chatJid,
+      });
     });
   };
   options.signal?.addEventListener("abort", abortHandler, { once: true });
   if (timeoutMs > 0) {
     timeoutId = setTimeout(() => {
       timedOut = true;
-      void sideSession.abort().catch(() => {
-        /* expected */
+      void sideSession.abort().catch((err) => {
+        debugSuppressedError(log, "Failed to abort side-prompt session after timeout.", err, {
+          operation: "run_side_prompt.timeout_abort",
+          chatJid,
+          timeoutMs,
+        });
       });
     }, timeoutMs);
   }

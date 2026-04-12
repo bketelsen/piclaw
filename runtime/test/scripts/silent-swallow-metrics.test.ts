@@ -3,7 +3,12 @@ import { mkdtempSync, mkdirSync, rmSync, symlinkSync, writeFileSync } from "node
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { getSilentSwallowMetrics } from "../../scripts/silent-swallow-metrics.ts";
+import {
+  buildSilentSwallowRemediationHint,
+  findSilentCatchBlocks,
+  findSilentPromiseCatches,
+  getSilentSwallowMetrics,
+} from "../../scripts/silent-swallow-metrics.ts";
 
 async function withTempDir(prefix: string, run: (dir: string) => Promise<void> | void): Promise<void> {
   const dir = mkdtempSync(join(tmpdir(), prefix));
@@ -21,7 +26,7 @@ describe("silent-swallow-metrics", () => {
       writeFileSync(join(dir, "src", "sample.ts"), [
         "// catch {} should not count",
         "/* Promise.resolve().catch(() => {}) should not count */",
-        "const note = \"catch {} in a string should not count\";",
+        'const note = "catch {} in a string should not count";',
         "const tmpl = `Promise.resolve().catch(() => {}) in template text should not count`;",
       ].join("\n"));
 
@@ -72,7 +77,7 @@ describe("silent-swallow-metrics", () => {
     });
   });
 
-  test("detects empty catch blocks and empty promise catches", async () => {
+  test("detects empty and comment-only catch blocks plus empty promise catches", async () => {
     await withTempDir("silent-swallow-detect-", async (dir) => {
       mkdirSync(join(dir, "src"), { recursive: true });
       writeFileSync(join(dir, "src", "sample.ts"), [
@@ -87,18 +92,50 @@ describe("silent-swallow-metrics", () => {
         runtimeCoreDirs: [join(dir, "src")],
       });
 
-      expect(metrics.repoSilentCatchBlocks).toBe(1);
+      expect(metrics.repoSilentCatchBlocks).toBe(2);
       expect(metrics.repoSilentPromiseCatches).toBe(1);
       expect(metrics.repoFilesWithSilentCatches).toBe(1);
-      expect(metrics.runtimeCoreSilentCatches).toBe(1);
+      expect(metrics.runtimeCoreSilentCatches).toBe(2);
     });
+  });
+
+  test("detects comment-only promise catches as silent", async () => {
+    await withTempDir("silent-swallow-comment-promise-", async (dir) => {
+      mkdirSync(join(dir, "src"), { recursive: true });
+      writeFileSync(join(dir, "src", "sample.ts"), "Promise.resolve().catch(() => { /* ignore */ });\n");
+
+      const matches = findSilentPromiseCatches([join(dir, "src", "sample.ts")]);
+      expect(matches).toHaveLength(1);
+      expect(matches[0]?.line).toBe(1);
+    });
+  });
+
+  test("does not flag catch blocks that log the error", async () => {
+    await withTempDir("silent-swallow-logged-", async (dir) => {
+      mkdirSync(join(dir, "src"), { recursive: true });
+      writeFileSync(join(dir, "src", "sample.ts"), [
+        "try { risky(); } catch (error) { console.debug(error); }",
+        "try { riskyAgain(); } catch (error) { logger?.debug?.({ error }, 'ignored in debug mode'); }",
+      ].join("\n"));
+
+      const matches = findSilentCatchBlocks([join(dir, "src", "sample.ts")]);
+      expect(matches).toHaveLength(0);
+    });
+  });
+
+  test("builds remediation guidance with centralized logging severity hints", () => {
+    const hint = buildSilentSwallowRemediationHint();
+    expect(hint).toContain("debugSuppressedError(log");
+    expect(hint).toContain("log.warn");
+    expect(hint).toContain("log.error");
+    expect(hint).toContain("Do not leave catch blocks empty or comment-only");
   });
 
   test("fails in --check mode when silent swallows are present", async () => {
     await withTempDir("silent-swallow-check-", async (dir) => {
       mkdirSync(join(dir, "src"), { recursive: true });
       writeFileSync(join(dir, "src", "sample.ts"), [
-        "try { work(); } catch {}",
+        "try { work(); } catch { /* no logging */ }",
         "Promise.resolve().catch(() => {});",
       ].join("\n"));
 
@@ -115,7 +152,31 @@ describe("silent-swallow-metrics", () => {
       });
 
       expect(proc.exitCode).toBe(1);
-      expect(new TextDecoder().decode(proc.stderr)).toContain("[check:silent-swallows]");
+      const stderr = new TextDecoder().decode(proc.stderr);
+      expect(stderr).toContain("Comment-only handlers count as silent");
+      expect(stderr).toContain("debugSuppressedError(log");
+      expect(stderr).toContain("log.warn");
+      expect(stderr).toContain("log.error");
+    });
+  });
+
+  test("reports file path, line, and snippet for catch matches", async () => {
+    await withTempDir("silent-swallow-match-info-", async (dir) => {
+      mkdirSync(join(dir, "src"), { recursive: true });
+      const filePath = join(dir, "src", "sample.ts");
+      writeFileSync(filePath, [
+        "doThing();",
+        "try { risky(); } catch { // TODO log",
+        "}",
+      ].join("\n"));
+
+      const matches = findSilentCatchBlocks([filePath]);
+      expect(matches).toHaveLength(1);
+      expect(matches[0]).toEqual({
+        filePath,
+        line: 2,
+        snippet: "try { risky(); } catch { // TODO log",
+      });
     });
   });
 });

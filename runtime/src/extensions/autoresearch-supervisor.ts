@@ -19,7 +19,7 @@ import type { AgentToolResult, ExtensionAPI, ExtensionFactory } from "@mariozech
 import { WORKSPACE_DIR } from "../core/config.js";
 import { createMedia } from "../db/media.js";
 import { createLogger } from "../utils/logger.js";
-import { buildAutoresearchSubagentCommand } from "./autoresearch-launcher.js";
+import { buildAutoresearchSubagentCommand, hasPiCliModel, listPiCliModels } from "./autoresearch-launcher.js";
 import { clearAutoresearchSessionFiles, prepareDirectAutoresearchWorktree } from "./autoresearch-workdir.js";
 import { postMessagesToolMessage } from "./messages-crud.js";
 
@@ -679,7 +679,7 @@ function buildModelPickerCard(
         { type: "Input.ChoiceSet", id: "model", style: "compact", choices, value: defaultValue },
         { type: "TextBlock", text: "Isolation", weight: "Bolder", spacing: "Medium" },
         { type: "Input.Toggle", id: "sandbox", title: "Run in a copied sandbox (safer, uses more disk)", value: "true" },
-        { type: "TextBlock", text: "When off, runs directly in the repo on a new git branch. Requires an existing git repository.", wrap: true, isSubtle: true, size: "Small" },
+        { type: "TextBlock", text: "When off, runs in a fresh git worktree on a new branch in the same repo. Requires an existing git repository.", wrap: true, isSubtle: true, size: "Small" },
       ],
       actions: [
         { type: "Action.Submit", title: "Launch Experiment →", data: { intent: "autoresearch-launch" } },
@@ -802,6 +802,16 @@ async function startAutoresearch(
   // Build tmux command
   const tmuxSession = `${TMUX_SESSION_PREFIX}${id}`;
   const model = params.model || "";
+  if (model) {
+    const availablePiModels = listPiCliModels();
+    if (availablePiModels.length === 0) {
+      return failStart("❌ Could not read the autoresearch sub-agent model list. Check `pi --list-models`.");
+    }
+    if (!hasPiCliModel(model, availablePiModels)) {
+      return failStart(`❌ Model ${JSON.stringify(model)} is not available to the autoresearch sub-agent. Pick one from the autoresearch model picker or check \
+\`pi --list-models\`.`);
+    }
+  }
   const extPath = join(VENDOR_DIR, "extensions", "pi-autoresearch", "index.ts");
   const skillPath = join(VENDOR_DIR, "skills", "autoresearch-create");
   const piCommand = buildAutoresearchSubagentCommand({
@@ -913,12 +923,12 @@ async function startAutoresearch(
     `tmux session: ${tmuxSession}`,
     `Project: ${workDir}`,
     worktreeRoot ? `Worktree: ${worktreeRoot}` : "",
-    branchName ? `Branch: ${branchName} (direct mode)` : "Mode: sandboxed copy",
+    branchName ? `Branch: ${branchName} (git worktree mode)` : "Mode: sandboxed copy",
     model ? `Model: ${model}` : "Model: (pi default)",
     params.max_iterations ? `Max iterations: ${params.max_iterations}` : "",
     hasExistingData ? `Resuming with existing JSONL data.` : "",
     "",
-    useSandbox ? `Experiment runs in a copied sandbox — the original repo is not modified by this run.` : `⚠️ Direct mode — changes are made in an isolated git worktree on branch ${branchName}. Existing repo-root autoresearch files are cleared in that worktree before launch to avoid stale experiment state reuse.`,
+    useSandbox ? `Experiment runs in a copied sandbox — the original repo is not modified by this run.` : `⚠️ Git worktree mode — changes are made in a fresh git worktree on branch ${branchName} within the same repo. Existing repo-root autoresearch files are cleared in that worktree before launch to avoid stale experiment state reuse.`,
     `Use stop_autoresearch to stop and clean up.`,
   ].filter(Boolean);
 
@@ -1133,23 +1143,12 @@ export const autoresearchSupervisor: ExtensionFactory = (pi: ExtensionAPI) => {
     promptSnippet: "start_autoresearch: launch an autonomous experiment loop in a tmux sub-agent.",
     parameters: StartSchema,
     async execute(_toolCallId, params, _signal, _update, ctx) {
-      // If no model specified, show a model picker card and defer launch
+      // If no model specified, show a model picker card sourced from the actual
+      // sub-agent CLI model list, not the current runtime registry.
       if (!params.model) {
-        const models: Array<{ label: string; provider: string; id: string; contextWindow?: number }> = [];
-        try {
-          ctx.modelRegistry.refresh();
-          const seen = new Set<string>();
-          for (const m of ctx.modelRegistry.getAvailable()) {
-            if (!m?.provider || !m?.id) continue;
-            const label = `${m.provider}/${m.id}`;
-            if (seen.has(label)) continue;
-            seen.add(label);
-            models.push({ label, provider: m.provider, id: m.id, contextWindow: Number.isFinite(m.contextWindow) ? Number(m.contextWindow) : undefined });
-          }
-        } catch { /* ok */ }
-
+        const models = listPiCliModels();
         if (models.length === 0) {
-          return buildResult("❌ No models available. Configure a model provider first (/login).");
+          return buildResult("❌ No models available to the autoresearch sub-agent. Check `pi --list-models`.");
         }
 
         const currentModel = ctx.model ? `${ctx.model.provider}/${ctx.model.id}` : null;

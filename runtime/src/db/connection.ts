@@ -21,7 +21,7 @@ import fs from "fs";
 import path from "path";
 
 import { STORE_DIR } from "../core/config.js";
-import { createLogger } from "../utils/logger.js";
+import { createLogger, debugSuppressedError } from "../utils/logger.js";
 
 const log = createLogger("db.connection");
 
@@ -481,8 +481,12 @@ function ensureMessageColumns(database: Database): void {
     if (existing.has(name)) return;
     try {
       database.exec(`ALTER TABLE messages ADD COLUMN ${name} ${type}`);
-    } catch {
-      /* expected: schema migration may race a previously-migrated database state. */
+    } catch (err) {
+      debugSuppressedError(log, "Message-column migration raced an already-updated schema state.", err, {
+        operation: "db.ensure_message_columns.add_column",
+        name,
+        type,
+      });
     }
   };
   ensureColumn("content_blocks");
@@ -515,8 +519,12 @@ function ensureScheduledTaskColumns(database: Database): void {
     if (existing.has(name)) return;
     try {
       database.exec(`ALTER TABLE scheduled_tasks ADD COLUMN ${name} ${type}`);
-    } catch {
-      /* expected: schema migration may race a previously-migrated database state. */
+    } catch (err) {
+      debugSuppressedError(log, "Scheduled-task column migration raced an already-updated schema state.", err, {
+        operation: "db.ensure_scheduled_task_columns.add_column",
+        name,
+        type,
+      });
     }
   };
 
@@ -533,8 +541,10 @@ function ensureWebSessionColumns(database: Database): void {
   if (!existing.has("auth_method")) {
     try {
       database.exec("ALTER TABLE web_sessions ADD COLUMN auth_method TEXT");
-    } catch {
-      /* expected: schema migration may race a previously-migrated database state. */
+    } catch (err) {
+      debugSuppressedError(log, "Web-session auth_method migration raced an already-updated schema state.", err, {
+        operation: "db.ensure_web_session_columns.add_auth_method",
+      });
     }
   }
 }
@@ -605,8 +615,12 @@ function ensureChatCursorFailedColumns(database: Database): void {
     if (!cols.has(col)) {
       try {
         database.exec(`ALTER TABLE chat_cursors ADD COLUMN ${col} ${type}`);
-      } catch {
-        /* expected: table or column may already be in the desired migration state. */
+      } catch (err) {
+        debugSuppressedError(log, "Chat-cursor migration raced an already-updated schema state.", err, {
+          operation: "db.ensure_chat_cursor_failed_columns.add_column",
+          column: col,
+          type,
+        });
       }
     }
   }
@@ -671,8 +685,12 @@ export function initDatabase(): void {
     try {
       db.prepare("SELECT 1;").get();
       reuse = true;
-    } catch {
-      /* expected: a stale sqlite handle should trigger a clean reopen path. */
+    } catch (err) {
+      debugSuppressedError(log, "Detected a stale SQLite handle; reopening the database.", err, {
+        operation: "init_database.detect_stale_handle",
+        mode: nextMode,
+        path: nextPath,
+      });
       reuse = false;
     }
   }

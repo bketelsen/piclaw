@@ -16,7 +16,10 @@ import { CONTROL_COMMAND_DEFINITIONS } from "../command-registry.js";
 import { getChatJid } from "../../core/chat-context.js";
 import { getSessionStorageConfig } from "../../core/config.js";
 import { getTokenUsageByModel, getTokenUsageByProvider, getTokenUsageTotals } from "../../db.js";
+import { createLogger, debugSuppressedError } from "../../utils/logger.js";
 import { searchWorkspace } from "../../workspace-search.js";
+
+const log = createLogger("agent-control.info");
 
 type StateCommand = Extract<AgentControlCommand, { type: "state" }>;
 type StatsCommand = Extract<AgentControlCommand, { type: "stats" }>;
@@ -111,8 +114,11 @@ export async function handleStats(session: AgentSession, _command: StatsCommand)
         }
       }
     }
-  } catch {
-    // Database may be unavailable in isolated command-handler tests.
+  } catch (err) {
+    debugSuppressedError(log, "Token-usage statistics were unavailable while building /stats output.", err, {
+      operation: "agent_control.info.stats.token_usage",
+      chatJid,
+    });
   }
 
   return { status: "success", message: lines.join("\n") };

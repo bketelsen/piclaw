@@ -13,7 +13,7 @@ import { readdirSync, statSync, watch } from "fs";
 import type { FSWatcher } from "fs";
 
 import { WORKSPACE_DIR } from "../../../core/config.js";
-import { createLogger } from "../../../utils/logger.js";
+import { createLogger, debugSuppressedError } from "../../../utils/logger.js";
 import { buildTree, compressPaths } from "./tree.js";
 import { resolveWorkspacePath, shouldIgnoreWatchPath, toRelativePath } from "./paths.js";
 
@@ -132,8 +132,11 @@ export function startWorkspaceWatcher(
             truncated: state.truncated,
             changed_paths: Array.from(changedPathSet),
           });
-        } catch {
-          /* expected: watched paths may disappear while a refresh is being assembled. */
+        } catch (err) {
+          debugSuppressedError(log, "Workspace watch refresh skipped a path that disappeared mid-refresh.", err, {
+            operation: "workspace_watcher.queue_path.build_tree",
+            relPath,
+          });
         }
       }
       throttler.schedule(updates);
@@ -143,7 +146,14 @@ export function startWorkspaceWatcher(
   const removeWatcher = (dir: string) => {
     for (const [key, watcher] of Array.from(watchers.entries())) {
       if (key === dir || key.startsWith(`${dir}${path.sep}`)) {
-        try { watcher.close(); } catch { /* expected: fs.watch handle may already be closed during watcher churn. */ }
+        try {
+          watcher.close();
+        } catch (err) {
+          debugSuppressedError(log, "Workspace watcher handle was already closed during watcher churn.", err, {
+            operation: "workspace_watcher.remove_watcher.close",
+            dir: key,
+          });
+        }
         watchers.delete(key);
       }
     }
@@ -193,7 +203,11 @@ export function startWorkspaceWatcher(
     let entries: Array<{ name: string; isDirectory: () => boolean }>;
     try {
       entries = readdirSync(dir, { withFileTypes: true }) as Array<{ name: string; isDirectory: () => boolean }>;
-    } catch {
+    } catch (err) {
+      debugSuppressedError(log, "Workspace watcher could not enumerate a directory while recursing.", err, {
+        operation: "workspace_watcher.add_watcher.readdir",
+        dir,
+      });
       return;
     }
     for (const entry of entries) {
@@ -221,7 +235,13 @@ export function startWorkspaceWatcher(
       pending.clear();
       const watchCount = watchers.size;
       for (const watcher of watchers.values()) {
-        try { watcher.close(); } catch { /* expected: watcher may already be closed during shutdown. */ }
+        try {
+          watcher.close();
+        } catch (err) {
+          debugSuppressedError(log, "Workspace watcher handle was already closed during shutdown.", err, {
+            operation: "workspace_watcher.stop.close",
+          });
+        }
       }
       watchers.clear();
       log.info("Workspace watcher stopped", {

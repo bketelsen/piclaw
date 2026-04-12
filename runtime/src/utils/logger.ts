@@ -19,6 +19,15 @@ export interface StructuredLogger {
   error(message: string, fields?: LogFields): void;
 }
 
+export function debugSuppressedError(
+  log: Pick<StructuredLogger, "debug">,
+  message: string,
+  error: unknown,
+  fields: Record<string, unknown> = {},
+): void {
+  log.debug(message, { ...fields, err: error, suppressed: true });
+}
+
 function serializeError(error: Error): Record<string, unknown> {
   const serialized: Record<string, unknown> = {
     name: error.name,

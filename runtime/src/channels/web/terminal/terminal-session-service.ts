@@ -5,6 +5,7 @@ import type { ServerWebSocket } from "bun";
 
 import { WORKSPACE_DIR } from "../../../core/config.js";
 import { DEFAULT_WEB_USER_ID, getWebSession } from "../../../db.js";
+import { createLogger, debugSuppressedError } from "../../../utils/logger.js";
 import { getSessionTokenFromRequest } from "../auth/session-auth.js";
 
 export interface TerminalSessionOwner {
@@ -65,6 +66,7 @@ const FALLBACK_TERMINAL_OWNER: TerminalSessionOwner = {
 
 const IS_LINUX = process.platform === "linux";
 const DEFAULT_TERMINAL_HANDOFF_TTL_MS = 5 * 60 * 1000;
+const log = createLogger("web.terminal-session-service");
 
 interface TerminalHandoffRecord {
   owner: TerminalSessionOwner;
@@ -74,7 +76,8 @@ interface TerminalHandoffRecord {
 function createTerminalHandoffToken(): string {
   try {
     return crypto.randomUUID();
-  } catch {
+  } catch (error) {
+    debugSuppressedError(log, "crypto.randomUUID unavailable for terminal handoff token", error);
     return `terminal-handoff-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
   }
 }
@@ -102,8 +105,8 @@ function getLibc(): typeof _libc {
     _libc = {
       ioctl: (fd, request, buf) => lib.symbols.ioctl(fd, request, buf) as number,
     };
-  } catch {
-    /* expected: PTY resizing is optional when libc FFI is unavailable. */
+  } catch (error) {
+    debugSuppressedError(log, "libc FFI unavailable; PTY resize disabled", error);
     _libc = null;
   }
   return _libc;
@@ -125,12 +128,12 @@ function resizePty(ptsPath: string, cols: number, rows: number): boolean {
     const winsize = new Uint16Array([rows, cols, 0, 0]);
     fd = openSync(ptsPath, 0); // O_RDONLY
     return libc.ioctl(fd, TIOCSWINSZ, winsize) === 0;
-  } catch {
-    /* expected: PTY path can disappear during resize races. */
+  } catch (error) {
+    debugSuppressedError(log, "failed to resize PTY", error, { ptsPath, cols, rows });
     return false;
   } finally {
     if (fd >= 0) {
-      try { closeSync(fd); } catch { /* expected: fd may already be closed during PTY teardown. */ }
+      try { closeSync(fd); } catch (error) { debugSuppressedError(log, "failed to close PTY fd after resize", error, { fd, ptsPath }); }
     }
   }
 }
@@ -149,14 +152,14 @@ function getChildPids(parentPid: number): number[] {
           // Format: pid (comm) state ppid ...
           const match = stat.match(/^\d+\s+\(.*?\)\s+\S+\s+(\d+)/);
           return match && parseInt(match[1], 10) === parentPid ? parseInt(entry, 10) : 0;
-        } catch {
-          /* expected: /proc entries may vanish while scanning child processes. */
+        } catch (error) {
+          debugSuppressedError(log, "failed to inspect child process stat", error, { procEntry: entry, parentPid });
           return 0;
         }
       })
       .filter((pid) => pid > 0);
-  } catch {
-    /* expected: /proc traversal is unavailable or racing on non-Linux/teardown paths. */
+  } catch (error) {
+    debugSuppressedError(log, "failed to scan /proc for child processes", error, { parentPid });
     return [];
   }
 }
@@ -176,8 +179,8 @@ function findChildPts(parentPid: number): { ptsPath: string; childPids: number[]
       if (target.startsWith("/dev/pts/")) {
         return { ptsPath: target, childPids };
       }
-    } catch {
-      /* expected: child may exit before /proc/<pid>/fd/0 can be inspected. */
+    } catch (error) {
+      debugSuppressedError(log, "failed to inspect child PTY path", error, { parentPid, childPid: cpid });
     }
   }
   return null;
@@ -194,7 +197,12 @@ function findExecutable(name: string): string {
   const dirs = (process.env.PATH || "").split(":").concat(EXTRA_BIN_DIRS);
   for (const dir of dirs) {
     const candidate = `${dir}/${name}`;
-    try { accessSync(candidate, constants.X_OK); return candidate; } catch { /* next */ }
+    try {
+      accessSync(candidate, constants.X_OK);
+      return candidate;
+    } catch (error) {
+      debugSuppressedError(log, "candidate executable unavailable", error, { name, candidate });
+    }
   }
   return name;
 }
@@ -316,8 +324,8 @@ export class TerminalSessionService {
   private parseClientMessage(messageText: string): TerminalClientMessage {
     try {
       return JSON.parse(messageText) as TerminalClientMessage;
-    } catch {
-      /* expected: plain text input frames are not JSON control messages. */
+    } catch (error) {
+      debugSuppressedError(log, "terminal control frame was not JSON; treating as input", error);
       return { type: "input", data: messageText };
     }
   }
@@ -344,8 +352,8 @@ export class TerminalSessionService {
     for (const session of this.sessions.values()) {
       try {
         session.process.kill("SIGHUP");
-      } catch {
-        /* expected: terminal process may already be gone during shutdown. */
+      } catch (error) {
+        debugSuppressedError(log, "terminal process already exited during shutdown", error, { pid: session.process.pid ?? null });
       }
     }
     this.sessions.clear();
@@ -374,7 +382,7 @@ export class TerminalSessionService {
     if (resizePty(session.ptsPath, cols, rows)) {
       // Send SIGWINCH to child processes so they re-query the terminal size
       for (const cpid of getChildPids(pid)) {
-        try { process.kill(cpid, "SIGWINCH"); } catch { /* expected: child may exit between pid scan and signal delivery. */ }
+        try { process.kill(cpid, "SIGWINCH"); } catch (error) { debugSuppressedError(log, "failed to deliver SIGWINCH to child process", error, { childPid: cpid, sessionPid: pid }); }
       }
     }
   }
@@ -434,7 +442,7 @@ export class TerminalSessionService {
           session.ptsPath = result.ptsPath;
           resizePty(result.ptsPath, session.cols, session.rows);
           for (const cpid of result.childPids) {
-            try { process.kill(cpid, "SIGWINCH"); } catch { /* expected: child may exit before the delayed resize signal lands. */ }
+            try { process.kill(cpid, "SIGWINCH"); } catch (error) { debugSuppressedError(log, "failed to deliver initial SIGWINCH to child process", error, { childPid: cpid, sessionPid: proc.pid ?? null }); }
           }
         }
       }, 300);
@@ -454,8 +462,8 @@ export class TerminalSessionService {
   private send(ws: ServerWebSocket<TerminalSocketData>, payload: string | Record<string, unknown>, preEncoded = false): void {
     try {
       ws.send(preEncoded ? (payload as string) : JSON.stringify(payload));
-    } catch {
-      /* expected: browser websocket may close between broadcast iteration and send. */
+    } catch (error) {
+      debugSuppressedError(log, "failed to send terminal websocket payload", error, { token: ws.data?.token ?? null, userId: ws.data?.userId ?? null });
     }
   }
 }

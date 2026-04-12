@@ -14,6 +14,7 @@ import { getTaskById, createTask, getDb, updateTask } from "./db.js";
 import { refreshWorkspaceIndex } from "./workspace-search.js";
 import { computeNextRun } from "./task-scheduler-utils.js";
 import { sanitiseJid } from "./agent-pool/session.js";
+import { createLogger, debugSuppressedError } from "./utils/logger.js";
 
 export const DREAM_TASK_ID = "builtin-dream-midnight";
 export const DREAM_TASK_KIND = "internal" as const;
@@ -52,6 +53,7 @@ const DREAM_RECENT_CONTEXT_PATH = resolve(DREAM_MEMORY_DIR, "recent-context.md")
 const DREAM_MEMORY_PATH = resolve(DREAM_MEMORY_DIR, "MEMORY.md");
 const DREAM_BACKUP_KEEP = Math.max(1, Number.parseInt(process.env.PICLAW_DREAM_BACKUP_KEEP || "10", 10) || 10);
 const DREAM_MODEL = process.env.PICLAW_DREAM_MODEL?.trim() || null;
+const log = createLogger("dream");
 
 export interface DreamAgentTurnResult {
   mode: "manual" | "auto";
@@ -70,7 +72,8 @@ function readLastConsolidatedAt(): string | null {
     const text = readFileSync(DREAM_CURRENT_STATE_PATH, "utf8");
     const match = text.match(/^Generated:\s*(.+)$/m);
     return match?.[1]?.trim() || null;
-  } catch {
+  } catch (error) {
+    debugSuppressedError(log, "failed to read last Dream consolidation timestamp", error, { path: DREAM_CURRENT_STATE_PATH });
     return null;
   }
 }
@@ -108,7 +111,8 @@ function countSessionsSince(chatJid: string, sinceIso: string | null): number | 
          AND m.timestamp > ?`
     ).get(chatJid, sinceIso);
     return row?.count ?? 0;
-  } catch {
+  } catch (error) {
+    debugSuppressedError(log, "failed to count sessions since Dream consolidation", error, { chatJid, sinceIso });
     return null;
   }
 }
@@ -180,8 +184,8 @@ function reapDreamArtifacts(excludeDreamChatJid?: string | null): void {
       db.prepare("DELETE FROM chats WHERE jid LIKE 'dream:%'").run();
       db.prepare("DELETE FROM token_usage WHERE chat_jid LIKE 'dream:%'").run();
     }
-  } catch {
-    /* ignore */
+  } catch (error) {
+    debugSuppressedError(log, "failed to reap Dream chat records", error, { excludeDreamChatJid: excludeDreamChatJid || null });
   }
 
   try {
@@ -191,16 +195,16 @@ function reapDreamArtifacts(excludeDreamChatJid?: string | null): void {
       if (excluded.has(name.name)) continue;
       rmSync(join(SESSIONS_DIR, name.name), { recursive: true, force: true });
     }
-  } catch {
-    /* ignore */
+  } catch (error) {
+    debugSuppressedError(log, "failed to reap Dream session directories", error, { sessionsDir: SESSIONS_DIR, excludeDreamChatJid: excludeDreamChatJid || null });
   }
 }
 
 async function cleanupDreamChat(agentPool: AgentPool, dreamChatJid: string): Promise<void> {
   try {
     await agentPool.disposeChatSession(dreamChatJid);
-  } catch {
-    /* ignore */
+  } catch (error) {
+    debugSuppressedError(log, "failed to dispose Dream chat session", error, { dreamChatJid });
   }
 
   try {
@@ -211,8 +215,8 @@ async function cleanupDreamChat(agentPool: AgentPool, dreamChatJid: string): Pro
     db.prepare("DELETE FROM chat_branches WHERE chat_jid = ?").run(dreamChatJid);
     db.prepare("DELETE FROM chats WHERE jid = ?").run(dreamChatJid);
     db.prepare("DELETE FROM token_usage WHERE chat_jid = ?").run(dreamChatJid);
-  } catch {
-    /* ignore */
+  } catch (error) {
+    debugSuppressedError(log, "failed to delete Dream chat artifacts", error, { dreamChatJid });
   }
 
   rmSync(join(SESSIONS_DIR, sanitiseJid(dreamChatJid)), { recursive: true, force: true });
@@ -229,10 +233,12 @@ function canReapDreamLock(): boolean {
     try {
       process.kill(pid, 0);
       return false;
-    } catch {
+    } catch (error) {
+      debugSuppressedError(log, "Dream lock owner PID is stale or inaccessible", error, { pid });
       return true;
     }
-  } catch {
+  } catch (error) {
+    debugSuppressedError(log, "failed to inspect Dream lock", error, { path: DREAM_LOCK_PATH });
     return true;
   }
 }
@@ -256,15 +262,24 @@ function acquireDreamLock(): number {
 }
 
 function releaseDreamLock(fd: number): void {
-  try { closeSync(fd); } catch { /* ignore */ }
-  try { rmSync(DREAM_LOCK_PATH, { force: true }); } catch { /* ignore */ }
+  try {
+    closeSync(fd);
+  } catch (error) {
+    debugSuppressedError(log, "failed to close Dream lock fd", error, { fd, path: DREAM_LOCK_PATH });
+  }
+  try {
+    rmSync(DREAM_LOCK_PATH, { force: true });
+  } catch (error) {
+    debugSuppressedError(log, "failed to remove Dream lock file", error, { path: DREAM_LOCK_PATH });
+  }
 }
 
 async function refreshWorkspaceSearchIndex(): Promise<boolean> {
   try {
     await refreshWorkspaceIndex({ scope: "all" });
     return true;
-  } catch {
+  } catch (error) {
+    debugSuppressedError(log, "failed to refresh workspace search index after Dream", error);
     return false;
   }
 }

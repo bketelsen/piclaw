@@ -13,7 +13,7 @@ export const AUTORESEARCH_SESSION_FILE_NAMES = [
   "autoresearch.session.json",
 ] as const;
 
-/** Prepared git-worktree paths for a direct-mode autoresearch experiment. */
+/** Prepared git-worktree paths for a git-worktree autoresearch experiment. */
 export interface PreparedAutoresearchWorktree {
   /** Resolved git repository root containing the source project. */
   repoRoot: string;
@@ -43,7 +43,7 @@ export function clearAutoresearchSessionFiles(workDir: string): void {
 }
 
 /**
- * Create a fresh git worktree + branch for a direct-mode autoresearch run.
+ * Create a fresh git worktree + branch for a non-sandbox autoresearch run.
  * @param projectDir Source project directory inside an existing git repository.
  * @param sessionDir Session directory used to hold the experiment worktree.
  * @param branchName Experiment branch name to create.
@@ -55,13 +55,18 @@ export function prepareDirectAutoresearchWorktree(
   branchName: string,
 ): PreparedAutoresearchWorktree {
   const resolvedProjectDir = resolve(projectDir);
-  const repoRoot = execFileSync("git", ["-C", resolvedProjectDir, "rev-parse", "--show-toplevel"], {
-    encoding: "utf8",
-    stdio: ["ignore", "pipe", "pipe"],
-  }).trim();
+  let repoRoot = "";
+  try {
+    repoRoot = execFileSync("git", ["-C", resolvedProjectDir, "rev-parse", "--show-toplevel"], {
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "pipe"],
+    }).trim();
+  } catch (error) {
+    throw new Error(`Git worktree mode requires an existing git repository in ${resolvedProjectDir}.`, { cause: error });
+  }
 
   if (!repoRoot || !existsSync(join(repoRoot, ".git"))) {
-    throw new Error(`Direct mode requires an existing git repository in ${resolvedProjectDir}.`);
+    throw new Error(`Git worktree mode requires an existing git repository in ${resolvedProjectDir}.`);
   }
 
   const relativeProjectPath = relative(repoRoot, resolvedProjectDir);
