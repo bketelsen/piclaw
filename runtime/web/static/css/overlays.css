@@ -476,18 +476,12 @@
     font-family: var(--font-family-mono);
     white-space: nowrap; line-height: 1.5;
 }
-.st-tag.user { background: color-mix(in srgb, #3b82f6 18%, transparent 82%); color: #60a5fa; }
-.st-tag.assistant { background: color-mix(in srgb, #22c55e 18%, transparent 82%); color: #4ade80; }
-.st-tag.tool { background: color-mix(in srgb, #f59e0b 18%, transparent 82%); color: #fbbf24; }
-.st-tag.result { background: color-mix(in srgb, #8b5cf6 18%, transparent 82%); color: #a78bfa; }
+.st-tag.user { background: color-mix(in srgb, var(--accent-color) 16%, transparent 84%); color: var(--accent-color); }
+.st-tag.assistant { background: color-mix(in srgb, var(--success-color) 16%, transparent 84%); color: var(--success-color); }
+.st-tag.tool { background: color-mix(in srgb, var(--accent-color) 24%, var(--success-color) 8%); color: color-mix(in srgb, var(--accent-color) 40%, var(--success-color) 60%); }
+.st-tag.result { background: color-mix(in srgb, var(--accent-color) 10%, var(--text-secondary) 8%); color: color-mix(in srgb, var(--accent-color) 50%, var(--text-secondary) 50%); }
 .st-tag.system { background: color-mix(in srgb, var(--text-secondary) 12%, transparent 88%); color: var(--text-secondary); }
 .st-tag.other { background: color-mix(in srgb, var(--text-secondary) 12%, transparent 88%); color: var(--text-secondary); }
-
-/* Light theme overrides for tag readability */
-[data-theme="light"] .st-tag.user { color: #2563eb; }
-[data-theme="light"] .st-tag.assistant { color: #16a34a; }
-[data-theme="light"] .st-tag.tool { color: #d97706; }
-[data-theme="light"] .st-tag.result { color: #7c3aed; }
 
 /* ── Row text ── */
 .st-text {
