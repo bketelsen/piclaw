@@ -403,12 +403,6 @@ export async function handleAgentMessage(
 
   let threadId = resolveThreadId(normalized.threadId, interaction.id);
 
-  const markCommandHandled = () => {
-    if (interaction?.timestamp) {
-      setChatCursor(chatJid, interaction.timestamp);
-    }
-  };
-
   const identity = getIdentityConfig();
   const withAgentProfile = createAgentProfileBuilder(
     chatJid,
@@ -533,7 +527,6 @@ export async function handleAgentMessage(
 
     if (formatted || result.contentBlocks?.length) {
       if (isQueueCommand && result.queued_followup) {
-        markCommandHandled();
         return queueDeferredFollowup(((command as { message?: string }).message || content).trim());
       } else if (isSteerCommand && (result as { queued_steer?: boolean }).queued_steer) {
         const steerResponse = await queueSteerMessage("command");
@@ -541,7 +534,6 @@ export async function handleAgentMessage(
           return steerResponse;
         }
       } else if (isSteerCommand && (result as { queued_followup?: boolean }).queued_followup) {
-        markCommandHandled();
         return queueDeferredFollowup(((command as { message?: string }).message || content).trim());
       } else if (isSteerCommand && result.status === "error" && result.message === "No active response to steer. Please send a message first.") {
         const queueResponse = await queueFollowupMessage();
@@ -602,7 +594,6 @@ export async function handleAgentMessage(
       return channel.json({ user_message: interaction, thread_id: threadId, command: result, queued: "steer" }, 201);
     }
 
-    markCommandHandled();
     return channel.json(
       { user_message: interaction, thread_id: threadId, command: result },
       201
@@ -659,7 +650,6 @@ export async function handleAgentMessage(
       });
     }
 
-    markCommandHandled();
     return channel.json(
       { user_message: interaction, thread_id: threadId, command: cmdResult },
       201

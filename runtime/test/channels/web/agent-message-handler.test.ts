@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import "../../helpers.ts";
-import { initDatabase } from "../../../src/db.js";
+import { beginChatRun, getChatCursor, getInflightMessageId, initDatabase } from "../../../src/db.js";
 import { handleAgentMessage } from "../../../src/channels/web/handlers/agent.ts";
 
 describe("web agent message handler", () => {
@@ -206,6 +206,73 @@ describe("web agent message handler", () => {
     expect(sentMessages).toHaveLength(1);
     expect(sentMessages[0]?.content).toContain("Cannot rotate the session while a response");
     expect(broadcasts.some((entry) => entry.event === "new_post")).toBe(true);
+  });
+
+  test("does not advance the chat cursor for commands while another turn is inflight", async () => {
+    initDatabase();
+
+    const chatJid = "web:default";
+    const inflightTimestamp = "2026-03-14T21:00:00.000Z";
+    beginChatRun(chatJid, inflightTimestamp, {
+      prevTs: "2026-03-14T20:59:00.000Z",
+      messageId: "active-message-id",
+      startedAt: "2026-03-14T21:00:00.100Z",
+    });
+
+    const broadcasts: Array<{ event: string; payload: unknown }> = [];
+    const sentMessages: Array<{ chatJid: string; content: string; options: unknown }> = [];
+
+    const channel = {
+      agentPool: {
+        isStreaming: () => true,
+        isActive: () => true,
+        applyControlCommand: async (_chatJid: string, command: { type: string; raw: string }) => {
+          expect(command.type).toBe("tree");
+          expect(command.raw).toBe("/tree");
+          return {
+            status: "success",
+            message: "tree output",
+          };
+        },
+      },
+      json: (payload: unknown, status = 200) =>
+        new Response(JSON.stringify(payload), {
+          status,
+          headers: { "Content-Type": "application/json" },
+        }),
+      enqueueQueuedFollowupItem: () => 0,
+      getQueuedFollowupCount: () => 0,
+      broadcastEvent: (event: string, payload: unknown) => {
+        broadcasts.push({ event, payload });
+      },
+      updateAgentStatus: () => {},
+      storeMessage: () => ({
+        id: 987,
+        timestamp: "2026-03-14T21:05:00.000Z",
+        data: { thread_id: null },
+        content: "/tree",
+      }),
+      sendMessage: async (targetChatJid: string, content: string, options: unknown) => {
+        sentMessages.push({ chatJid: targetChatJid, content, options });
+      },
+    } as any;
+
+    const req = new Request("https://example.com/agent/default/message", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ content: "/tree" }),
+    });
+
+    const response = await handleAgentMessage(channel, req, "/agent/default/message", chatJid, "default");
+    expect(response.status).toBe(201);
+
+    const body = await response.json();
+    expect(body.command?.status).toBe("success");
+    expect(sentMessages).toHaveLength(1);
+    expect(sentMessages[0]?.content).toBe("tree output");
+    expect(broadcasts.some((entry) => entry.event === "new_post")).toBe(true);
+    expect(getChatCursor(chatJid)).toBe(inflightTimestamp);
+    expect(getInflightMessageId(chatJid)).toBe("active-message-id");
   });
 
   test("surfaces a successful /session-rotate result immediately when the chat is idle", async () => {

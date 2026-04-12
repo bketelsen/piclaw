@@ -465,6 +465,7 @@ export function getNewMessages(
     FROM messages
     WHERE timestamp > ? AND chat_jid IN (${placeholders})
       AND is_bot_message = 0 AND content NOT LIKE ?
+      AND LTRIM(content) NOT LIKE '/%'
       AND COALESCE(is_steering_message, 0) = 0
     ORDER BY timestamp
   `;
@@ -494,6 +495,7 @@ export function getMessagesSince(
     FROM messages
     WHERE chat_jid = ? AND timestamp > ?
       AND is_bot_message = 0 AND content NOT LIKE ?
+      AND LTRIM(content) NOT LIKE '/%'
       AND COALESCE(is_steering_message, 0) = 0
     ORDER BY timestamp
   `;
