@@ -12,7 +12,7 @@ code-registered built-in extension factories wired directly into the runtime.
 - `viewers/` — packaged viewer/editor web-surface extensions
 - `integrations/` — packaged runtime integration/helper extensions
 - `experimental/` — packaged experimental or harness-only extension entries
-  - `experimental/m365/` — Microsoft 365 tool bundle (env-gated; browser/CDP-assisted, primarily validated on Windows, with cross-platform Edge → Chrome → Chromium lookup)
+  - `experimental/m365/` — Microsoft 365 tool bundle (env-gated; browser/CDP-assisted, primarily validated on Windows, with cross-platform Edge → Chrome → Chromium lookup; Graph-backed consumer-account support now exists, while Teams chat flows still require a work/school tenant)
 
 ## Guardrail
 

@@ -98,7 +98,7 @@ PiClaw is single-user, mobile-friendly, and streams updates over SSE.
 - **`/image` and `/flux`** — workspace-backed image generation commands for Azure OpenAI / Foundry; `/image` now supports `--transparent` for transparent PNG output when the Azure OpenAI model supports it
 - **`cdp_browser`** — Chromium/Edge/Chrome automation via CDP for navigation, JS evaluation, DOM clicking, and screenshots
 - **`mcp` via `pi-mcp-adapter`** — token-efficient access to external MCP servers configured through `.pi/mcp.json`
-- **Experimental `m365` extension** — opt-in Microsoft 365 automation bundle for Teams, Graph, OneDrive, SharePoint, and calendar flows; enable with `PICLAW_ENABLE_M365_EXPERIMENTAL=1` (primarily validated on Windows with YOLO mode, with Edge → Chrome → Chromium browser lookup across Windows/macOS/Linux)
+- **Experimental `m365` extension** — opt-in Microsoft 365 automation bundle for Teams, Graph, OneDrive, SharePoint, and calendar flows; enable with `PICLAW_ENABLE_M365_EXPERIMENTAL=1` (primarily validated on Windows with YOLO mode, with Edge → Chrome → Chromium browser lookup across Windows/macOS/Linux). Graph-backed consumer-account support now exists; Teams chat flows still require a work/school tenant.
 - **`win_*` tools** — Windows-only desktop automation via Win32 FFI for window enumeration, screenshots, element inspection, clicking, typing, and process management. No-ops on non-Windows platforms.
 
 ## Configuration
@@ -156,6 +156,7 @@ See [docs/development.md](docs/development.md).
 - [Cross-instance interop](docs/cross-instance-ipc.md)
 - [MCP via pi-mcp-adapter](docs/mcp.md)
 - [Azure OpenAI extension](docs/azure/azure-openai-extension.md) — managed-identity provider notes plus `/image` and `/flux` behaviour
+- [Experimental M365 extension](docs/m365-experimental-extension.md) — Microsoft 365 browser-auth automation, including current consumer-account support boundaries
 - [Development](docs/development.md)
 
 ## Credits

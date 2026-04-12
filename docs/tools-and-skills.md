@@ -384,11 +384,13 @@ Direct commands (no LLM round-trip):
 | `/bash <cmd>` | Run a shell command and add output to context |
 | `/queue <msg>` | Queue a follow-up message (one at a time) |
 | `/queue-all <msg>` | Queue a follow-up message (batch all) |
+| `/steer <msg>` | Send immediate steering input to the current response |
 | `/steering-mode all\|one` | Set steering mode |
 | `/followup-mode all\|one` | Set follow-up mode |
 | `/session-name [name]` | Set or show the session name |
 | `/new-session` | Start a new session |
 | `/switch-session <file>` | Switch to a session file |
+| `/session-rotate` | Rotate the current persisted session into an archived file |
 | `/fork` | Fork from a previous message |
 | `/forks` | List forkable messages |
 | `/tree` | List the session tree and navigate branches |
@@ -404,11 +406,15 @@ Direct commands (no LLM round-trip):
 | `/totp` / `/totp reset <code>` | Open the single-card TOTP setup/secondary/reset flow; commit only after confirmation |
 | `/qr <text>` | Generate a QR code for text or a URL |
 | `/search <query>` | Search notes and skills in the workspace |
+| `/login [provider]` | Login to an AI model provider (OAuth or API key) |
+| `/logout [provider]` | Logout from an AI model provider |
 | `/image <prompt> [--size ...] [--count ...] [--quality ...] [--style ...] [--transparent]` | Generate an Azure OpenAI image into workspace-backed files; `--transparent` requests transparent PNG output |
 | `/flux <prompt> [--size ...] [--count ...] [--quality ...]` | Generate an Azure Foundry image into workspace-backed files |
 | `/restart` | Restart the agent and stop subprocesses |
+| `/exit` | Exit the current piclaw process immediately so the service manager restarts it |
 | `/commands` | List available commands (shows sourceInfo provenance: scope, source, and origin for extension commands, templates, and skills) |
 | `/btw <question>` | Open a side-conversation panel in the web UI and stream an answer without interrupting the main chat |
+| `/meters on\|off\|toggle` | Toggle the web UI CPU/RAM HUD |
 | `/tasks [filter]` | List scheduled tasks (via extension) |
 | `/scheduled [filter]` | Alias for `/tasks` |
 | `/dream [days]` | Queue an out-of-band Dream cycle on a temporary `dream:` channel; runtime backs up notes, seeds daily notes from DB, the model follows Orient / Signal / Consolidate / Prune and Index, and runtime refreshes FTS at the end |
@@ -439,6 +445,7 @@ Adaptive Card and side-conversation helpers are intentionally explicit web-facin
 - card submissions are persisted as structured `adaptive_card_submission` blocks, so the timeline can render compact receipt UI and finished cards can display their submitted values read-only.
 - `/btw` is currently a thin consumer of the side-prompt substrate: it streams a side answer in the web panel, reseeds from current main-chat context, and only injects back into the main chat when explicitly requested.
 - `/btw` currently reuses the chat's model/thinking context but is still prompt-only rather than a full side tool-using agent loop.
+- `/theme`, `/tint`, and `/meters` are web-local UI commands handled without an LLM round-trip.
 - `/context` reports current context-window usage; the compose-footer indicator is refreshed on reconnect and when returning to the tab so the compaction affordance stays current.
 
 ## Skill pipeline

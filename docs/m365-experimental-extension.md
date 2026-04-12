@@ -27,6 +27,23 @@ The extension exposes tools for:
 - SharePoint browse / search / download / upload / move flows
 - calendar queries and calendar SVG rendering
 
+## Account support
+
+Consumer-account support now exists for the Graph-backed part of the extension.
+
+### Works with personal Microsoft accounts
+
+- Graph token acquisition can use an Outlook Live browser session (`outlook.live.com`) via the consumer OAuth flow in `shared.ts`
+- Graph-backed reads such as profile / people / mail / calendar can authenticate through that consumer flow
+- `m365_onedrive_share_local_file` is the intended personal-OneDrive upload/share helper
+
+### Still requires a work/school M365 account
+
+- Teams chat tools (`m365_teams_*`) — guarded by `requireTeams(...)`
+- SharePoint/enterprise document flows where Teams/SharePoint work context is required
+
+In code, consumer accounts are detected via the Microsoft consumer tenant id (`9188040d-6c67-4c5b-b112-36a304b66dad`). When a consumer session is visible, Graph auth prefers the Outlook Live PKCE flow before enterprise Teams-based token recovery.
+
 ## Platform support
 
 The bundled copy is intended to run on:
@@ -60,8 +77,8 @@ Important behavior:
 
 - primarily validated on Windows
 - by design, the extension requires user consent to operate and access M365
-- Leverages browser authentication to ensure full compliance with security policies (i.e., you will need to authenticate manually with whatever security mechanisms you have set up for consumer or business M365)
-- only supports a single account (also by design)
+- Leverages browser authentication to ensure full compliance with security policies (you authenticate in the browser with whatever security mechanisms are already configured for your personal or business Microsoft account)
+- only supports a single active account/browser session at a time (by design)
 - safe behaviors by design: dry-run mode, only drafts e-mails, doesn't send them, etc.
 - `PICLAW_M365_YOLO=1` skips the explicit consent interstitial and was the main Windows validation mode
 - auth/token/cookie caching is RAM-only in this redistributed copy
@@ -80,6 +97,17 @@ Results:
 - no embedded private credentials were found
 - personal/local Windows path references from the bundle README were removed from the adopted docs
 - browser lookup was expanded so Windows/macOS/Linux all search Edge, then Chrome, then Chromium
+
+## Configuration knobs
+
+| Variable | Purpose |
+|---|---|
+| `PICLAW_ENABLE_M365_EXPERIMENTAL=1` | Enable the packaged M365 extension |
+| `M365_EDGE_PATH` | Explicit Edge/Chrome/Chromium executable override |
+| `M365_USE_TEMP_EDGE_PROFILE=true` | Use a temporary browser profile instead of the normal logged-in profile |
+| `PICLAW_M365_YOLO=1` | Skip the explicit consent interstitial before auth navigation |
+| `M365_TENANT_ID` | Force the tenant id instead of starting from `common` and auto-discovering |
+| `M365_CHATSVC_REGION` | Force the Teams chatsvc region instead of auto-discovering it |
 
 ## Validation
 
