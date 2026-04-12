@@ -29,6 +29,7 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import * as os from "node:os";
 import { execFileSync, execSync, spawn, type ChildProcess } from "node:child_process";
+import { createHash, randomBytes } from "node:crypto";
 
 // ═══════════════════════════════════════════════════════════════════════════
 // AUTH LAYER
@@ -44,6 +45,13 @@ export const CDP_PORT_START = 9224;
 const TEAMS_CLIENT_ID = "5e3ce6c0-2b1f-4285-8d4b-75ee78787346";
 const TEAMS_START_URL = "https://teams.microsoft.com/v2";
 const TEAMS_REDIRECT_URI = "https://teams.microsoft.com/go";
+const OUTLOOK_CLIENT_ID = "9199bf20-a13f-4107-85dc-02114787ef48";
+const OUTLOOK_REDIRECT_URI = "https://outlook.live.com/mail/";
+const CONSUMER_GRAPH_SCOPES = [
+	"openid",
+	"profile",
+	"https://graph.microsoft.com/User.Read",
+].join(" ");
 
 // Tenant ID: env override, or auto-discovered from Graph token on first use.
 // Default to "common" for multi-tenant login; resolved to actual tenant after first auth.
@@ -616,6 +624,266 @@ async function redeemTeamsRefreshToken(resource: string): Promise<string | null>
 	return typeof data?.access_token === "string" && data.access_token.length > 100 ? data.access_token : null;
 }
 
+
+function base64UrlEncode(buffer: Buffer): string {
+	return buffer.toString("base64").replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
+}
+
+/**
+ * Check whether the current CDP browser session contains a signed-in Outlook Live
+ * consumer account. Uses both tab URL detection and MSAL account tenant verification
+ * to avoid false positives in mixed work/personal browser sessions.
+ */
+async function hasOutlookLiveSession(): Promise<boolean> {
+	const existingPort = await findExistingCdpPort();
+	if (!existingPort) return false;
+	const targets: any[] = await httpGet(`http://localhost:${existingPort}/json`, 3000);
+	const outlookTarget = targets.find((t: any) => t.type === "page" && t.url?.includes("outlook.live.com/mail"));
+	if (!outlookTarget?.webSocketDebuggerUrl) return false;
+
+	// Verify the signed-in account is actually a consumer account by checking
+	// the MSAL account tenant in localStorage. This prevents hijacking enterprise
+	// Graph auth when the browser has both work and personal sessions.
+	try {
+		const ws = await connectDebuggerUrl(outlookTarget.webSocketDebuggerUrl);
+		try {
+			const hasConsumer = await cdpEval(ws, `(() => {
+				try {
+					const CONSUMER = "9188040d-6c67-4c5b-b112-36a304b66dad";
+					const keys = JSON.parse(localStorage.getItem('msal.2.account.keys') || '[]');
+					for (const key of keys) {
+						const acct = JSON.parse(localStorage.getItem(key) || 'null');
+						if (!acct) continue;
+						const tid = acct.realm ?? acct.tenantProfiles?.[0]?.tenantId ?? null;
+						if (tid === CONSUMER) return true;
+					}
+					return false;
+				} catch { return false; }
+			})()`, false, 5000);
+			return hasConsumer === true;
+		} finally {
+			try { ws.close(); } catch {
+				// Best-effort debugger cleanup.
+			}
+		}
+	} catch {
+		return false;
+	}
+}
+
+async function showConsumerConsentAndWait(): Promise<boolean> {
+	const existingPort = await findExistingCdpPort();
+	if (!existingPort) return false;
+
+	const target: any = await httpPut(`http://localhost:${existingPort}/json/new?${encodeURIComponent("about:blank")}`, 5000);
+	if (!target?.webSocketDebuggerUrl) return false;
+
+	const ws = await connectDebuggerUrl(target.webSocketDebuggerUrl);
+	try {
+		cdpSend(ws, "Page.enable");
+		cdpSend(ws, "Runtime.enable");
+		const addBindingId = cdpSend(ws, "Runtime.addBinding", { name: "__m365ConsentApproved" });
+		const bindingMsgs = await cdpCollect(ws, 300);
+		const bindingError = bindingMsgs.find((m) => m.id === addBindingId && m.error);
+		if (bindingError) {
+			try { ws.close(); } catch {
+				// Best-effort debugger cleanup.
+			}
+			return false;
+		}
+
+		const purpose = "The agent needs to silently refresh a Graph access token using your signed-in Outlook session. No new sign-in is required — this just authorises the agent to read your Microsoft account data via the existing browser session.";
+		await cdpEval(ws, `document.open();document.write(${JSON.stringify(buildM365ConsentHtml(purpose))});document.close();true`, false, 5000);
+		await cdpWaitFor(ws, `typeof window.__m365ConsentApproved`, (v) => v === "function", 5000, 100);
+
+		const deadline = Date.now() + 10 * 60 * 1000;
+		while (Date.now() < deadline) {
+			const msgs = await cdpCollect(ws, 750);
+			const approved = msgs.find((m) => m.method === "Runtime.bindingCalled" && m.params?.name === "__m365ConsentApproved");
+			if (approved) {
+				try { ws.close(); } catch {
+					// Best-effort debugger cleanup.
+				}
+				// Close the consent tab
+				if (target.id) {
+					try { await httpPut(`http://localhost:${existingPort}/json/close/${target.id}`, 3000); } catch {
+						// Best-effort tab cleanup.
+					}
+				}
+				return true;
+			}
+			if (target.id) {
+				const page = await findPageTargetById(existingPort, target.id).catch(() => null);
+				if (!page) {
+					try { ws.close(); } catch {
+						// Best-effort debugger cleanup.
+					}
+					return false;
+				}
+			}
+		}
+		try { ws.close(); } catch {
+			// Best-effort debugger cleanup.
+		}
+		if (target.id) {
+			try { await httpPut(`http://localhost:${existingPort}/json/close/${target.id}`, 3000); } catch {
+				// Best-effort tab cleanup.
+			}
+		}
+		return false;
+	} catch {
+		try { ws.close(); } catch {
+			// Best-effort debugger cleanup.
+		}
+		return false;
+	}
+}
+
+async function acquireConsumerGraphToken(): Promise<string | null> {
+	// Consumer Graph token acquisition using silent PKCE auth-code flow.
+	//
+	// Opens a tab with prompt=none in the signed-in Outlook browser session,
+	// captures the auth code from the redirect, and exchanges it via browser-context
+	// fetch() (required because the Outlook client is registered as an SPA and
+	// Microsoft enforces the Origin header on the token endpoint).
+	//
+	// Security properties:
+	// - PKCE (S256) binds the code to this specific verifier
+	// - OAuth state parameter binds the redirect to this specific auth attempt
+	// - Redirect capture is scoped to the auth tab we opened (not all tabs)
+	// - No auth material is written to disk
+
+	if (!M365_YOLO) {
+		const consentOk = await showConsumerConsentAndWait();
+		if (!consentOk) return null;
+	}
+
+	const cdpPort = await findExistingCdpPort();
+	if (!cdpPort) return null;
+
+	const verifier = base64UrlEncode(randomBytes(32));
+	const challenge = base64UrlEncode(createHash("sha256").update(verifier).digest());
+	const state = base64UrlEncode(randomBytes(16));
+	const expectedRedirect = new URL(OUTLOOK_REDIRECT_URI);
+
+	const authUrl =
+		`https://login.microsoftonline.com/consumers/oauth2/v2.0/authorize` +
+		`?client_id=${OUTLOOK_CLIENT_ID}` +
+		`&response_type=code` +
+		`&redirect_uri=${encodeURIComponent(OUTLOOK_REDIRECT_URI)}` +
+		`&response_mode=query` +
+		`&scope=${encodeURIComponent(CONSUMER_GRAPH_SCOPES)}` +
+		`&prompt=none` +
+		`&state=${encodeURIComponent(state)}` +
+		`&code_challenge=${encodeURIComponent(challenge)}` +
+		`&code_challenge_method=S256`;
+
+	try {
+		// Find Outlook target for token exchange
+		const targets: any[] = await httpGet(`http://localhost:${cdpPort}/json`, 3000);
+		const outlookTarget = targets.find((t: any) => t.type === "page" && t.url?.includes("outlook.live.com/mail"));
+		if (!outlookTarget?.webSocketDebuggerUrl) return null;
+
+		// Open auth tab
+		const authTab: any = await httpPut(`http://localhost:${cdpPort}/json/new?${encodeURIComponent(authUrl)}`, 5000);
+		const authTabId: string | null = authTab?.id ?? null;
+		if (!authTabId) return null;
+
+		// Poll the specific auth tab for redirect with matching state
+		let authCode: string | null = null;
+		const deadline = Date.now() + 20000;
+		while (Date.now() < deadline) {
+			await sleep(600);
+			try {
+				const page = await findPageTargetById(cdpPort, authTabId).catch(() => null);
+				if (!page) break; // tab was closed externally
+				const url = page.url ?? "";
+
+				// Validate: must be our redirect URI origin/path, must have matching state
+				try {
+					const urlObj = new URL(url);
+					if (urlObj.origin !== expectedRedirect.origin || urlObj.pathname !== expectedRedirect.pathname) continue;
+
+					const returnedState = urlObj.searchParams.get("state");
+					const returnedCode = urlObj.searchParams.get("code");
+					const returnedError = urlObj.searchParams.get("error");
+
+					if (returnedError) break; // auth error, stop polling
+
+					if (returnedCode && returnedState === state) {
+						authCode = returnedCode;
+						break;
+					}
+					// If code present but state mismatch, ignore (stale/foreign redirect)
+				} catch { /* invalid URL, skip */ }
+			} catch { /* retry */ }
+		}
+
+		// Cleanup auth tab
+		if (authTabId) {
+			try { await httpPut(`http://localhost:${cdpPort}/json/close/${authTabId}`, 3000); } catch {
+				// Best-effort tab cleanup.
+			}
+		}
+
+		if (!authCode) return null;
+
+		// Token exchange via browser fetch inside the Outlook page context.
+		// The Outlook client is registered as an SPA — Microsoft requires the Origin header,
+		// which the browser automatically provides on cross-origin fetch from the Outlook page.
+		const ws = new WebSocket(outlookTarget.webSocketDebuggerUrl);
+		await new Promise<void>((resolve, reject) => {
+			ws.addEventListener("open", () => resolve());
+			ws.addEventListener("error", () => reject(new Error("WS connect failed")));
+			setTimeout(() => reject(new Error("WS connect timeout")), 5000);
+		});
+
+		let wsId = 0;
+		const wsEval = (expr: string, timeoutMs = 15000): Promise<any> => new Promise((resolve, reject) => {
+			const id = ++wsId;
+			ws.send(JSON.stringify({ id, method: "Runtime.evaluate", params: { expression: expr, awaitPromise: true, returnByValue: true } }));
+			const timer = setTimeout(() => { ws.removeEventListener("message", handler); reject(new Error("eval timeout")); }, timeoutMs);
+			const handler = (ev: any) => {
+				try {
+					const msg = JSON.parse(typeof ev.data === "string" ? ev.data : ev.data.toString());
+					if (msg.id === id) { ws.removeEventListener("message", handler); clearTimeout(timer); resolve(msg.result?.result?.value ?? null); }
+				} catch {
+					// Ignore malformed interim debugger frames.
+				}
+			};
+			ws.addEventListener("message", handler);
+		});
+
+		ws.send(JSON.stringify({ id: ++wsId, method: "Runtime.enable" }));
+		await sleep(300);
+
+		const exchangeExpr =
+			"(async()=>{try{" +
+			"const b=new URLSearchParams({" +
+				"client_id:" + JSON.stringify(OUTLOOK_CLIENT_ID) + "," +
+				"grant_type:'authorization_code'," +
+				"code:" + JSON.stringify(authCode) + "," +
+				"redirect_uri:" + JSON.stringify(OUTLOOK_REDIRECT_URI) + "," +
+				"code_verifier:" + JSON.stringify(verifier) + "," +
+				"scope:" + JSON.stringify(CONSUMER_GRAPH_SCOPES) +
+			"});" +
+			"const r=await fetch('https://login.microsoftonline.com/consumers/oauth2/v2.0/token'," +
+				"{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:b.toString()});" +
+			"const d=await r.json();" +
+			"return{ok:r.ok,status:r.status,data:d};" +
+			"}catch(e){return{error:String(e)}}})()";
+
+		const tokenResult: any = await wsEval(exchangeExpr, 15000);
+		ws.close();
+
+		if (!tokenResult?.ok || !tokenResult?.data?.access_token) return null;
+		return tokenResult.data.access_token;
+	} catch {
+		return null;
+	}
+}
+
+
 // ── CDP WebSocket helpers ───────────────────────────────────────────────
 
 export async function cdpConnect(port: number, urlFilter?: string): Promise<WebSocket> {
@@ -1181,6 +1449,27 @@ export async function findExistingCdpPort(): Promise<number | null> {
  * `m365_onedrive`, etc.).
  */
 export async function acquireGraphToken(): Promise<string> {
+	// ── Method -1: Prefer Outlook Live consumer auth when a personal session is visible ──
+	// Do this before any Teams-specific logic. Outlook consumer sessions use encrypted
+	// MSAL cache entries, so the Teams/localStorage extraction path will not work, and
+	// falling through to the old implicit-token flow yields unsupported_response_type.
+	const consumerKnown = _tenantId === CONSUMER_TENANT_ID || _isConsumer;
+	const consumerSessionVisible = !consumerKnown && await hasOutlookLiveSession();
+	if (consumerKnown || consumerSessionVisible) {
+		const consumerToken = await acquireConsumerGraphToken();
+		if (consumerToken) {
+			saveToken("graph", consumerToken);
+			setTenantIdFromToken(consumerToken);
+			return consumerToken;
+		}
+		// If consumer mode was definitively known (tenant/flag), hard-fail.
+		// If only inferred from visible session, fall through to enterprise paths.
+		if (consumerKnown) {
+			throw new Error("Consumer Graph token acquisition failed");
+		}
+		// Inferred consumer session failed — try enterprise paths below.
+	}
+
 	// ── Method 0: Extract Graph token from Teams v2 (teams.cloud.microsoft) localStorage ──
 	// Teams v2 caches MSAL tokens in localStorage. This is faster and more reliable
 	// than the OAuth redirect flow, and the token has richer scopes.
