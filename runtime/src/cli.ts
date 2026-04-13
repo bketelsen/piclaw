@@ -29,6 +29,7 @@ Usage:
 Options:
   -h, --help                 Show this help
   -v, --version              Show version
+  -w, --workspace <path>     Workspace root (also relocates .piclaw state under it)
   -p, --port <number>        Web UI port (default: 8080)
       --host <addr>          Web UI host (default: 0.0.0.0)
       --idle-timeout <secs>  Web idle timeout in seconds (default: 0 = disabled)
@@ -58,6 +59,31 @@ function getFlagValue(args: string[], flag: string): string | undefined {
   const value = args[index + 1];
   if (!value || value.startsWith("-")) return undefined;
   return value;
+}
+
+function consumeLeadingGlobalOptions(args: string[]): string[] {
+  const remaining = [...args];
+  while (remaining.length > 0) {
+    const [current] = remaining;
+    if (!current) break;
+    if (current === "--") {
+      remaining.shift();
+      break;
+    }
+    if (current === "-w" || current === "--workspace" || current === "-p" || current === "--port" || current === "--host" || current === "--idle-timeout" || current === "--tls-cert" || current === "--tls-key") {
+      remaining.shift();
+      if (remaining.length > 0 && !remaining[0]?.startsWith("-")) {
+        remaining.shift();
+      }
+      continue;
+    }
+    if (current.startsWith("--workspace=") || current.startsWith("--port=") || current.startsWith("--host=") || current.startsWith("--idle-timeout=") || current.startsWith("--tls-cert=") || current.startsWith("--tls-key=")) {
+      remaining.shift();
+      continue;
+    }
+    break;
+  }
+  return remaining;
 }
 
 async function handleKeychainCommand(args: string[]): Promise<void> {
@@ -122,9 +148,11 @@ export async function handleCliOptions(args = process.argv.slice(2)): Promise<bo
     console.log(getVersion());
     return true;
   }
-  if (args[0] === "keychain") {
+
+  const commandArgs = consumeLeadingGlobalOptions(args);
+  if (commandArgs[0] === "keychain") {
     try {
-      await handleKeychainCommand(args.slice(1));
+      await handleKeychainCommand(commandArgs.slice(1));
     } catch (error) {
       console.error((error as Error).message);
       return true;

@@ -84,6 +84,31 @@ test("cli keychain list orders entries", async () => {
   expect(names).toEqual(["cli/alpha", "cli/zeta"]);
 });
 
+test("cli keychain command accepts leading global runtime flags", async () => {
+  const logs: string[] = [];
+  const originalLog = console.log;
+  console.log = (...args: any[]) => {
+    logs.push(args.map(String).join(" "));
+  };
+
+  try {
+    const handled = await handleCliOptions([
+      "--workspace",
+      ws.workspace,
+      "--port",
+      "9090",
+      "keychain",
+      "list",
+    ]);
+    expect(handled).toBe(true);
+  } finally {
+    console.log = originalLog;
+  }
+
+  expect(logs.length).toBeGreaterThan(0);
+  expect(() => JSON.parse(logs[logs.length - 1] || "[]")).not.toThrow();
+});
+
 test("cli keychain errors when disabled", async () => {
   const restoreDisabled = setEnv({ PICLAW_KEYCHAIN_KEY: undefined, PICLAW_KEYCHAIN_KEY_FILE: undefined });
 

@@ -171,6 +171,38 @@ test("CLI web flags override env values and invalid CLI numbers fall back to env
   }
 });
 
+test("CLI workspace flag overrides env workspace and relocates derived state paths", () => {
+  const envWs = createTempWorkspace("piclaw-config-env-");
+  const cliWs = createTempWorkspace("piclaw-config-cli-");
+
+  try {
+    writeWorkspaceConfig(cliWs.workspace, {
+      whatsappPhone: "+15550001111",
+    });
+
+    const snapshot = loadConfigInSubprocess(
+      {
+        workspace: envWs.workspace,
+        store: envWs.store,
+        data: envWs.data,
+      },
+      ["WORKSPACE_DIR", "STORE_DIR", "DATA_DIR", "PICLAW_CONFIG_PATH", "WHATSAPP_CONFIG"],
+      {
+        args: ["--workspace", cliWs.workspace],
+      },
+    );
+
+    expect(snapshot.WORKSPACE_DIR).toBe(resolve(cliWs.workspace));
+    expect(snapshot.STORE_DIR).toBe(resolve(cliWs.workspace, ".piclaw", "store"));
+    expect(snapshot.DATA_DIR).toBe(resolve(cliWs.workspace, ".piclaw", "data"));
+    expect(snapshot.PICLAW_CONFIG_PATH).toBe(resolve(cliWs.workspace, ".piclaw", "config.json"));
+    expect(snapshot.WHATSAPP_CONFIG).toEqual({ phoneNumber: "+15550001111" });
+  } finally {
+    envWs.cleanup();
+    cliWs.cleanup();
+  }
+});
+
 test("config and env fallback chains handle booleans and session settings", () => {
   const ws = createTempWorkspace("piclaw-config-");
 

@@ -28,6 +28,31 @@ import { createLogger } from "../utils/logger.js";
 import { getConfiguredLogLevel, parseLogLevel } from "../utils/log-level.js";
 
 // ---------------------------------------------------------------------------
+// CLI argument parsing helpers.
+// ---------------------------------------------------------------------------
+
+const CLI_ARGS = process.argv.slice(2);
+
+/** Read a CLI flag value, e.g. `--port 3000` or `--port=3000`. */
+function readCliArg(name: string, alias?: string): string | undefined {
+  const names = [name, alias].filter(Boolean) as string[];
+  for (let i = 0; i < CLI_ARGS.length; i += 1) {
+    const arg = CLI_ARGS[i];
+    for (const flag of names) {
+      if (arg === flag) {
+        return CLI_ARGS[i + 1];
+      }
+      if (arg.startsWith(`${flag}=`)) {
+        return arg.slice(flag.length + 1);
+      }
+    }
+  }
+  return undefined;
+}
+
+const CLI_WORKSPACE = readCliArg("--workspace", "-w");
+
+// ---------------------------------------------------------------------------
 // .env file – loaded once at module init and merged with process.env below.
 // ---------------------------------------------------------------------------
 const envConfig = readEnvFile([
@@ -104,11 +129,15 @@ export function getRuntimeTimingConfig(): Readonly<RuntimeTimingConfig> {
 // ---------------------------------------------------------------------------
 
 /** Root of the persistent workspace (bind-mounted volume). */
-export const WORKSPACE_DIR = resolve(process.env.PICLAW_WORKSPACE || "/workspace");
+export const WORKSPACE_DIR = resolve(CLI_WORKSPACE || process.env.PICLAW_WORKSPACE || "/workspace");
 /** Directory for the SQLite database and related state. */
-export const STORE_DIR = resolve(process.env.PICLAW_STORE || `${WORKSPACE_DIR}/.piclaw/store`);
+export const STORE_DIR = resolve(
+  CLI_WORKSPACE ? `${WORKSPACE_DIR}/.piclaw/store` : (process.env.PICLAW_STORE || `${WORKSPACE_DIR}/.piclaw/store`)
+);
 /** Directory for runtime data (sessions, IPC files, etc.). */
-export const DATA_DIR = resolve(process.env.PICLAW_DATA || `${WORKSPACE_DIR}/.piclaw/data`);
+export const DATA_DIR = resolve(
+  CLI_WORKSPACE ? `${WORKSPACE_DIR}/.piclaw/data` : (process.env.PICLAW_DATA || `${WORKSPACE_DIR}/.piclaw/data`)
+);
 
 // ---------------------------------------------------------------------------
 // TLS – optional HTTPS support for the web channel.
@@ -381,29 +410,6 @@ export const AGENT_RUNTIME_CONFIG = Object.freeze<AgentRuntimeConfig>({
 /** Return grouped agent timeout settings for runtime wiring and tests. */
 export function getAgentRuntimeConfig(): Readonly<AgentRuntimeConfig> {
   return AGENT_RUNTIME_CONFIG;
-}
-
-// ---------------------------------------------------------------------------
-// CLI argument parsing helpers.
-// ---------------------------------------------------------------------------
-
-const CLI_ARGS = process.argv.slice(2);
-
-/** Read a CLI flag value, e.g. `--port 3000` or `--port=3000`. */
-function readCliArg(name: string, alias?: string): string | undefined {
-  const names = [name, alias].filter(Boolean) as string[];
-  for (let i = 0; i < CLI_ARGS.length; i += 1) {
-    const arg = CLI_ARGS[i];
-    for (const flag of names) {
-      if (arg === flag) {
-        return CLI_ARGS[i + 1];
-      }
-      if (arg.startsWith(`${flag}=`)) {
-        return arg.slice(flag.length + 1);
-      }
-    }
-  }
-  return undefined;
 }
 
 /** Parse a numeric port string, falling back to `fallback` on failure. */
