@@ -438,6 +438,7 @@ These defaults are recommended for first implementation.
 ## 15) Command UX (Proposed)
 
 ```text
+/pair discover <url>
 /pair request <url>
 /pair accept <instance_id|fingerprint>
 /pair deny <instance_id|fingerprint>
@@ -477,10 +478,14 @@ UX requirements:
 
 - [x] canonical signature spec implemented and versioned
 - [x] nonce replay cache enforced per peer
-- [ ] acceptance/revocation only by immutable ID/fingerprint
+- [x] acceptance/revocation only by immutable ID/fingerprint
 - [x] URL ownership challenge implemented in pairing
+- [x] pair-callback endpoint hardened (validates nonce + request_id against outbound records)
 - [ ] strict SSRF protections for callback URLs
-- [ ] deterministic policy ceiling (LLM cannot escalate)
+- [x] deterministic policy ceiling (LLM cannot escalate): tool ceiling enforced via
+  `toolCeilingFilter` on `RunAgentOptions`; `setActiveToolsByName` patched for the
+  duration of each remote run to prevent self-escalation; `custom` profile deferred
+  (falls back to `restricted`)
 - [ ] mediated mode default with dedicated channel
 - [x] short-circuit mode explicit opt-in only
 - [ ] per-peer quotas, concurrency caps, and queue isolation
@@ -498,15 +503,24 @@ Completed:
 - Short-circuit explicit opt-in gate
 - Loop/hop limit checks
 - Trust-epoch checks on signed requests
+- Bidirectional peer storage (both sides store each other after pair-confirm)
+- **Explicit operator consent gate**: pairing is now two-stage — initiator sends
+  `pair-request` and waits; receiver operator must run `/pair accept` to drive
+  the URL proof and notify the initiator via a signed `pair-confirm` callback
+- **pair-callback hardened**: validates request_id, challenge nonce, and
+  receiver_instance_id against the pending outbound record before signing
 
 Missing (or partial):
-- Acceptance/revocation UX by immutable ID/fingerprint
-- SSRF hardening beyond baseline allow/deny rules (e.g., DNS rebinding defenses)
+- SSRF hardening beyond baseline allow/deny rules (e.g., redirect-follow cap,
+  DNS rebinding defenses)
 - Deterministic policy ceiling + scoped tool enforcement
 - Dedicated mediated channel UI + decision workflow
 - Quotas/queue isolation beyond basic concurrency limits
 - TLS-only enforcement for interop endpoints
 - Audit redaction + retention controls
+- [x] Tool-call limit enforcement in execute handler (constants defined and
+  passed to agentPool.runAgent; cap enforced via tool_execution_end subscriber)
+- [x] pair-callback endpoint rate limiter (PAIR_CALLBACK_LIMIT: 6/10 min/source)
 
 ---
 

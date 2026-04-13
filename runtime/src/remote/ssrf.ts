@@ -100,8 +100,15 @@ export async function validateCallbackUrl(
     return { ok: false, error: "Invalid callback_url." };
   }
 
-  if (url.protocol !== "https:" && !(getRemoteInteropConfig().allowHttp && url.protocol === "http:")) {
+  const cfg = getRemoteInteropConfig();
+
+  if (url.protocol !== "https:" && !(cfg.allowHttp && url.protocol === "http:")) {
     return { ok: false, error: "callback_url must use https." };
+  }
+
+  // Dev/internal mode: skip private-IP checks for Docker-internal callback URLs.
+  if (cfg.allowPrivateNetwork) {
+    return { ok: true, url };
   }
 
   if (isBlockedHostname(url.hostname)) {

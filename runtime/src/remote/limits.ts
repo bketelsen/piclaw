@@ -50,3 +50,7 @@ export const EXECUTE_LIMIT = 6;
 export const REVOKE_WINDOW_MS = 60 * 1000;
 /** Maximum revoke requests allowed per window. */
 export const REVOKE_LIMIT = 6;
+/** Fixed window length for pair-callback rate limiting. */
+export const PAIR_CALLBACK_WINDOW_MS = 10 * 60 * 1000;
+/** Maximum pair-callback requests allowed per window. */
+export const PAIR_CALLBACK_LIMIT = 6;

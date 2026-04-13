@@ -562,6 +562,7 @@ export function getWebRuntimeConfig(): Readonly<WebRuntimeConfig> {
 export interface RemoteInteropConfig {
   enabled: boolean;
   allowHttp: boolean;
+  allowPrivateNetwork: boolean;
   shortCircuitEnabled: boolean;
   instanceName: string;
   decisionModel: string;
@@ -569,6 +570,7 @@ export interface RemoteInteropConfig {
 
 const remoteInteropEnabledRaw = pickBoolean(piclawConfig, ["remoteInteropEnabled", "PICLAW_REMOTE_INTEROP_ENABLED"]);
 const remoteInteropAllowHttpRaw = pickBoolean(piclawConfig, ["remoteInteropAllowHttp", "PICLAW_REMOTE_INTEROP_ALLOW_HTTP"]);
+const remoteInteropAllowPrivateNetworkRaw = pickBoolean(piclawConfig, ["remoteInteropAllowPrivateNetwork", "PICLAW_REMOTE_INTEROP_ALLOW_PRIVATE_NETWORK"]);
 const remoteShortCircuitRaw = pickBoolean(piclawConfig, ["remoteInteropShortCircuitEnabled", "PICLAW_REMOTE_SHORT_CIRCUIT_ENABLED"]);
 
 /** Grouped remote interop settings with existing config/env precedence preserved. */
@@ -581,6 +583,10 @@ export const REMOTE_INTEROP_CONFIG = Object.freeze<RemoteInteropConfig>({
     remoteInteropAllowHttpRaw ??
     ((process.env.PICLAW_REMOTE_INTEROP_ALLOW_HTTP || "").toLowerCase() === "true" ||
       process.env.PICLAW_REMOTE_INTEROP_ALLOW_HTTP === "1"),
+  allowPrivateNetwork:
+    remoteInteropAllowPrivateNetworkRaw ??
+    ((process.env.PICLAW_REMOTE_INTEROP_ALLOW_PRIVATE_NETWORK || "").toLowerCase() === "true" ||
+      process.env.PICLAW_REMOTE_INTEROP_ALLOW_PRIVATE_NETWORK === "1"),
   shortCircuitEnabled:
     remoteShortCircuitRaw ??
     ((process.env.PICLAW_REMOTE_SHORT_CIRCUIT_ENABLED || "").toLowerCase() === "true" ||

@@ -941,4 +941,41 @@ describe("remote interop", () => {
     );
     expect(blocked.status).toBe(403);
   });
+
+  // ─── Bidirectional pairing ─────────────────────────────────────────────────
+
+  test("pair confirm stores base_url on receiver side", async () => {
+    const peer = makeIdentity();
+    const callbackUrl = `${TEST_REMOTE_BASE_URL}/api/remote/pair-callback`;
+    const pairRes = await service.handleRequest(
+      new Request("http://localhost/api/remote/pair-request", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          instance_id: peer.instance_id,
+          public_key: peer.public_key,
+          display_name: "peer",
+          callback_url: callbackUrl,
+          protocol_version: "1",
+          nonce: "challenge",
+          expires_at: new Date(Date.now() + 60_000).toISOString(),
+        }),
+      })
+    );
+    expect(pairRes.status).toBe(202);
+    const pairBody = await pairRes.json();
+
+    const restoreFetch = installCallbackStub(peer);
+    const confirmRes = await service.handleRequest(
+      buildSignedRequest(peer, "POST", "/api/remote/pair-confirm", {
+        request_id: pairBody.request_id,
+        challenge: "challenge",
+      })
+    );
+    restoreFetch();
+    expect(confirmRes.status).toBe(200);
+
+    const stored = getRemotePeer(peer.instance_id);
+    expect(stored?.base_url).toBe(TEST_REMOTE_BASE_URL);
+  });
 });

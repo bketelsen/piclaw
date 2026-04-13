@@ -12,6 +12,8 @@ import type { RemoteNonceCache } from "./nonce-cache.js";
 import {
   DEFAULT_MAX_PROMPT_BYTES,
   DEFAULT_MAX_RESPONSE_BYTES,
+  DEFAULT_MAX_TOOL_CALLS_FULL,
+  DEFAULT_MAX_TOOL_CALLS_RESTRICTED,
   DEFAULT_REQUEST_HOP_LIMIT,
 } from "./limits.js";
 import {
@@ -26,6 +28,7 @@ import {
 import { logAudit } from "./service-security.js";
 import { loadOrCreateIdentity } from "./identity.js";
 import { RemoteExecuteConcurrency } from "./execute-concurrency.js";
+import { getToolCeilingFilter } from "./policy.js";
 
 /** Shared remote operation handler dependencies owned by the remote service runtime. */
 export interface RemoteOperationHandlersContext {
@@ -38,6 +41,7 @@ export interface RemoteOperationHandlersContext {
   agentPool?: AgentPool;
   remoteConfig: Readonly<RemoteInteropConfig>;
   getDecisionModel: () => string;
+  notify?: (text: string) => void;
 }
 
 /** Resolve and validate paired remote peer identity from request headers. */
@@ -129,6 +133,9 @@ export async function handleProposal(req: Request, context: RemoteOperationHandl
 
   logAudit(peer, "/api/remote/proposal", "queued", "human_required");
 
+  const peerLabel = peer.display_name ?? `\`${peer.instance_id.slice(0, 6)}-${peer.instance_id.slice(6, 12)}-${peer.instance_id.slice(12, 18)}\``;
+  context.notify?.(`**Incoming request from ${peerLabel}:** ${prompt}`);
+
   return jsonResponse({
     decision: "human_required",
     reason: "Proposal queued for review.",
@@ -184,9 +191,11 @@ export async function handleExecute(req: Request, context: RemoteOperationHandle
 
   context.executeConcurrency.acquire(peer.instance_id);
   const start = Date.now();
+  const maxToolCalls = peer.profile === "full" ? DEFAULT_MAX_TOOL_CALLS_FULL : DEFAULT_MAX_TOOL_CALLS_RESTRICTED;
+  const toolCeilingFilter = getToolCeilingFilter(peer.profile) ?? undefined;
   try {
     const chatJid = `remote:${peer.instance_id}`;
-    const output = await context.agentPool.runAgent(prompt, chatJid, { timeoutMs: 60_000 });
+    const output = await context.agentPool.runAgent(prompt, chatJid, { timeoutMs: 60_000, maxToolCalls, toolCeilingFilter });
     const duration = Date.now() - start;
     const recoverySummary = formatRecoverySummary(output.recovery);
 

@@ -26,6 +26,7 @@ export interface RemotePeerRecord {
   updated_at: string;
   last_seen_at: string | null;
   blocked_reason: string | null;
+  base_url: string | null;
 }
 
 /** Row shape for records stored in `remote_pair_requests`. */
@@ -41,6 +42,19 @@ export interface RemotePairRequestRecord {
   status: string;
   created_at: string;
   source_ip: string | null;
+}
+
+/** Row shape for records stored in `remote_pair_outbound_requests`. */
+export interface RemotePairOutboundRecord {
+  id: string;
+  instance_id: string;
+  public_key: string;
+  fingerprint: string;
+  base_url: string;
+  nonce: string;
+  status: string;
+  expires_at: string;
+  created_at: string;
 }
 
 /** Row shape for records stored in `remote_requests`. */
@@ -72,8 +86,8 @@ export function upsertRemotePeer(peer: RemotePeerRecord): void {
   db.prepare(
     `INSERT INTO remote_peers (
       instance_id, public_key, display_name, status, mode, profile, trust_epoch,
-      created_at, updated_at, last_seen_at, blocked_reason
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      created_at, updated_at, last_seen_at, blocked_reason, base_url
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(instance_id) DO UPDATE SET
       public_key = excluded.public_key,
       display_name = excluded.display_name,
@@ -83,7 +97,8 @@ export function upsertRemotePeer(peer: RemotePeerRecord): void {
       trust_epoch = excluded.trust_epoch,
       updated_at = excluded.updated_at,
       last_seen_at = excluded.last_seen_at,
-      blocked_reason = excluded.blocked_reason`
+      blocked_reason = excluded.blocked_reason,
+      base_url = excluded.base_url`
   ).run(
     peer.instance_id,
     peer.public_key,
@@ -95,7 +110,8 @@ export function upsertRemotePeer(peer: RemotePeerRecord): void {
     peer.created_at,
     peer.updated_at,
     peer.last_seen_at,
-    peer.blocked_reason
+    peer.blocked_reason,
+    peer.base_url ?? null
   );
 }
 
@@ -105,10 +121,53 @@ export function getRemotePeer(instanceId: string): RemotePeerRecord | null {
   const row = db
     .prepare(
       `SELECT instance_id, public_key, display_name, status, mode, profile, trust_epoch,
-              created_at, updated_at, last_seen_at, blocked_reason
+              created_at, updated_at, last_seen_at, blocked_reason, base_url
        FROM remote_peers WHERE instance_id = ?`
     )
     .get(instanceId) as RemotePeerRecord | undefined;
+  return row ?? null;
+}
+
+/**
+ * Return a peer whose instance_id starts with the first 18 chars of the
+ * provided fingerprint (separator dashes removed by position), or null
+ * if no match is found.
+ *
+ * Fingerprint format: `slice(0,6) + '-' + slice(6,12) + '-' + slice(12,18)`.
+ * We extract the three groups by scanning for the two separator dashes so that
+ * any `-` characters already present in the instance_id are preserved correctly.
+ */
+export function getRemotePeerByFingerprint(fingerprint: string): RemotePeerRecord | null {
+  const fp = fingerprint.trim();
+  // Fingerprint format is always exactly XXXXXX-YYYYYY-ZZZZZZ (20 chars) with
+  // separator dashes at fixed positions 6 and 13. instance_id is base64url-encoded
+  // (SHA-256 hash) and can itself contain '-', so we must NOT use indexOf("-") to
+  // locate separators — that would mis-parse fingerprints whose data groups contain
+  // embedded dashes. Use fixed positions instead.
+  if (fp.length < 20 || fp[6] !== "-" || fp[13] !== "-") return null;
+  const prefix = fp.slice(0, 6) + fp.slice(7, 13) + fp.slice(14, 20);
+  if (!prefix) return null;
+  const db = getDb();
+  const row = db
+    .prepare(
+      `SELECT instance_id, public_key, display_name, status, mode, profile, trust_epoch,
+              created_at, updated_at, last_seen_at, blocked_reason, base_url
+       FROM remote_peers WHERE instance_id LIKE ?`
+    )
+    .get(`${prefix}%`) as RemotePeerRecord | undefined;
+  return row ?? null;
+}
+
+/** Return a peer whose display_name matches (case-insensitive), or null. */
+export function getRemotePeerByDisplayName(displayName: string): RemotePeerRecord | null {
+  const db = getDb();
+  const row = db
+    .prepare(
+      `SELECT instance_id, public_key, display_name, status, mode, profile, trust_epoch,
+              created_at, updated_at, last_seen_at, blocked_reason, base_url
+       FROM remote_peers WHERE lower(display_name) = lower(?)`
+    )
+    .get(displayName) as RemotePeerRecord | undefined;
   return row ?? null;
 }
 
@@ -131,6 +190,7 @@ export function updateRemotePeer(instanceId: string, updates: Partial<RemotePeer
   addField("updated_at", updates.updated_at);
   addField("last_seen_at", updates.last_seen_at);
   addField("blocked_reason", updates.blocked_reason);
+  addField("base_url", updates.base_url);
 
   if (!fields.length) return;
   values.push(instanceId);
@@ -174,6 +234,20 @@ export function getPairRequestById(id: string): RemotePairRequestRecord | null {
   return row ?? null;
 }
 
+/** Return all pending pair requests, newest first. */
+export function getPendingPairRequests(): RemotePairRequestRecord[] {
+  const db = getDb();
+  return db
+    .prepare(
+      `SELECT id, instance_id, public_key, display_name, callback_url, protocol_version,
+              nonce, expires_at, status, created_at, source_ip
+       FROM remote_pair_requests
+       WHERE status = 'pending'
+       ORDER BY created_at DESC`
+    )
+    .all() as RemotePairRequestRecord[];
+}
+
 /** Return the newest pending pair request for a remote instance, if any. */
 export function getPendingPairRequest(instanceId: string): RemotePairRequestRecord | null {
   const db = getDb();
@@ -196,7 +270,59 @@ export function updatePairRequestStatus(id: string, status: string): void {
   db.prepare("UPDATE remote_pair_requests SET status = ? WHERE id = ?").run(status, id);
 }
 
-/** Insert a new remote interop proposal/execute request record. */
+/** Insert a new outbound pairing request (initiator side). */
+export function createOutboundPairRequest(record: RemotePairOutboundRecord): void {
+  const db = getDb();
+  db.prepare(
+    `INSERT INTO remote_pair_outbound_requests
+       (id, instance_id, public_key, fingerprint, base_url, nonce, status, expires_at, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+  ).run(
+    record.id,
+    record.instance_id,
+    record.public_key,
+    record.fingerprint,
+    record.base_url,
+    record.nonce,
+    record.status,
+    record.expires_at,
+    record.created_at
+  );
+}
+
+/** Fetch an outbound pair request by ID. */
+export function getOutboundPairRequestById(id: string): RemotePairOutboundRecord | null {
+  const db = getDb();
+  const row = db
+    .prepare(
+      `SELECT id, instance_id, public_key, fingerprint, base_url, nonce, status, expires_at, created_at
+       FROM remote_pair_outbound_requests WHERE id = ?`
+    )
+    .get(id) as RemotePairOutboundRecord | undefined;
+  return row ?? null;
+}
+
+/** Return the newest pending outbound pair request for a given receiver instance_id. */
+export function getPendingOutboundPairRequest(instanceId: string): RemotePairOutboundRecord | null {
+  const db = getDb();
+  const row = db
+    .prepare(
+      `SELECT id, instance_id, public_key, fingerprint, base_url, nonce, status, expires_at, created_at
+       FROM remote_pair_outbound_requests
+       WHERE instance_id = ? AND status = 'pending'
+       ORDER BY created_at DESC LIMIT 1`
+    )
+    .get(instanceId) as RemotePairOutboundRecord | undefined;
+  return row ?? null;
+}
+
+/** Update only the status field on an outbound pair request row. */
+export function updateOutboundPairRequestStatus(id: string, status: string): void {
+  const db = getDb();
+  db.prepare("UPDATE remote_pair_outbound_requests SET status = ? WHERE id = ?").run(status, id);
+}
+
+
 export function storeRemoteRequest(request: RemoteRequestRecord): void {
   const db = getDb();
   db.prepare(

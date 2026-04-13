@@ -336,6 +336,21 @@ function createSchema(database: Database): void {
     );
     CREATE INDEX IF NOT EXISTS idx_remote_audit_created_at ON remote_audit_logs(created_at);
 
+    -- Pending outbound pairing requests (initiator side).
+    CREATE TABLE IF NOT EXISTS remote_pair_outbound_requests (
+      id TEXT PRIMARY KEY,
+      instance_id TEXT NOT NULL,
+      public_key TEXT NOT NULL,
+      fingerprint TEXT NOT NULL,
+      base_url TEXT NOT NULL,
+      nonce TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'pending',
+      expires_at TEXT NOT NULL,
+      created_at TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_remote_pair_outbound_instance ON remote_pair_outbound_requests(instance_id);
+    CREATE INDEX IF NOT EXISTS idx_remote_pair_outbound_status ON remote_pair_outbound_requests(status);
+
     -- Simple key-value store for the router's per-chat cursor positions.
     CREATE TABLE IF NOT EXISTS router_state (
       key TEXT PRIMARY KEY,
@@ -741,6 +756,43 @@ export function initDatabase(): void {
   ensureChatCursorFailedColumns(db);
   migrateChatCursors(db);
   dropChatBranchDisplayName(db);
+  ensureRemotePeerBaseUrl(db);
+  ensureOutboundPairRequestsTable(db);
+}
+
+/**
+ * Idempotent migration: ensure the outbound pair requests table exists.
+ * Needed for instances that were initialised before this table was added.
+ */
+function ensureOutboundPairRequestsTable(database: Database): void {
+  database.exec(`
+    CREATE TABLE IF NOT EXISTS remote_pair_outbound_requests (
+      id TEXT PRIMARY KEY,
+      instance_id TEXT NOT NULL,
+      public_key TEXT NOT NULL,
+      fingerprint TEXT NOT NULL,
+      base_url TEXT NOT NULL,
+      nonce TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'pending',
+      expires_at TEXT NOT NULL,
+      created_at TEXT NOT NULL
+    )`);
+  database.exec(`CREATE INDEX IF NOT EXISTS idx_remote_pair_outbound_instance ON remote_pair_outbound_requests(instance_id)`);
+  database.exec(`CREATE INDEX IF NOT EXISTS idx_remote_pair_outbound_status ON remote_pair_outbound_requests(status)`);
+}
+
+/**
+ * Add nullable base_url column to remote_peers if it doesn't already exist.
+ * Required for bidirectional pairing and /unpair routing.
+ */
+function ensureRemotePeerBaseUrl(database: Database): void {
+  const cols = database.prepare("PRAGMA table_info(remote_peers)").all() as Array<{ name: string }>;
+  if (cols.some((c) => c.name === "base_url")) return;
+  try {
+    database.exec("ALTER TABLE remote_peers ADD COLUMN base_url TEXT");
+  } catch {
+    /* expected: column may have been added in a race or concurrent migration. */
+  }
 }
 
 /**
