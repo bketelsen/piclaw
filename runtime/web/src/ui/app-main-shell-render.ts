@@ -429,6 +429,11 @@ export function renderMainShell(options: MainShellRenderOptions): any {
         <div class="editor-splitter" onMouseDown=${handleEditorSplitterMouseDown} onTouchStart=${handleEditorSplitterTouchStart}></div>
       `}
       <div class="container">
+        ${!chatOnlyMode && html`
+          <div class="system-meters-inline-row">
+            <${SystemMetersHud} mode="inline" />
+          </div>
+        `}
         ${searchQuery && isIOSDevice() && html`<div class="search-results-spacer"></div>`}
         ${chatOnlyMode && html`
           <div class="chat-window-header">

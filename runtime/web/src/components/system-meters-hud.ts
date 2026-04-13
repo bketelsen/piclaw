@@ -1,7 +1,7 @@
 // @ts-nocheck
 import { html, useEffect, useMemo, useState } from '../vendor/preact-htm.js';
 import { getSystemMetrics } from '../api.js';
-import { METERS_EVENT_NAME, readStoredMetersEnabled } from '../ui/meters.js';
+import { METERS_COLLAPSED_EVENT_NAME, METERS_EVENT_NAME, readStoredMetersCollapsed, readStoredMetersEnabled, toggleMetersCollapsed } from '../ui/meters.js';
 
 function clampSeries(input, maxPoints = 30) {
     const series = Array.isArray(input)
@@ -37,6 +37,7 @@ function readIsNarrowLayout() {
 
 export function SystemMetersHud({ mode = 'overlay' }) {
     const [enabled, setEnabled] = useState(() => readStoredMetersEnabled(false));
+    const [collapsed, setCollapsed] = useState(() => readStoredMetersCollapsed(false));
     const [isNarrowLayout, setIsNarrowLayout] = useState(() => readIsNarrowLayout());
     const [metrics, setMetrics] = useState({
         cpu_percent: 0,
@@ -55,8 +56,15 @@ export function SystemMetersHud({ mode = 'overlay' }) {
         const onMetersChange = (event) => {
             setEnabled(Boolean(event?.detail?.enabled));
         };
+        const onMetersCollapsedChange = (event) => {
+            setCollapsed(Boolean(event?.detail?.collapsed));
+        };
         window.addEventListener(METERS_EVENT_NAME, onMetersChange);
-        return () => window.removeEventListener(METERS_EVENT_NAME, onMetersChange);
+        window.addEventListener(METERS_COLLAPSED_EVENT_NAME, onMetersCollapsedChange);
+        return () => {
+            window.removeEventListener(METERS_EVENT_NAME, onMetersChange);
+            window.removeEventListener(METERS_COLLAPSED_EVENT_NAME, onMetersCollapsedChange);
+        };
     }, []);
 
     useEffect(() => {
@@ -122,33 +130,53 @@ export function SystemMetersHud({ mode = 'overlay' }) {
 
     if (!enabled || !isActiveInstance) return null;
 
+    const title = collapsed
+        ? 'Show system meters'
+        : (loading ? 'Updating system meters… Click to collapse.' : 'System meters — click to collapse.');
+
+    const handleToggleCollapsed = (event) => {
+        event?.stopPropagation?.();
+        toggleMetersCollapsed();
+    };
+
     return html`
-        <div class=${`system-meters-hud system-meters-hud-${mode}`} aria-live="polite">
-            <div class="system-meters-card" title=${loading ? 'Updating system meters…' : 'System meters'}>
-                <div class="system-meters-row cpu">
-                    <span class="system-meters-label">CPU</span>
-                    <svg class="system-meters-spark" viewBox="0 0 56 16" preserveAspectRatio="none" aria-hidden="true">
-                        <path d=${cpuPath}></path>
-                    </svg>
-                    <span class="system-meters-value">${formatPercent(metrics.cpu_percent)}</span>
-                </div>
-                <div class="system-meters-row ram">
-                    <span class="system-meters-label">RAM</span>
-                    <svg class="system-meters-spark" viewBox="0 0 56 16" preserveAspectRatio="none" aria-hidden="true">
-                        <path d=${ramPath}></path>
-                    </svg>
-                    <span class="system-meters-value">${formatPercent(metrics.ram_percent)}</span>
-                </div>
-                ${showSwap && html`
-                    <div class="system-meters-row swap">
-                        <span class="system-meters-label">SWP</span>
-                        <svg class="system-meters-spark" viewBox="0 0 56 16" preserveAspectRatio="none" aria-hidden="true">
-                            <path d=${swapPath}></path>
-                        </svg>
-                        <span class="system-meters-value">${formatPercent(metrics.swap_percent)}</span>
-                    </div>
-                `}
-            </div>
+        <div class=${`system-meters-hud system-meters-hud-${mode}${collapsed ? ' is-collapsed' : ''}`} aria-live="polite">
+            <button
+                class="system-meters-card"
+                type="button"
+                title=${title}
+                aria-label=${title}
+                aria-expanded=${collapsed ? 'false' : 'true'}
+                onClick=${handleToggleCollapsed}
+            >
+                ${collapsed
+                    ? html`<span class="system-meters-collapse-tab" aria-hidden="true">◂</span>`
+                    : html`
+                        <div class="system-meters-row cpu">
+                            <span class="system-meters-label">CPU</span>
+                            <svg class="system-meters-spark" viewBox="0 0 56 16" preserveAspectRatio="none" aria-hidden="true">
+                                <path d=${cpuPath}></path>
+                            </svg>
+                            <span class="system-meters-value">${formatPercent(metrics.cpu_percent)}</span>
+                        </div>
+                        <div class="system-meters-row ram">
+                            <span class="system-meters-label">RAM</span>
+                            <svg class="system-meters-spark" viewBox="0 0 56 16" preserveAspectRatio="none" aria-hidden="true">
+                                <path d=${ramPath}></path>
+                            </svg>
+                            <span class="system-meters-value">${formatPercent(metrics.ram_percent)}</span>
+                        </div>
+                        ${showSwap && html`
+                            <div class="system-meters-row swap">
+                                <span class="system-meters-label">SWP</span>
+                                <svg class="system-meters-spark" viewBox="0 0 56 16" preserveAspectRatio="none" aria-hidden="true">
+                                    <path d=${swapPath}></path>
+                                </svg>
+                                <span class="system-meters-value">${formatPercent(metrics.swap_percent)}</span>
+                            </div>
+                        `}
+                    `}
+            </button>
         </div>
     `;
 }
