@@ -2,8 +2,17 @@
 
 import { isMobileBrowserMode, isStandaloneWebAppMode } from './chat-window.js';
 
+function isIOSMobileRuntime(runtime = {}) {
+  const nav = runtime.navigator ?? (typeof navigator !== 'undefined' ? navigator : null);
+  if (!nav) return false;
+  const userAgent = String(nav.userAgent || '');
+  if (/iPad|iPhone|iPod/i.test(userAgent)) return true;
+  return nav.platform === 'MacIntel' && Number(nav.maxTouchPoints || 0) > 1;
+}
+
 export function shouldUseStandaloneMobileViewportFix(runtime = {}) {
-  return isStandaloneWebAppMode(runtime) && isMobileBrowserMode(runtime);
+  if (!isMobileBrowserMode(runtime)) return false;
+  return isStandaloneWebAppMode(runtime) || isIOSMobileRuntime(runtime);
 }
 
 function isTextEntryFocused(doc) {

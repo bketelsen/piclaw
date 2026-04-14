@@ -6,7 +6,7 @@ import {
   syncStandaloneMobileViewport,
 } from '../../web/src/ui/mobile-viewport.js';
 
-test('shouldUseStandaloneMobileViewportFix only enables for standalone mobile runtimes', () => {
+test('shouldUseStandaloneMobileViewportFix enables for standalone mobile and iPhone browser runtimes', () => {
   expect(shouldUseStandaloneMobileViewportFix({
     navigator: {
       standalone: true,
@@ -15,6 +15,17 @@ test('shouldUseStandaloneMobileViewportFix only enables for standalone mobile ru
     },
     window: {
       matchMedia: () => ({ matches: true }),
+    },
+  })).toBe(true);
+
+  expect(shouldUseStandaloneMobileViewportFix({
+    navigator: {
+      standalone: false,
+      userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X)',
+      maxTouchPoints: 5,
+    },
+    window: {
+      matchMedia: (query: string) => ({ matches: query.includes('pointer') }),
     },
   })).toBe(true);
 
