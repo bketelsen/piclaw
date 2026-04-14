@@ -21,6 +21,7 @@ import { broadcastInteractionUpdated } from "../cards/interaction-service.js";
 import { storeAgentTurn } from "../messaging/agent-message-store.js";
 import { resolveThreadId, resolveThreadRootId } from "../runtime/threading.js";
 import { resolveToolStatusHints } from "../../../tool-status-hints.js";
+import "../../../extensions/local-core-tool-status-hints.js";
 import { createUuid } from "../../../utils/ids.js";
 import { createLogger } from "../../../utils/logger.js";
 import { checkPendingShutdown } from "../../../runtime/shutdown-registry.js";
@@ -747,15 +748,9 @@ export async function processChat(channel, chatJid, agentId, threadRootId) {
         onDraftBuffer: (text, totalLines) => channel.updateDraftBuffer(turnId, text, totalLines),
     });
     const hasActiveClients = channel.sse.clients.size > 0;
-    // Keep interactive web turns bounded so stalled sessions still reach a
-    // terminal state, but do not clamp them too aggressively. A 5 minute cap
-    // proved too short for legitimate long-running tool workflows, 20 minutes
-    // has still been too tight for some real sessions, so allow up to 40
-    // minutes here while still respecting any lower global timeout.
     const agentRuntimeConfig = getAgentRuntimeConfig();
-    const INTERACTIVE_WEB_TIMEOUT_MS = Math.min(agentRuntimeConfig.timeoutMs, 40 * 60 * 1000);
     const timeoutMs = hasActiveClients
-        ? INTERACTIVE_WEB_TIMEOUT_MS
+        ? agentRuntimeConfig.timeoutMs
         : (agentRuntimeConfig.backgroundTimeoutMs > 0 ? agentRuntimeConfig.backgroundTimeoutMs : agentRuntimeConfig.timeoutMs);
     let turnCount = 0;
     let hadIntermediateOutput = false;
