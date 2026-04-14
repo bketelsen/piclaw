@@ -53,3 +53,26 @@ export function extractToolContextPath(toolName: unknown, args: unknown): string
 
   return null;
 }
+
+export function stripRemotePathFromSshTarget(value: unknown): string | null {
+  const target = readTrimmedString(value);
+  if (!target) return null;
+  const match = target.match(/^(.*?):((?:\/|~).*)$/);
+  return (match?.[1] || target).trim() || null;
+}
+
+export function extractToolSshTarget(toolName: unknown, args: unknown): string | null {
+  const normalizedToolName = typeof toolName === 'string' ? toolName.trim() : '';
+  const record = args && typeof args === 'object' ? args as Record<string, unknown> : null;
+  if (!record) return null;
+
+  if (normalizedToolName !== 'ssh') {
+    return stripRemotePathFromSshTarget(
+      readTrimmedString(record.ssh_target, record.sshTarget, record.remote, record.host)
+    );
+  }
+
+  return stripRemotePathFromSshTarget(
+    readTrimmedString(record.ssh_target, record.sshTarget, record.remote, record.host)
+  );
+}

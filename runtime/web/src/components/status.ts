@@ -5,7 +5,7 @@ import { renderThinkingMarkdown } from '../markdown.js';
 import { getTurnColor } from '../ui/agent-utils.js';
 import { buildTurnDotClass, resolveRunningStatusIndicator, shouldShowRunningStatusDot } from '../ui/status-dot.js';
 import { getStatusElapsedLabel, isCompactionStatus, resolveStatusPanelTitle } from '../ui/status-duration.js';
-import { extractToolContextPath } from '../ui/tool-git-context.js';
+import { extractToolContextPath, extractToolSshTarget } from '../ui/tool-git-context.js';
 
 const COPY_ICON_SVG = html`
     <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
@@ -20,6 +20,13 @@ const GIT_BRANCH_ICON_SVG = html`
         <circle cx="18" cy="6" r="3"></circle>
         <circle cx="6" cy="18" r="3"></circle>
         <path d="M18 9a9 9 0 0 1-9 9"></path>
+    </svg>
+`;
+
+const SSH_LOCK_ICON_SVG = html`
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
+        <rect x="5" y="11" width="14" height="10" rx="2"></rect>
+        <path d="M8 11V8a4 4 0 1 1 8 0v3"></path>
     </svg>
 `;
 
@@ -184,6 +191,7 @@ export function AgentStatus({ status, draft, plan, thought, pendingRequest, inte
     const toolRepoLabel = toolRepoContext
         ? [toolRepoRepoPath, toolRepoBranch].filter(Boolean).join(' · ')
         : '';
+    const toolSshTarget = extractToolSshTarget(status?.tool_name, status?.tool_args) || '';
 
     const renderThinkingPanel = ({ panelTitle, text, fullText, totalLines, maxLines, titleClass, panelKey }) => {
         const isExpanded = expandedPanels.has(panelKey);
@@ -600,7 +608,7 @@ export function AgentStatus({ status, draft, plan, thought, pendingRequest, inte
                 panelKey: 'draft',
             })}
             ${showCorePanels && status && status?.type !== 'intent' && html`
-                <div class=${`agent-status${isLastActivity ? ' agent-status-last-activity' : ''}${status?.type === 'error' ? ' agent-status-error' : ''}${toolRepoLabel ? ' agent-status-multiline' : ''}`} aria-live="polite" style=${turnColor ? `--turn-color: ${turnColor};` : ''}>
+                <div class=${`agent-status${isLastActivity ? ' agent-status-last-activity' : ''}${status?.type === 'error' ? ' agent-status-error' : ''}${toolRepoLabel || toolSshTarget ? ' agent-status-multiline' : ''}`} aria-live="polite" style=${turnColor ? `--turn-color: ${turnColor};` : ''}>
                     ${turnColor && showRunningStatusDot && html`<span class=${dotClass} aria-hidden="true"></span>`}
                     ${status?.type === 'error'
                         ? html`<span class="agent-status-error-icon" aria-hidden="true">⚠</span>`
@@ -615,6 +623,12 @@ export function AgentStatus({ status, draft, plan, thought, pendingRequest, inte
                                     ${toolRepoRepoPath && toolRepoBranch && html`<span class="agent-status-git-separator" aria-hidden="true">•</span>`}
                                     ${toolRepoBranch && html`<span class="agent-status-git-part">${toolRepoBranch}</span>`}
                                 </span>
+                            </span>
+                        `}
+                        ${toolSshTarget && html`
+                            <span class="agent-status-ssh-row" title=${toolSshTarget}>
+                                <span class="agent-status-ssh-icon">${SSH_LOCK_ICON_SVG}</span>
+                                <span class="agent-status-ssh-label">${toolSshTarget}</span>
                             </span>
                         `}
                     </div>

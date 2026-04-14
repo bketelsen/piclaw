@@ -3,6 +3,8 @@ import { expect, test } from 'bun:test';
 import {
   extractShellCwdFromCommand,
   extractToolContextPath,
+  extractToolSshTarget,
+  stripRemotePathFromSshTarget,
 } from '../../web/src/ui/tool-git-context.js';
 
 test('extractShellCwdFromCommand parses leading cd prefixes', () => {
@@ -27,4 +29,16 @@ test('extractToolContextPath falls back to command prefixes', () => {
   expect(extractToolContextPath('bash', { command: 'cd /workspace/piclaw && bun run typecheck' })).toBe('/workspace/piclaw');
   expect(extractToolContextPath('exec_batch', { commands: ['cd repo && git status', 'pwd'] })).toBe('repo');
   expect(extractToolContextPath('bash', null)).toBeNull();
+});
+
+test('stripRemotePathFromSshTarget keeps user@host and removes remote paths', () => {
+  expect(stripRemotePathFromSshTarget('agent@example.com:/srv/project')).toBe('agent@example.com');
+  expect(stripRemotePathFromSshTarget('agent@example.com:~/repo')).toBe('agent@example.com');
+  expect(stripRemotePathFromSshTarget('agent@example.com')).toBe('agent@example.com');
+});
+
+test('extractToolSshTarget reads ssh wrapper targets', () => {
+  expect(extractToolSshTarget('ssh', { ssh_target: 'agent@example.com:/srv/project' })).toBe('agent@example.com');
+  expect(extractToolSshTarget('bash', { ssh_target: 'agent@example.com:/srv/project' })).toBe('agent@example.com');
+  expect(extractToolSshTarget('ssh', { action: 'get' })).toBeNull();
 });
