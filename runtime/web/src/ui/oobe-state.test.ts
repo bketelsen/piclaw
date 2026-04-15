@@ -8,16 +8,17 @@ test('countAvailableModels counts model_options first and falls back to models',
   expect(countAvailableModels(null)).toBe(0);
 });
 
-test('blank installs stay in provider-missing even if a current model string exists', () => {
+test('configured-model hints suppress provider-missing when the current model exists but options are not loaded yet', () => {
   expect(resolveOobePanelState({
     modelsLoaded: true,
     modelPayload: { current: 'openai/gpt-5' },
     providerMissingDismissed: false,
     providerReadyCompleted: false,
   })).toEqual({
-    kind: 'provider-missing',
+    kind: 'hidden',
     hasAvailableModels: false,
     availableModelCount: 0,
+    hasConfiguredModelHint: true,
   });
 });
 
@@ -34,6 +35,7 @@ test('configured instances show provider-ready guidance once actual available mo
     kind: 'provider-ready',
     hasAvailableModels: true,
     availableModelCount: 1,
+    hasConfiguredModelHint: true,
   });
 });
 
@@ -50,5 +52,6 @@ test('provider-ready guidance stays hidden once completed', () => {
     kind: 'hidden',
     hasAvailableModels: true,
     availableModelCount: 1,
+    hasConfiguredModelHint: true,
   });
 });

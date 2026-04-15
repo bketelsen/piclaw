@@ -11,7 +11,7 @@ test('countAvailableModels prefers structured model options and falls back to le
   expect(countAvailableModels(null)).toBe(0);
 });
 
-test('resolveOobePanelState shows the provider-missing panel when models are loaded but unavailable', () => {
+test('resolveOobePanelState shows the provider-missing panel when models are loaded but unavailable and there is no configured-model hint', () => {
   expect(resolveOobePanelState({
     modelsLoaded: true,
     modelPayload: { models: [] },
@@ -20,6 +20,21 @@ test('resolveOobePanelState shows the provider-missing panel when models are loa
     kind: 'provider-missing',
     hasAvailableModels: false,
     availableModelCount: 0,
+    hasConfiguredModelHint: false,
+  });
+});
+
+
+test('resolveOobePanelState suppresses provider-missing when a current model is already configured', () => {
+  expect(resolveOobePanelState({
+    modelsLoaded: true,
+    modelPayload: { current: 'openai/gpt-4.1', models: [] },
+    activeModel: null,
+  })).toEqual({
+    kind: 'hidden',
+    hasAvailableModels: false,
+    availableModelCount: 0,
+    hasConfiguredModelHint: true,
   });
 });
 
@@ -32,6 +47,7 @@ test('resolveOobePanelState shows provider-ready guidance when models are availa
     kind: 'provider-ready',
     hasAvailableModels: true,
     availableModelCount: 1,
+    hasConfiguredModelHint: false,
   });
 });
 

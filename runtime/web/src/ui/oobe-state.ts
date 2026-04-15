@@ -7,6 +7,7 @@ export interface OobePanelState {
   kind: OobePanelKind;
   hasAvailableModels: boolean;
   availableModelCount: number;
+  hasConfiguredModelHint: boolean;
 }
 
 export function countAvailableModels(payload: Record<string, unknown> | null | undefined): number {
@@ -21,6 +22,12 @@ export function countAvailableModels(payload: Record<string, unknown> | null | u
     ? (payload as any).models.filter((value: unknown) => typeof value === 'string' && value.trim())
     : [];
   return models.length;
+}
+
+export function hasConfiguredModelHint(payload: Record<string, unknown> | null | undefined): boolean {
+  if (!payload || typeof payload !== 'object') return false;
+  const current = (payload as any).current;
+  return typeof current === 'string' && current.trim().length > 0;
 }
 
 export function resolveOobePanelState(options: {
@@ -40,20 +47,23 @@ export function resolveOobePanelState(options: {
 
   const availableModelCount = countAvailableModels(modelPayload);
   const hasAvailableModels = availableModelCount > 0;
+  const configuredModelHint = hasConfiguredModelHint(modelPayload);
 
   if (panePopoutMode || !modelsLoaded) {
     return {
       kind: 'hidden',
       hasAvailableModels,
       availableModelCount,
+      hasConfiguredModelHint: configuredModelHint,
     };
   }
 
   if (!hasAvailableModels) {
     return {
-      kind: providerMissingDismissed ? 'hidden' : 'provider-missing',
+      kind: configuredModelHint ? 'hidden' : (providerMissingDismissed ? 'hidden' : 'provider-missing'),
       hasAvailableModels,
       availableModelCount,
+      hasConfiguredModelHint: configuredModelHint,
     };
   }
 
@@ -61,5 +71,6 @@ export function resolveOobePanelState(options: {
     kind: providerReadyCompleted ? 'hidden' : 'provider-ready',
     hasAvailableModels,
     availableModelCount,
+    hasConfiguredModelHint: configuredModelHint,
   };
 }
