@@ -45,7 +45,9 @@ export function syncStandaloneMobileViewport(runtime = {}, options = {}) {
       if (typeof win.scrollTo === 'function') {
         win.scrollTo(0, 0);
       }
-    } catch {}
+    } catch (error) {
+      console.debug('[mobile-viewport] Ignoring scrollTo failure during standalone viewport reset.', error);
+    }
 
     try {
       if (doc.scrollingElement) {
@@ -60,7 +62,9 @@ export function syncStandaloneMobileViewport(runtime = {}, options = {}) {
         doc.body.scrollTop = 0;
         doc.body.scrollLeft = 0;
       }
-    } catch {}
+    } catch (error) {
+      console.debug('[mobile-viewport] Ignoring DOM scroll reset failure during standalone viewport sync.', error);
+    }
   }
 
   return height;
