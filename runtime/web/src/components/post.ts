@@ -387,6 +387,10 @@ async function copyTextToClipboard(text) {
     const value = typeof text === 'string' ? text : '';
     if (!value) return false;
 
+    if (writeClipboardDataViaExecCommand(document, { text: value })) {
+        return true;
+    }
+
     if (await writeClipboardTextBestEffort(navigator.clipboard, value)) {
         return true;
     }
