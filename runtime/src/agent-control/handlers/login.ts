@@ -118,6 +118,17 @@ const PROVIDER_DEFS: ProviderDef[] = [
       { key: "contextWindow", label: "Context window", placeholder: "128000", required: false },
     ],
   },
+  {
+    id: "openai-compatible", name: "OpenAI-compatible", hasOAuth: false, hasApiKey: false, isCustom: true,
+    customApi: "openai-completions",
+    customFields: [
+      { key: "baseUrl", label: "Base URL", placeholder: "https://api.example.com/v1", required: true },
+      { key: "apiKey", label: "API Key", placeholder: "sk-...", required: true },
+      { key: "modelId", label: "Model ID", placeholder: "gpt-4o", required: true },
+      { key: "modelIds", label: "Additional model IDs (comma-separated)", placeholder: "model-a,model-b", required: false },
+      { key: "contextWindow", label: "Context window", placeholder: "128000", required: false },
+    ],
+  },
 ];
 
 // ── Helpers ──────────────────────────────────────────────────────
