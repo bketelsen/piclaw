@@ -14,6 +14,12 @@ const ALLOWED_HTML_TAGS = new Set([
     'i',
     'u',
     's',
+    'del',
+    'ins',
+    'sub',
+    'sup',
+    'mark',
+    'small',
     'br',
     'p',
     'ul',
@@ -24,6 +30,7 @@ const ALLOWED_HTML_TAGS = new Set([
     'rt',
     'rp',
     'span',
+    'input',
 ]);
 
 const SAFE_TAGS = new Set([
@@ -32,6 +39,7 @@ const SAFE_TAGS = new Set([
     'blockquote',
     'br',
     'code',
+    'del',
     'div',
     'em',
     'hr',
@@ -43,6 +51,8 @@ const SAFE_TAGS = new Set([
     'h6',
     'i',
     'img',
+    'input',
+    'ins',
     'kbd',
     'li',
     'mark',
@@ -53,6 +63,7 @@ const SAFE_TAGS = new Set([
     'rt',
     'rp',
     's',
+    'small',
     'span',
     'strong',
     'sub',
@@ -102,6 +113,7 @@ const GLOBAL_ALLOWED_ATTRS = new Set([
 const TAG_ALLOWED_ATTRS = {
     a: new Set(['href', 'target', 'rel']),
     img: new Set(['src', 'alt', 'title']),
+    input: new Set(['type', 'checked', 'disabled']),
 };
 
 const SAFE_PROTOCOLS = new Set(['http:', 'https:', 'mailto:', '']);
@@ -369,6 +381,7 @@ export function applySyntaxHighlighting(html) {
 
 const RESTORABLE_HTML_ATTRS = {
     span: new Set(['title', 'class', 'lang', 'dir']),
+    input: new Set(['type', 'checked', 'disabled']),
 };
 
 function extractRestorableAttributes(tagName, rawAttrs) {
