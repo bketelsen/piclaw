@@ -26,6 +26,7 @@ describe("built-in extension hook determinism", () => {
       "openWorkspaceFile",
       "exitProcess",
       "autoresearchSupervisor",
+      "imageProcessing",
     ]);
     expect(audit.context_hook_order).toEqual(["fileAttachments"]);
     expect(audit.final_system_prompt).toContain("## File Attachments");

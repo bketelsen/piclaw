@@ -586,6 +586,17 @@ const TOOL_CAPABILITIES: Record<string, ToolCapability> = {
       nouns: ["process", "service", "piclaw"],
     }),
   },
+
+  // image processing
+  image_process: {
+    kind: "mutating",
+    weight: "standard",
+    recommend: rec({
+      domains: ["image", "workspace"],
+      verbs: ["resize", "crop", "convert", "optimize", "trim", "rotate", "flip", "blur", "sharpen", "composite"],
+      nouns: ["image", "photo", "picture", "icon", "thumbnail", "png", "jpeg", "webp", "avif"],
+    }),
+  },
 };
 
 const DEFAULT_CAPABILITY: ToolCapability = {
