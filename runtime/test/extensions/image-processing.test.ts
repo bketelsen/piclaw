@@ -261,4 +261,141 @@ test("spritesheet_to_gif supports vertical strips", async () => {
 
   ws2.cleanup();
 });
+
+test("greyscale action converts to greyscale", async () => {
+  const ws2 = createTempWorkspace("piclaw-imgproc-grey-");
+  restoreEnv = setEnv({ PICLAW_WORKSPACE: ws2.workspace });
+
+  await createTestImage(ws2.workspace, "color.png", { width: 50, height: 50 });
+
+  const { imageProcessing } = await import("../../src/extensions/image-processing.js");
+  const fake = makeFakeApi();
+  imageProcessing(fake.api as any);
+
+  const tool = fake.tools.get("image_process");
+  const result = await tool.execute("t-grey", { action: "greyscale", input: join(ws2.workspace, "color.png") });
+  expect(result.details.action).toBe("greyscale");
+  ws2.cleanup();
+});
+
+test("modulate action adjusts brightness and saturation", async () => {
+  const ws2 = createTempWorkspace("piclaw-imgproc-mod-");
+  restoreEnv = setEnv({ PICLAW_WORKSPACE: ws2.workspace });
+
+  await createTestImage(ws2.workspace, "photo.png", { width: 50, height: 50 });
+
+  const { imageProcessing } = await import("../../src/extensions/image-processing.js");
+  const fake = makeFakeApi();
+  imageProcessing(fake.api as any);
+
+  const tool = fake.tools.get("image_process");
+  const result = await tool.execute("t-mod", {
+    action: "modulate",
+    input: join(ws2.workspace, "photo.png"),
+    brightness: 1.3,
+    saturation: 0.5,
+  });
+  expect(result.details.action).toBe("modulate");
+  ws2.cleanup();
+});
+
+test("normalize action applies auto-level", async () => {
+  const ws2 = createTempWorkspace("piclaw-imgproc-norm-");
+  restoreEnv = setEnv({ PICLAW_WORKSPACE: ws2.workspace });
+
+  await createTestImage(ws2.workspace, "dark.png", { width: 50, height: 50 });
+
+  const { imageProcessing } = await import("../../src/extensions/image-processing.js");
+  const fake = makeFakeApi();
+  imageProcessing(fake.api as any);
+
+  const tool = fake.tools.get("image_process");
+  const result = await tool.execute("t-norm", { action: "normalize", input: join(ws2.workspace, "dark.png") });
+  expect(result.details.action).toBe("normalize");
+  ws2.cleanup();
+});
+
+test("negate action inverts colors", async () => {
+  const ws2 = createTempWorkspace("piclaw-imgproc-neg-");
+  restoreEnv = setEnv({ PICLAW_WORKSPACE: ws2.workspace });
+
+  await createTestImage(ws2.workspace, "input.png", { width: 50, height: 50 });
+
+  const { imageProcessing } = await import("../../src/extensions/image-processing.js");
+  const fake = makeFakeApi();
+  imageProcessing(fake.api as any);
+
+  const tool = fake.tools.get("image_process");
+  const result = await tool.execute("t-neg", { action: "negate", input: join(ws2.workspace, "input.png") });
+  expect(result.details.action).toBe("negate");
+  ws2.cleanup();
+});
+
+test("threshold action creates binary image", async () => {
+  const ws2 = createTempWorkspace("piclaw-imgproc-thresh-");
+  restoreEnv = setEnv({ PICLAW_WORKSPACE: ws2.workspace });
+  await createTestImage(ws2.workspace, "input.png", { width: 50, height: 50 });
+  const { imageProcessing } = await import("../../src/extensions/image-processing.js");
+  const fake = makeFakeApi();
+  imageProcessing(fake.api as any);
+  const tool = fake.tools.get("image_process");
+  const result = await tool.execute("t-thresh", { action: "threshold", input: join(ws2.workspace, "input.png"), threshold_value: 100 });
+  expect(result.details.action).toBe("threshold");
+  ws2.cleanup();
+});
+
+test("extend action adds padding", async () => {
+  const ws2 = createTempWorkspace("piclaw-imgproc-ext-");
+  restoreEnv = setEnv({ PICLAW_WORKSPACE: ws2.workspace });
+  await createTestImage(ws2.workspace, "small.png", { width: 50, height: 50 });
+  const { imageProcessing } = await import("../../src/extensions/image-processing.js");
+  const fake = makeFakeApi();
+  imageProcessing(fake.api as any);
+  const tool = fake.tools.get("image_process");
+  const result = await tool.execute("t-ext", { action: "extend", input: join(ws2.workspace, "small.png"), extend_top: 10, extend_bottom: 10, extend_left: 10, extend_right: 10, extend_background: "#FF000080" });
+  expect(result.details.width).toBe(70);
+  expect(result.details.height).toBe(70);
+  ws2.cleanup();
+});
+
+test("extract_channel action isolates a single channel", async () => {
+  const ws2 = createTempWorkspace("piclaw-imgproc-chan-");
+  restoreEnv = setEnv({ PICLAW_WORKSPACE: ws2.workspace });
+  await createTestImage(ws2.workspace, "rgb.png", { width: 50, height: 50 });
+  const { imageProcessing } = await import("../../src/extensions/image-processing.js");
+  const fake = makeFakeApi();
+  imageProcessing(fake.api as any);
+  const tool = fake.tools.get("image_process");
+  const result = await tool.execute("t-chan", { action: "extract_channel", input: join(ws2.workspace, "rgb.png"), channel: 0 });
+  expect(result.details.action).toBe("extract_channel");
+  ws2.cleanup();
+});
+
+test("text action overlays text on image", async () => {
+  const ws2 = createTempWorkspace("piclaw-imgproc-text-");
+  restoreEnv = setEnv({ PICLAW_WORKSPACE: ws2.workspace });
+  await createTestImage(ws2.workspace, "bg.png", { width: 200, height: 100 });
+  const { imageProcessing } = await import("../../src/extensions/image-processing.js");
+  const fake = makeFakeApi();
+  imageProcessing(fake.api as any);
+  const tool = fake.tools.get("image_process");
+  const result = await tool.execute("t-text", { action: "text", input: join(ws2.workspace, "bg.png"), text: "Hello World", text_color: "#FFFFFF", text_size: 20 });
+  expect(result.details.action).toBe("text");
+  ws2.cleanup();
+});
+
+test("metadata action returns detailed image metadata", async () => {
+  const ws2 = createTempWorkspace("piclaw-imgproc-meta-");
+  restoreEnv = setEnv({ PICLAW_WORKSPACE: ws2.workspace });
+  await createTestImage(ws2.workspace, "test.png", { width: 100, height: 100 });
+  const { imageProcessing } = await import("../../src/extensions/image-processing.js");
+  const fake = makeFakeApi();
+  imageProcessing(fake.api as any);
+  const tool = fake.tools.get("image_process");
+  const result = await tool.execute("t-meta", { action: "metadata", input: join(ws2.workspace, "test.png") });
+  expect(result.details.action).toBe("metadata");
+  expect(result.details.width).toBe(100);
+  expect(result.details.format).toBe("png");
+  ws2.cleanup();
+});
 });

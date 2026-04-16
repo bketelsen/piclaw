@@ -592,9 +592,22 @@ const TOOL_CAPABILITIES: Record<string, ToolCapability> = {
     kind: "mutating",
     weight: "standard",
     recommend: rec({
-      domains: ["image", "workspace"],
-      verbs: ["resize", "crop", "convert", "optimize", "trim", "rotate", "flip", "blur", "sharpen", "composite"],
-      nouns: ["image", "photo", "picture", "icon", "thumbnail", "png", "jpeg", "webp", "avif"],
+      domains: ["image", "graphics", "media", "workspace"],
+      verbs: [
+        "resize", "crop", "convert", "optimize", "trim", "rotate", "flip",
+        "blur", "sharpen", "composite", "overlay", "denoise",
+        "greyscale", "grayscale", "adjust", "tint", "negate", "invert",
+        "threshold", "normalize", "level", "brighten", "darken", "saturate",
+        "render", "rasterize", "animate", "tile", "extend", "pad",
+        "extract", "strip", "watermark", "label", "transform",
+      ],
+      nouns: [
+        "image", "photo", "picture", "icon", "thumbnail", "avatar", "screenshot",
+        "png", "jpeg", "jpg", "webp", "avif", "gif", "tiff", "svg",
+        "spritesheet", "sprite", "animation", "frame", "channel", "alpha",
+        "color", "contrast", "brightness", "saturation", "gamma",
+        "metadata", "exif", "icc", "tiles", "deepzoom",
+      ],
     }),
   },
 };

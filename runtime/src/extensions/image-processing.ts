@@ -45,7 +45,10 @@ const TRANSPARENCY_FORMATS = new Set<OutputFormat>(["png", "webp", "avif", "tiff
 
 const ImageProcessSchema = Type.Object({
   action: Type.String({
-    description: "Operation: resize | crop | convert | optimize | trim | rotate | flip | blur | sharpen | composite | frames | spritesheet_to_gif | info",
+    description: "Operation: resize | crop | convert | optimize | trim | rotate | flip | blur | sharpen | composite | " +
+      "greyscale | modulate | contrast | gamma | tint | normalize | negate | clahe | threshold | median | " +
+      "extend | extract_channel | remove_alpha | unflatten | text | svg_render | affine | tile | metadata | " +
+      "frames | spritesheet_to_gif | info",
   }),
   input: Type.String({ description: "Input file path (relative to workspace or absolute)." }),
   output: Type.Optional(Type.String({ description: "Output file path. Default: auto-generated next to input." })),
@@ -67,6 +70,29 @@ const ImageProcessSchema = Type.Object({
   loop: Type.Optional(Type.Integer({ description: "GIF loop count. 0 = infinite. Default: 0.", minimum: 0 })),
   frame_count: Type.Optional(Type.Integer({ description: "Number of frames to split from a spritesheet (for spritesheet_to_gif). Default: auto from width." , minimum: 1 })),
   direction: Type.Optional(Type.String({ description: "Spritesheet direction: horizontal (default) or vertical." })),
+  brightness: Type.Optional(Type.Number({ description: "Brightness multiplier for modulate (1.0 = unchanged). Default: 1.0.", minimum: 0 })),
+  saturation: Type.Optional(Type.Number({ description: "Saturation multiplier for modulate (1.0 = unchanged, 0 = greyscale). Default: 1.0.", minimum: 0 })),
+  hue: Type.Optional(Type.Integer({ description: "Hue rotation in degrees for modulate." })),
+  gamma: Type.Optional(Type.Number({ description: "Gamma correction value for gamma action. Default: 2.2.", minimum: 0.1, maximum: 10 })),
+  contrast: Type.Optional(Type.Number({ description: "Linear contrast multiplier for contrast action (1.0 = unchanged). Default: 1.5.", minimum: 0 })),
+  tint_color: Type.Optional(Type.String({ description: "Tint color as hex (#RRGGBB) for tint action." })),
+  clahe_width: Type.Optional(Type.Integer({ description: "CLAHE tile width for auto-level. Default: 3.", minimum: 1 })),
+  clahe_height: Type.Optional(Type.Integer({ description: "CLAHE tile height for auto-level. Default: 3.", minimum: 1 })),
+  threshold_value: Type.Optional(Type.Integer({ description: "Threshold value 0-255 for threshold action. Default: 128.", minimum: 0, maximum: 255 })),
+  median_size: Type.Optional(Type.Integer({ description: "Median filter kernel size (odd number). Default: 3.", minimum: 1 })),
+  extend_top: Type.Optional(Type.Integer({ description: "Padding pixels to add at top (for extend). Default: 0.", minimum: 0 })),
+  extend_bottom: Type.Optional(Type.Integer({ description: "Padding pixels to add at bottom (for extend). Default: 0.", minimum: 0 })),
+  extend_left: Type.Optional(Type.Integer({ description: "Padding pixels to add at left (for extend). Default: 0.", minimum: 0 })),
+  extend_right: Type.Optional(Type.Integer({ description: "Padding pixels to add at right (for extend). Default: 0.", minimum: 0 })),
+  extend_background: Type.Optional(Type.String({ description: "Padding color as hex (#RRGGBB or #RRGGBBAA). Default: transparent." })),
+  channel: Type.Optional(Type.Integer({ description: "Channel index to extract (0=red, 1=green, 2=blue, 3=alpha) for extract_channel.", minimum: 0, maximum: 3 })),
+  text: Type.Optional(Type.String({ description: "Text content for text overlay (rendered via SVG)." })),
+  text_color: Type.Optional(Type.String({ description: "Text color as hex. Default: #FFFFFF." })),
+  text_size: Type.Optional(Type.Integer({ description: "Text font size in pixels. Default: 24.", minimum: 8, maximum: 200 })),
+  density: Type.Optional(Type.Integer({ description: "DPI for SVG rasterization (svg_render). Default: 72.", minimum: 1, maximum: 1200 })),
+  tile_size: Type.Optional(Type.Integer({ description: "Tile size for tile output. Default: 256.", minimum: 64, maximum: 2048 })),
+  affine_matrix: Type.Optional(Type.Array(Type.Number(), { description: "Affine transform matrix [a,b,c,d] for affine action.", minItems: 4, maxItems: 4 })),
+  strip_metadata: Type.Optional(Type.Boolean({ description: "Strip all metadata (EXIF/ICC/XMP) from output. Default: false." })),
 });
 
 type ImageProcessParams = Static<typeof ImageProcessSchema>;
@@ -265,6 +291,174 @@ async function executeImageProcess(
       break;
     }
 
+    case "greyscale":
+    case "grayscale": {
+      pipeline = pipeline.greyscale();
+      break;
+    }
+
+    case "modulate": {
+      pipeline = pipeline.modulate({
+        brightness: params.brightness ?? 1.0,
+        saturation: params.saturation ?? 1.0,
+        hue: params.hue ?? 0,
+      });
+      break;
+    }
+
+    case "contrast": {
+      const multiplier = params.contrast ?? 1.5;
+      const offset = 128 * (1 - multiplier);
+      pipeline = pipeline.linear(multiplier, offset);
+      break;
+    }
+
+    case "gamma": {
+      const gammaValue = params.gamma ?? 2.2;
+      pipeline = pipeline.gamma(gammaValue);
+      break;
+    }
+
+    case "tint": {
+      const hex = (params.tint_color || "#FF8800").replace("#", "");
+      const r = parseInt(hex.slice(0, 2), 16) || 0;
+      const g = parseInt(hex.slice(2, 4), 16) || 0;
+      const b = parseInt(hex.slice(4, 6), 16) || 0;
+      pipeline = pipeline.tint({ r, g, b });
+      break;
+    }
+
+    case "normalize":
+    case "normalise": {
+      pipeline = pipeline.normalise();
+      break;
+    }
+
+    case "negate": {
+      pipeline = pipeline.negate();
+      break;
+    }
+
+    case "clahe": {
+      pipeline = pipeline.clahe({
+        width: params.clahe_width ?? 3,
+        height: params.clahe_height ?? 3,
+      });
+      break;
+    }
+
+    case "threshold": {
+      pipeline = pipeline.threshold(params.threshold_value ?? 128);
+      break;
+    }
+
+    case "median": {
+      pipeline = pipeline.median(params.median_size ?? 3);
+      break;
+    }
+
+    case "extend": {
+      const bg = params.extend_background || "";
+      const hexBg = bg.replace("#", "");
+      const background = hexBg.length >= 6
+        ? { r: parseInt(hexBg.slice(0,2),16), g: parseInt(hexBg.slice(2,4),16), b: parseInt(hexBg.slice(4,6),16), alpha: hexBg.length >= 8 ? parseInt(hexBg.slice(6,8),16)/255 : 1 }
+        : { r: 0, g: 0, b: 0, alpha: 0 };
+      pipeline = pipeline.extend({
+        top: params.extend_top ?? 0,
+        bottom: params.extend_bottom ?? 0,
+        left: params.extend_left ?? 0,
+        right: params.extend_right ?? 0,
+        background,
+      });
+      break;
+    }
+
+    case "extract_channel": {
+      pipeline = pipeline.extractChannel(params.channel ?? 0);
+      break;
+    }
+
+    case "remove_alpha": {
+      pipeline = pipeline.removeAlpha();
+      break;
+    }
+
+    case "unflatten": {
+      pipeline = pipeline.unflatten();
+      break;
+    }
+
+    case "text": {
+      if (!params.text) {
+        return {
+          content: [{ type: "text", text: "Text overlay requires the text parameter." }],
+          details: { error: "missing_text" },
+        };
+      }
+      const textColor = params.text_color || "#FFFFFF";
+      const fontSize = params.text_size ?? 24;
+      const svgText = `<svg xmlns="http://www.w3.org/2000/svg"><text x="10" y="${fontSize}" font-family="sans-serif" font-size="${fontSize}" fill="${textColor}">${params.text.replace(/&/g,"\&amp;").replace(/</g,"\&lt;").replace(/>/g,"\&gt;")}</text></svg>`;
+      const textBuf = await sharp(Buffer.from(svgText)).png().toBuffer();
+      pipeline = pipeline.composite([{ input: textBuf, gravity: params.gravity || "southeast" }]);
+      break;
+    }
+
+    case "svg_render": {
+      const density = params.density ?? 72;
+      pipeline = sharp(inputPath, { density });
+      if (!preserveTransparency || !TRANSPARENCY_FORMATS.has(outputFormat)) {
+        pipeline = pipeline.flatten({ background: { r: 255, g: 255, b: 255 } });
+      }
+      if (params.width || params.height) {
+        pipeline = pipeline.resize(params.width || null, params.height || null, { fit: "inside", withoutEnlargement: false });
+      }
+      break;
+    }
+
+    case "affine": {
+      if (!params.affine_matrix || params.affine_matrix.length !== 4) {
+        return {
+          content: [{ type: "text", text: "Affine requires affine_matrix with 4 numbers [a,b,c,d]." }],
+          details: { error: "missing_matrix" },
+        };
+      }
+      const [a, b, c, d] = params.affine_matrix;
+      pipeline = pipeline.affine([a, b, c, d], { background: { r: 0, g: 0, b: 0, alpha: 0 } });
+      break;
+    }
+
+    case "tile": {
+      const tileSize = params.tile_size ?? 256;
+      const tilePath = params.output
+        ? resolveWorkspacePath(params.output)
+        : buildOutputPath(inputPath, "png", "-tiles");
+      const { mkdirSync: mkFs } = await import("node:fs");
+      mkFs(tilePath, { recursive: true });
+      await sharp(inputPath).tile({ size: tileSize, layout: "dz" }).toFile(join(tilePath, "output"));
+      const relTile = tilePath.startsWith(WORKSPACE_DIR) ? tilePath.slice(WORKSPACE_DIR.length + 1) : tilePath;
+      return {
+        content: [{ type: "text", text: `Deep zoom tiles generated in ${relTile}/ (tile size: ${tileSize}px)` }],
+        details: { action: "tile", input: params.input, outputDir: relTile, tileSize },
+      };
+    }
+
+    case "metadata": {
+      const meta = await sharp(inputPath).metadata();
+      const metaInfo = {
+        width: meta.width, height: meta.height, format: meta.format,
+        channels: meta.channels, hasAlpha: meta.hasAlpha, space: meta.space,
+        density: meta.density, chromaSubsampling: meta.chromaSubsampling,
+        isProgressive: meta.isProgressive, pages: meta.pages,
+        hasProfile: meta.hasProfile, icc: meta.icc ? `ICC profile (${meta.icc.length} bytes)` : null,
+        exif: meta.exif ? `EXIF data (${meta.exif.length} bytes)` : null,
+        xmp: meta.xmp ? `XMP data (${meta.xmp.length} bytes)` : null,
+      };
+      return {
+        content: [{ type: "text", text: `Metadata for ${params.input}:\n${JSON.stringify(metaInfo, null, 2)}` }],
+        details: { action: "metadata", input: params.input, ...metaInfo },
+      };
+    }
+
     case "frames": {
       // Extract individual frames from an animated GIF/WebP
       const meta = await sharp(inputPath, { animated: true }).metadata();
@@ -384,12 +578,13 @@ async function executeImageProcess(
 
     default:
       return {
-        content: [{ type: "text", text: `Unknown action: ${action}. Use: resize, crop, convert, optimize, trim, rotate, flip, blur, sharpen, composite, frames, spritesheet_to_gif, info` }],
+        content: [{ type: "text", text: `Unknown action: ${action}. Use: resize, crop, convert, optimize, trim, rotate, flip, blur, sharpen, composite, greyscale, modulate, contrast, gamma, tint, normalize, negate, clahe, threshold, median, extend, extract_channel, remove_alpha, unflatten, text, svg_render, affine, tile, metadata, frames, spritesheet_to_gif, info` }],
         details: { error: "unknown_action", action },
       };
   }
 
   // Apply output format
+
   switch (outputFormat) {
     case "jpeg":
       pipeline = pipeline.jpeg({ quality, mozjpeg: true });
@@ -440,11 +635,16 @@ async function executeImageProcess(
 
 const HINT = [
   "## Image Processing",
-  "Use image_process to manipulate workspace images: resize, crop, convert, optimize, trim, rotate, flip, blur, sharpen, composite, frames, spritesheet_to_gif, or get info.",
-  "Non-destructive by default: output goes to a new file next to the input. Set overwrite=true to replace the original.",
-  "Supports PNG, JPEG, WebP, AVIF, TIFF, GIF. Preserves transparency and animation frames by default.",
-  "spritesheet_to_gif converts a horizontal/vertical sprite strip into an animated GIF with configurable delay and loop.",
-  "Output quality is configurable (1-100). Use action='info' to inspect image metadata before processing.",
+  "Use image_process for comprehensive image manipulation. 30+ operations including:",
+  "- Geometry: resize, crop, rotate, flip, extend/pad, affine transform, trim",
+  "- Format: convert (PNG/JPEG/WebP/AVIF/TIFF/GIF), optimize, svg_render, tile (deep zoom)",
+  "- Color: greyscale, modulate, contrast, gamma, tint, normalize, negate, threshold, CLAHE",
+  "- Filters: blur, sharpen, median denoise",
+  "- Channels: extract_channel, remove_alpha, unflatten",
+  "- Compose: composite, text overlay",
+  "- Animation: frames (extract), spritesheet_to_gif (assemble)",
+  "- Inspect: info, metadata",
+  "Non-destructive by default. Preserves transparency and animation.",
 ].join("\n");
 
 /** Extension factory that registers image_process. */
@@ -457,11 +657,12 @@ export const imageProcessing: ExtensionFactory = (pi: ExtensionAPI) => {
     name: "image_process",
     label: "image_process",
     description:
-      "Process workspace images with sharp: resize, crop, convert formats, optimize file size, trim transparent pixels, " +
-      "rotate, flip, blur, sharpen, composite/overlay, extract frames from animated GIFs, or assemble a spritesheet into an animated GIF. " +
-      "Non-destructive by default (output goes to a new file). " +
-      "Supports PNG, JPEG, WebP, AVIF, TIFF, GIF. Preserves transparency and animation frames by default. Output quality is configurable.",
-    promptSnippet: "image_process: manipulate workspace images (resize, crop, convert, optimize, trim, rotate, blur, sharpen, composite, frames, spritesheet_to_gif, info).",
+      "Process workspace images with sharp. Operations: resize, crop, convert, optimize, trim, rotate, flip, blur, sharpen, " +
+      "composite, greyscale, modulate (brightness/saturation/hue), contrast, gamma, tint, normalize, negate, CLAHE, " +
+      "threshold, median denoise, extend/pad, extract_channel, remove_alpha, unflatten, text overlay, svg_render, " +
+      "affine transform, tile (deep zoom), metadata inspection, extract frames from animated GIFs, spritesheet_to_gif. " +
+      "Non-destructive by default. Preserves transparency and animation. Quality configurable.",
+    promptSnippet: "image_process: full image manipulation — resize, crop, convert, optimize, color adjust, denoise, text overlay, SVG render, animated GIF, tiles, and more.",
     parameters: ImageProcessSchema,
     execute: executeImageProcess,
   });
