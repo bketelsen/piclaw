@@ -130,14 +130,44 @@ registerToolStatusHintProvider({
     const state = loadMcpStatusHintState();
     const serverName = resolveMcpServerName(toolName, args, state.index);
     const label = buildMcpStatusHintLabel(serverName, state.config);
-    if (!label) return null;
-    return {
-      key: "mcp",
-      icon_svg: MCP_STATUS_ICON_SVG,
-      label: label.label,
-      title: label.title,
-      kind: "service",
-    };
+    if (label) {
+      return {
+        key: "mcp",
+        icon_svg: MCP_STATUS_ICON_SVG,
+        label: label.label,
+        title: label.title,
+        kind: "service",
+      };
+    }
+    // If the tool is the MCP proxy or a known MCP-prefixed tool, show the icon
+    // even without a resolved server name (cache may not be ready yet).
+    const record = args && typeof args === "object" ? args as Record<string, unknown> : null;
+    if (toolName === "mcp") {
+      const proxyToolName = typeof record?.tool === "string" ? record.tool : (typeof record?.describe === "string" ? record.describe : null);
+      const serverArg = typeof record?.server === "string" ? record.server : null;
+      const displayLabel = serverArg || proxyToolName || "mcp";
+      return {
+        key: "mcp",
+        icon_svg: MCP_STATUS_ICON_SVG,
+        label: displayLabel,
+        title: serverArg ? `MCP server \u2022 ${serverArg}` : `MCP tool \u2022 ${displayLabel}`,
+        kind: "service",
+      };
+    }
+    // Check if tool name looks like a direct MCP tool (has the configured prefix)
+    const prefix = state.config.settings?.toolPrefix ?? "server";
+    if (prefix && toolName.includes(`_${prefix}_`)) {
+      const parts = toolName.split(`_${prefix}_`);
+      const inferredServer = parts.length > 1 ? parts[0] : null;
+      return {
+        key: "mcp",
+        icon_svg: MCP_STATUS_ICON_SVG,
+        label: inferredServer || toolName,
+        title: inferredServer ? `MCP server \u2022 ${inferredServer}` : `MCP tool \u2022 ${toolName}`,
+        kind: "service",
+      };
+    }
+    return null;
   },
 });
 
