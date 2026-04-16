@@ -79,7 +79,7 @@ function createFacade(getIdentitySnapshot: () => WebChannelIdentitySnapshot) {
     getIdentitySnapshot,
     ensureAvatarCache: async (_kind, source) => {
       ensureCalls.push(source);
-      return { updatedAt: "2026-03-09T00:00:00.000Z", contentType: "image/png" };
+      return { updatedAt: "2026-03-09T00:00:00.000Z", contentType: "image/webp" };
     },
     json,
     broadcastEvent: () => {},
@@ -121,7 +121,7 @@ describe("web channel endpoint facade service", () => {
 
     const avatarResponse = await facade.handleAvatar("agent", new Request("https://example.com/avatar/agent"));
     expect(avatarResponse.status).toBe(200);
-    expect(avatarResponse.headers.get("Content-Type")).toBe("image/png");
+    expect(avatarResponse.headers.get("Content-Type")).toBe("image/webp");
 
     identity = createIdentitySnapshot({
       assistantName: "Nova",

@@ -82,11 +82,24 @@ export class MediaService {
 
     const arrayBuffer = await file.arrayBuffer();
     const data = new Uint8Array(arrayBuffer);
+
+    // Generate a thumbnail for image uploads
+    let thumbnail: Uint8Array | null = null;
+    if (contentType.startsWith("image/") && !contentType.includes("svg")) {
+      try {
+        const { generateThumbnail } = await import("../../../utils/image-processing.js");
+        const thumb = await generateThumbnail(Buffer.from(data));
+        if (thumb) thumbnail = new Uint8Array(thumb.data);
+      } catch {
+        // sharp unavailable or processing failed — skip thumbnail
+      }
+    }
+
     const mediaId = createMedia(
       file.name || "upload",
       contentType,
       data,
-      null,
+      thumbnail,
       { size: file.size }
     );
 
@@ -126,11 +139,23 @@ export class MediaService {
       return { status: 500, body: { error: `Unable to read media file: ${filePath}` } };
     }
 
+    // Generate a thumbnail for image uploads
+    let thumbnail: Uint8Array | null = null;
+    if (contentType.startsWith("image/") && !contentType.includes("svg")) {
+      try {
+        const { generateThumbnail } = await import("../../../utils/image-processing.js");
+        const thumb = await generateThumbnail(Buffer.from(data));
+        if (thumb) thumbnail = new Uint8Array(thumb.data);
+      } catch {
+        // sharp unavailable or processing failed — skip thumbnail
+      }
+    }
+
     const mediaId = createMedia(
       filenameOverride || basename(filePath),
       contentType,
       data,
-      null,
+      thumbnail,
       { size: stats.size }
     );
 

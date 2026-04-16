@@ -216,15 +216,31 @@ export async function ensureAvatarCache(kind: AvatarKind, source: string): Promi
   }
 
   const extension = guessExtension(loaded.contentType, sanitized);
-  const filePath = resolve(AVATAR_DIR, `${kind}${extension}`);
+
+  // Optimize avatar: resize to standard dimensions, strip EXIF, convert to WebP.
+  let avatarData: Buffer | Uint8Array = loaded.data;
+  let contentType = normalizeContentType(loaded.contentType) || guessContentTypeFromExtension(extension);
+  let effectiveExtension = extension;
+  try {
+    const { processAvatar } = await import("../../../utils/image-processing.js");
+    const processed = await processAvatar(Buffer.from(loaded.data));
+    if (processed) {
+      avatarData = processed.data;
+      contentType = processed.mimeType;
+      effectiveExtension = contentType === "image/webp" ? ".webp" : extension;
+    }
+  } catch {
+    // sharp unavailable or processing failed — use original
+  }
+
+  const filePath = resolve(AVATAR_DIR, `${kind}${effectiveExtension}`);
   mkdirSync(AVATAR_DIR, { recursive: true });
-  writeFileSync(filePath, Buffer.from(loaded.data));
+  writeFileSync(filePath, Buffer.from(avatarData));
 
   if (existing && existing.file !== filePath) {
     cleanupFile(existing.file);
   }
 
-  const contentType = normalizeContentType(loaded.contentType) || guessContentTypeFromExtension(extension);
   const meta: AvatarMeta = {
     source: sanitized,
     file: filePath,

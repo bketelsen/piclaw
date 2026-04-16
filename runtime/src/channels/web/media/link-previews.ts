@@ -271,12 +271,26 @@ async function cachePreviewImage(imageUrl: string): Promise<string | undefined> 
     const declaredLength = Number(response.headers.get("content-length") || "0");
     if (Number.isFinite(declaredLength) && declaredLength > MAX_PREVIEW_IMAGE_BYTES) return undefined;
 
-    const bytes = new Uint8Array(await response.arrayBuffer());
-    if (bytes.byteLength === 0 || bytes.byteLength > MAX_PREVIEW_IMAGE_BYTES) return undefined;
+    const rawBytes = new Uint8Array(await response.arrayBuffer());
+    if (rawBytes.byteLength === 0 || rawBytes.byteLength > MAX_PREVIEW_IMAGE_BYTES) return undefined;
+
+    // Optimize the OG image: resize to timeline-friendly dimensions and convert to WebP.
+    let bytes = rawBytes;
+    let effectiveContentType = contentType.split(";")[0] || "application/octet-stream";
+    try {
+      const { optimizeLinkPreviewImage } = await import("../../../utils/image-processing.js");
+      const optimized = await optimizeLinkPreviewImage(Buffer.from(rawBytes));
+      if (optimized) {
+        bytes = new Uint8Array(optimized.data);
+        effectiveContentType = optimized.mimeType;
+      }
+    } catch {
+      // sharp unavailable or processing failed — use original
+    }
 
     const mediaId = createMedia(
-      buildCachedPreviewFilename(imageUrl, contentType),
-      contentType.split(";")[0] || "application/octet-stream",
+      buildCachedPreviewFilename(imageUrl, effectiveContentType),
+      effectiveContentType,
       bytes,
       null,
       {
