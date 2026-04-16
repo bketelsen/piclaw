@@ -51,7 +51,7 @@ interface WebChannelStateStoreLike {
 
 interface PendingSteeringStoreLike {
   queue(chatJid: string, timestamp: string | undefined): void;
-  consumeLatest(chatJid: string): string | null;
+  consumeAll(chatJid: string): string[];
 }
 
 interface AgentStatusStoreLike {
@@ -102,7 +102,6 @@ export class WebChannelRuntimeStateService {
       defaultAgentId: this.options.defaultAgentId,
       enqueue: (task, key, laneKey) => this.callbacks.enqueue(task, key, laneKey),
       processChat: (chatJid, agentId, threadRootId) => this.callbacks.processChat(chatJid, agentId, threadRootId),
-      getChatCursor: (chatJid) => this.callbacks.getChatCursor(chatJid),
     };
   }
 
@@ -150,8 +149,8 @@ export class WebChannelRuntimeStateService {
     this.pendingSteeringStore.queue(chatJid, timestamp);
   }
 
-  consumePendingSteering(chatJid: string): string | null {
-    return this.pendingSteeringStore.consumeLatest(chatJid);
+  consumePendingSteering(chatJid: string): string[] {
+    return this.pendingSteeringStore.consumeAll(chatJid);
   }
 
   updateAgentStatus(chatJid: string, status: Record<string, unknown>): void {

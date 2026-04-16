@@ -129,7 +129,7 @@ export class WebChannelRuntimePublicSurfaceService {
     this.channel.runtimeFollowupFacade.queuePendingSteering(chatJid, timestamp);
   }
 
-  consumePendingSteering(chatJid: string): string | null {
+  consumePendingSteering(chatJid: string): string[] {
     return this.channel.runtimeFollowupFacade.consumePendingSteering(chatJid);
   }
 

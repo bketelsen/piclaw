@@ -1239,7 +1239,7 @@ test("web channel queues steering without advancing cursor", async () => {
   expect(json.queued).toBe("steer");
   expect(db.getChatCursor("web:default")).toBe("");
   const pending = (web as any).consumePendingSteering("web:default");
-  expect(pending).toBeTruthy();
+  expect(pending).toHaveLength(1);
   expect(events.some((event) => event.type === "agent_steer_queued")).toBe(true);
 });
 
@@ -1329,7 +1329,7 @@ test("web channel defers active /steer command without creating a timeline messa
   expect(res.status).toBe(201);
   expect(json.queued).toBe("steer");
   expect(applyCalls).toBe(0);
-  expect((web as any).consumePendingSteering("web:default")).toBeNull();
+  expect((web as any).consumePendingSteering("web:default")).toEqual([]);
 
   const timeline = db.getTimeline("web:default", 10);
   expect(timeline.length).toBe(0);
@@ -1608,7 +1608,7 @@ test("web channel defers active compose steer without creating a timeline messag
   expect(res.status).toBe(201);
   expect(json.queued).toBe("steer");
   expect(db.getChatCursor("web:default")).toBe("");
-  expect((web as any).consumePendingSteering("web:default")).toBeNull();
+  expect((web as any).consumePendingSteering("web:default")).toEqual([]);
 
   const timeline = db.getTimeline("web:default", 10);
   expect(timeline.length).toBe(0);
@@ -1669,7 +1669,7 @@ test("web channel defers /steer without active stream into queue-state", async (
   expect(events.some((event) => event.type === "agent_followup_queued")).toBe(true);
 });
 
-test("processChat advances cursor to pending steering timestamp", async () => {
+test("processChat does not advance cursor to pending steering timestamps or skip later persisted messages", async () => {
   const ws = createTempWorkspace("piclaw-web-channel-");
   cleanupWorkspace = ws.cleanup;
   restoreEnv = setEnv({ PICLAW_WORKSPACE: ws.workspace, PICLAW_STORE: ws.store, PICLAW_DATA: ws.data });
@@ -1680,33 +1680,52 @@ test("processChat advances cursor to pending steering timestamp", async () => {
   db.getDb().exec("DELETE FROM chat_cursors;");
   db.storeChatMetadata("web:default", new Date().toISOString(), "Web");
 
-  const messageTs = "2024-01-01T00:00:00.000Z";
+  const firstTs = "2024-01-01T00:00:00.000Z";
+  const secondTs = "2024-01-01T00:00:05.000Z";
   db.storeMessage({
     id: `msg-${Math.random()}`,
     chat_jid: "web:default",
     sender: "user",
     sender_name: "User",
-    content: "hello",
-    timestamp: messageTs,
+    content: "first",
+    timestamp: firstTs,
+    is_from_me: false,
+    is_bot_message: false,
+  });
+  db.storeMessage({
+    id: `msg-${Math.random()}`,
+    chat_jid: "web:default",
+    sender: "user",
+    sender_name: "User",
+    content: "second",
+    timestamp: secondTs,
     is_from_me: false,
     is_bot_message: false,
   });
 
+  let runCount = 0;
   const webMod = await import("../../../src/channels/web.js");
   const web = new (webMod.WebChannel as any)({
     queue: { enqueue: () => {} },
     agentPool: {
       setSessionBinder: () => {},
-      runAgent: async () => ({ status: "success", result: "ok", attachments: [] }),
+      runAgent: async () => {
+        runCount += 1;
+        return { status: "success", result: "ok", attachments: [] };
+      },
       getContextUsageForChat: async () => null,
     },
   });
 
-  const pendingTs = "2024-01-01T00:00:10.000Z";
-  web.queuePendingSteering("web:default", pendingTs);
+  web.queuePendingSteering("web:default", "2024-01-01T00:00:10.000Z");
 
   await web.processChat("web:default", "default");
-  expect(db.getChatCursor("web:default")).toBe(pendingTs);
+  expect(db.getChatCursor("web:default")).toBe(firstTs);
+  expect(runCount).toBe(1);
+
+  await web.processChat("web:default", "default");
+  expect(db.getChatCursor("web:default")).toBe(secondTs);
+  expect(runCount).toBe(2);
 });
 
 test("processChat rolls back cursor when agent is already processing", async () => {
@@ -1752,6 +1771,59 @@ test("processChat rolls back cursor when agent is already processing", async () 
   expect(error?.message).toContain("already processing");
   expect(db.getChatCursor("web:default")).toBe("");
   expect(db.getInflightRuns().some((run: any) => run.chatJid === "web:default")).toBe(false);
+  const retryStatus = web.getAgentStatus("web:default");
+  expect(retryStatus?.title).toBe("Queued — waiting for current response");
+  expect(typeof retryStatus?.started_at).toBe("string");
+  expect(typeof retryStatus?.retry_at).toBe("string");
+  expect(typeof retryStatus?.retry_delay_ms).toBe("number");
+  expect(Date.parse(String(retryStatus?.retry_at))).toBeGreaterThan(Date.parse(String(retryStatus?.started_at)));
+});
+
+test("processChat publishes retry metadata while providers are still initializing", async () => {
+  const ws = createTempWorkspace("piclaw-web-channel-");
+  cleanupWorkspace = ws.cleanup;
+  restoreEnv = setEnv({ PICLAW_WORKSPACE: ws.workspace, PICLAW_STORE: ws.store, PICLAW_DATA: ws.data });
+
+  const db = await import("../../../src/db.js");
+  db.initDatabase();
+  db.getDb().exec("DELETE FROM message_media; DELETE FROM messages; DELETE FROM chats; DELETE FROM chat_cursors; DELETE FROM chat_cursors;");
+  db.storeChatMetadata("web:default", new Date().toISOString(), "Web");
+
+  db.storeMessage({
+    id: `msg-${Math.random()}`,
+    chat_jid: "web:default",
+    sender: "user",
+    sender_name: "User",
+    content: "hello",
+    timestamp: "2024-01-01T00:00:00.000Z",
+    is_from_me: false,
+    is_bot_message: false,
+  });
+
+  const webMod = await import("../../../src/channels/web.js");
+  const web = new (webMod.WebChannel as any)({
+    queue: { enqueue: () => {} },
+    agentPool: {
+      setSessionBinder: () => {},
+      runAgent: async () => ({ status: "error", error: "No API provider registered for api: demo", result: null }),
+      getContextUsageForChat: async () => null,
+    },
+  });
+
+  let error: Error | null = null;
+  try {
+    await web.processChat("web:default", "default");
+  } catch (err) {
+    error = err as Error;
+  }
+
+  expect(error).toBeTruthy();
+  expect(error?.message).toContain("No API provider registered for api:");
+  const retryStatus = web.getAgentStatus("web:default");
+  expect(retryStatus?.title).toBe("Model provider is initializing — retrying shortly");
+  expect(retryStatus?.detail).toContain("No API provider registered for api:");
+  expect(typeof retryStatus?.retry_at).toBe("string");
+  expect(retryStatus?.retry_delay_ms).toBe(5000);
 });
 
 // --- New coverage: agent status lifecycle ---
@@ -1991,6 +2063,51 @@ test("processChat surfaces provider rate limits as an explicit error notice", as
   expect(botMessages[0].data.content).toContain("AI provider rate limit after automatic retries");
   expect(botMessages[0].data.content).toContain("429");
   expect(botMessages[0].data.content).not.toContain("produced no response");
+});
+
+test("processChat keeps the rate-limit notice when a draft fallback is published", async () => {
+  const ws = createTempWorkspace("piclaw-web-channel-");
+  cleanupWorkspace = ws.cleanup;
+  restoreEnv = setEnv({ PICLAW_WORKSPACE: ws.workspace, PICLAW_STORE: ws.store, PICLAW_DATA: ws.data });
+
+  const db = await import("../../../src/db.js");
+  db.initDatabase();
+  db.getDb().exec("DELETE FROM message_media; DELETE FROM messages; DELETE FROM chats; DELETE FROM chat_cursors; DELETE FROM chat_cursors;");
+  db.storeChatMetadata("web:default", new Date().toISOString(), "Web");
+
+  db.storeMessage({
+    id: `msg-${Math.random()}`,
+    chat_jid: "web:default",
+    sender: "user",
+    sender_name: "User",
+    content: "hello",
+    timestamp: new Date().toISOString(),
+    is_from_me: false,
+    is_bot_message: false,
+  });
+
+  const webMod = await import("../../../src/channels/web.js");
+  const web = new (webMod.WebChannel as any)({
+    queue: { enqueue: () => {} },
+    agentPool: {
+      setSessionBinder: () => {},
+      runAgent: async () => ({ status: "error", error: "Azure request failed: Azure rate limit exceeded — the model's per-minute token budget was exhausted.", result: null, attachments: [] }),
+      getContextUsageForChat: async () => null,
+    },
+  });
+
+  web.getBuffer = (_turnId: string, panel: string) => panel === "draft"
+    ? { text: "Partial draft already visible", totalLines: 1 }
+    : undefined;
+
+  await web.processChat("web:default", "default");
+
+  const timeline = db.getTimeline("web:default", 10);
+  const botMessages = timeline.filter((item: any) => item.data.type === "agent_response");
+  expect(botMessages.length).toBe(1);
+  expect(botMessages[0].data.content).toContain("Partial draft already visible");
+  expect(botMessages[0].data.content).toContain("AI provider rate limit after automatic retries");
+  expect(botMessages[0].data.content).not.toContain("Response ended with an error before finalization");
 });
 
 test("processChat finalizes as no-op when no terminal output can be persisted", async () => {

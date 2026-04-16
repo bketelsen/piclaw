@@ -202,14 +202,29 @@ export async function runAgentPrompt(
     const tracker = options.turnCoordinator.createTracker(chatJid, runOptions.onTurnComplete);
     const unsub = options.turnCoordinator.subscribe(session, chatJid, tracker, runOptions.onEvent);
     const timeoutMs = typeof runOptions.timeoutMs === "number" ? runOptions.timeoutMs : getAgentRuntimeConfig().timeoutMs;
-    const { timeoutId, timedOutRef } = options.turnCoordinator.startPromptTimeout(session, chatJid, timeoutMs);
+    const { timeoutId, timedOutRef, completedRef } = options.turnCoordinator.startPromptTimeout(session, chatJid, timeoutMs);
 
     const channel = detectChannel(chatJid);
     return await withChatContext(chatJid, channel, async () => {
       try {
         await session.prompt(prompt);
-        await waitForSessionIdle(session);
+        options.onInfo?.("session.prompt() resolved", {
+          operation: "run_agent.prompt_resolved",
+          chatJid,
+          promptDurationMs: Date.now() - startTime,
+          sessionIsStreaming: Boolean(session.isStreaming),
+          sessionIsCompacting: Boolean(session.isCompacting),
+          sessionIsRetrying: Boolean(session.isRetrying),
+        });
+        await waitForSessionIdle(session, 10, (result) => {
+          options.onInfo?.("Session settled after prompt", {
+            operation: "run_agent.wait_for_session_idle",
+            chatJid,
+            ...result,
+          });
+        });
       } finally {
+        completedRef.value = true;
         if (timeoutId) clearTimeout(timeoutId);
         unsub();
       }

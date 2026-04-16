@@ -33,7 +33,6 @@ describe("web chat run control helpers", () => {
       processChat: async (chatJid, agentId, threadRootId) => {
         processed.push({ chatJid, agentId, threadRootId });
       },
-      getChatCursor: () => "2024-01-01T00:00:00.000Z",
     };
 
     resumeChat("web:1", 77, ctx);
@@ -44,7 +43,7 @@ describe("web chat run control helpers", () => {
     expect(processed).toEqual([{ chatJid: "web:1", agentId: "default", threadRootId: 77 }]);
   });
 
-  test("resumeChat falls back to the current cursor when no thread root is provided", async () => {
+  test("resumeChat uses stable wake key when no thread root is provided", async () => {
     const enqueued: Array<{ key: string; task: () => Promise<void> }> = [];
 
     const ctx: ResumeChatContext = {
@@ -53,12 +52,17 @@ describe("web chat run control helpers", () => {
         enqueued.push({ task, key });
       },
       processChat: async () => {},
-      getChatCursor: () => "2024-01-01T00:00:05.000Z",
     };
 
     resumeChat("web:1", undefined, ctx);
     expect(enqueued).toHaveLength(1);
-    expect(enqueued[0].key).toBe("resume:web:1:2024-01-01T00:00:05.000Z");
+    expect(enqueued[0].key).toBe("resume:web:1:wake");
+
+    // A second call with no threadRootId produces the same key, so the queue
+    // will deduplicate it.
+    resumeChat("web:1", null, ctx);
+    expect(enqueued).toHaveLength(2);
+    expect(enqueued[1].key).toBe("resume:web:1:wake");
   });
 
   test("skipFailedOnModelSwitch advances cursor only when needed and clears failure", () => {

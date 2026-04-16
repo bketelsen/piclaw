@@ -216,7 +216,7 @@ export function installWebChannelPrototype(
     consumePendingSteering: {
       configurable: true,
       writable: true,
-      value: withRuntimePublicSurface((service, chatJid: string): string | null => service.consumePendingSteering(chatJid)),
+      value: withRuntimePublicSurface((service, chatJid: string): string[] => service.consumePendingSteering(chatJid)),
     },
     updateAgentStatus: {
       configurable: true,

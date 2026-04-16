@@ -12,7 +12,7 @@ const sampleAttachment: AttachmentInfo = {
   sourcePath: "/tmp/note.txt",
 };
 
-test("AgentTurnCoordinator tracks streamed turns and fallback assistant text", () => {
+test("AgentTurnCoordinator tracks streamed turns and fallback assistant text after a completed message boundary", () => {
   const attachmentBatches: AttachmentInfo[][] = [[sampleAttachment], []];
   const completed: Array<{ text: string; attachments: AttachmentInfo[] }> = [];
 
@@ -31,6 +31,13 @@ test("AgentTurnCoordinator tracks streamed turns and fallback assistant text", (
       delta: "hello",
       contentIndex: 0,
       partial: { content: [{ type: "text", textSignature: JSON.stringify({ v: 1, id: "msg_1", phase: "final_answer" }) }] },
+    },
+  } as any);
+  tracker.handleMessageUpdate({
+    type: "message_end",
+    message: {
+      role: "assistant",
+      content: [{ type: "text", text: "hello", textSignature: JSON.stringify({ v: 1, id: "msg_1", phase: "final_answer" }) }],
     },
   } as any);
   tracker.handleMessageUpdate({
@@ -200,6 +207,58 @@ test("AgentTurnCoordinator subscribes, records usage, and downgrades handler fai
   expect(listener).toBeNull();
 });
 
+test("AgentTurnCoordinator does not flush an incomplete turn when a new text_start arrives before message_end", () => {
+  const completed: Array<{ text: string; attachments: AttachmentInfo[] }> = [];
+  const coordinator = new AgentTurnCoordinator({
+    takeAttachments: () => [],
+    touchSession: () => {},
+    recordMessageUsage: () => {},
+  });
+
+  const tracker = coordinator.createTracker("web:default", (turn) => completed.push(turn));
+
+  tracker.handleMessageUpdate({
+    type: "message_update",
+    assistantMessageEvent: {
+      type: "text_start",
+      contentIndex: 0,
+      partial: { content: [{ type: "text", textSignature: JSON.stringify({ v: 1, id: "msg_1", phase: "final_answer" }) }] },
+    },
+  } as any);
+  tracker.handleMessageUpdate({
+    type: "message_update",
+    assistantMessageEvent: {
+      type: "text_delta",
+      delta: "hello",
+      contentIndex: 0,
+      partial: { content: [{ type: "text", textSignature: JSON.stringify({ v: 1, id: "msg_1", phase: "final_answer" }) }] },
+    },
+  } as any);
+  tracker.handleMessageUpdate({
+    type: "message_update",
+    assistantMessageEvent: {
+      type: "text_start",
+      contentIndex: 0,
+      partial: { content: [{ type: "text", textSignature: JSON.stringify({ v: 1, id: "msg_2", phase: "final_answer" }) }] },
+    },
+  } as any);
+
+  expect(completed).toEqual([]);
+  expect(tracker.getTurnCount()).toBe(0);
+
+  tracker.handleMessageUpdate({
+    type: "message_end",
+    message: {
+      role: "assistant",
+      content: [{ type: "text", text: "fallback answer", textSignature: JSON.stringify({ v: 1, id: "msg_2", phase: "final_answer" }) }],
+    },
+  } as any);
+
+  expect(completed).toEqual([]);
+  expect(tracker.getTurnCount()).toBe(0);
+  expect(tracker.getFinalText()).toBe("fallback answer");
+});
+
 test("AgentTurnCoordinator captures provider error from assistant message_end", () => {
   const coordinator = new AgentTurnCoordinator({
     takeAttachments: () => [],
@@ -274,4 +333,29 @@ test("AgentTurnCoordinator aborts timed-out prompts", async () => {
   expect(timedOutRef.value).toBe(true);
   expect(abortCalls).toBe(1);
   expect(errors).toContain("Prompt timed out; aborting session");
+});
+
+test("AgentTurnCoordinator ignores late timeout callbacks after completion", async () => {
+  let abortCalls = 0;
+  const errors: string[] = [];
+  const session = {
+    abort: async () => {
+      abortCalls += 1;
+    },
+  };
+
+  const coordinator = new AgentTurnCoordinator({
+    takeAttachments: () => [],
+    touchSession: () => {},
+    recordMessageUsage: () => {},
+    onError: (message) => errors.push(message),
+  });
+
+  const { timedOutRef, completedRef } = coordinator.startPromptTimeout(session as any, "web:default", 5);
+  completedRef.value = true;
+  await Bun.sleep(20);
+
+  expect(timedOutRef.value).toBe(false);
+  expect(abortCalls).toBe(0);
+  expect(errors).toEqual([]);
 });

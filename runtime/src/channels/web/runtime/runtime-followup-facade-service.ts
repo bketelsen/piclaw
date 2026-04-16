@@ -125,7 +125,7 @@ export class WebChannelRuntimeFollowupFacadeService {
     this.deps.getRuntimeState().queuePendingSteering(chatJid, timestamp);
   }
 
-  consumePendingSteering(chatJid: string): string | null {
+  consumePendingSteering(chatJid: string): string[] {
     return this.deps.getRuntimeState().consumePendingSteering(chatJid);
   }
 

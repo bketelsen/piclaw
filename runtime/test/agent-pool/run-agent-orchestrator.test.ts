@@ -1,4 +1,7 @@
-import { expect, test } from "bun:test";
+import { afterEach, expect, test } from "bun:test";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 
 import { DEFAULT_COMPACTION_SETTINGS } from "@mariozechner/pi-coding-agent";
 import type { AgentSessionRuntime } from "@mariozechner/pi-coding-agent";
@@ -21,6 +24,22 @@ function createRuntime(session: any): AgentSessionRuntime {
     dispose: async () => {},
   } as any;
 }
+
+const tempLogsDirs: string[] = [];
+
+function createTestLogsDir(): string {
+  const logsDir = mkdtempSync(join(tmpdir(), "piclaw-run-agent-logs-"));
+  tempLogsDirs.push(logsDir);
+  return logsDir;
+}
+
+afterEach(() => {
+  while (tempLogsDirs.length > 0) {
+    const logsDir = tempLogsDirs.pop();
+    if (!logsDir) continue;
+    rmSync(logsDir, { recursive: true, force: true });
+  }
+});
 
 test("runAgentPrompt aggregates deltas and returns pending attachments", async () => {
   const attachments = getAttachmentRegistry();
@@ -68,7 +87,7 @@ test("runAgentPrompt aggregates deltas and returns pending attachments", async (
     turnCoordinator,
     clearAttachments: (chatJid) => attachments.clear(chatJid),
     takeAttachments: (chatJid) => attachments.take(chatJid),
-    logsDir: process.env.PICLAW_WORKSPACE || "/workspace",
+    logsDir: createTestLogsDir(),
     setActiveForkBaseLeaf: (_chatJid, leafId) => {
       forkStates.push(leafId);
     },
@@ -137,7 +156,7 @@ test("runAgentPrompt auto-compacts before prompting when estimated context excee
     turnCoordinator,
     clearAttachments: () => {},
     takeAttachments: () => [],
-    logsDir: process.env.PICLAW_WORKSPACE || "/workspace",
+    logsDir: createTestLogsDir(),
     setActiveForkBaseLeaf: () => {},
     clearActiveForkBaseLeaf: () => {},
   });
@@ -200,7 +219,7 @@ test("runAgentPrompt skips pre-prompt auto-compaction when it is disabled", asyn
     turnCoordinator,
     clearAttachments: () => {},
     takeAttachments: () => [],
-    logsDir: process.env.PICLAW_WORKSPACE || "/workspace",
+    logsDir: createTestLogsDir(),
     setActiveForkBaseLeaf: () => {},
     clearActiveForkBaseLeaf: () => {},
   });
@@ -251,7 +270,7 @@ test("runAgentPrompt surfaces provider error instead of returning null result", 
     turnCoordinator,
     clearAttachments: () => {},
     takeAttachments: () => [],
-    logsDir: process.env.PICLAW_WORKSPACE || "/workspace",
+    logsDir: createTestLogsDir(),
     setActiveForkBaseLeaf: () => {},
     clearActiveForkBaseLeaf: () => {},
   });
@@ -302,7 +321,7 @@ test("runAgentPrompt surfaces latent session state errors when no final text is 
     turnCoordinator,
     clearAttachments: () => {},
     takeAttachments: () => [],
-    logsDir: process.env.PICLAW_WORKSPACE || "/workspace",
+    logsDir: createTestLogsDir(),
     setActiveForkBaseLeaf: () => {},
     clearActiveForkBaseLeaf: () => {},
   });
@@ -369,7 +388,7 @@ test("runAgentPrompt ignores commentary-only aborted output", async () => {
     turnCoordinator,
     clearAttachments: () => {},
     takeAttachments: () => [],
-    logsDir: process.env.PICLAW_WORKSPACE || "/workspace",
+    logsDir: createTestLogsDir(),
     setActiveForkBaseLeaf: () => {},
     clearActiveForkBaseLeaf: () => {},
   });
@@ -377,4 +396,80 @@ test("runAgentPrompt ignores commentary-only aborted output", async () => {
   expect(result.status).toBe("success");
   expect(result.result).toBeNull();
   expect(result.attachments).toBeUndefined();
+});
+
+test("runAgentPrompt ignores a queued late-timeout callback after prompt completion", async () => {
+  let abortCalls = 0;
+
+  class StubSession {
+    private listeners: Array<(event: any) => void> = [];
+    sessionManager = { getLeafId: () => "leaf-1" };
+    isStreaming = false;
+    isCompacting = false;
+    isRetrying = false;
+    subscribe(listener: (event: any) => void) {
+      this.listeners.push(listener);
+      return () => {
+        this.listeners = this.listeners.filter((entry) => entry !== listener);
+      };
+    }
+    async prompt() {
+      for (const listener of this.listeners) {
+        listener({ type: "message_update", assistantMessageEvent: { type: "text_delta", delta: "done" } });
+      }
+    }
+    async abort() {
+      abortCalls += 1;
+    }
+  }
+
+  const session = new StubSession();
+  const turnCoordinator = new AgentTurnCoordinator({
+    takeAttachments: () => [],
+    touchSession: () => {},
+    recordMessageUsage: () => {},
+  });
+
+  const originalStartPromptTimeout = turnCoordinator.startPromptTimeout.bind(turnCoordinator);
+  const originalClearTimeout = globalThis.clearTimeout;
+  turnCoordinator.startPromptTimeout = ((_session: any, _chatJid: string, _timeoutMs: number) => {
+    const state = originalStartPromptTimeout(_session, _chatJid, 0);
+    return { ...state, timeoutId: 1 as any };
+  }) as any;
+
+  globalThis.clearTimeout = ((_: any) => {
+    queueMicrotask(async () => {
+      const state = (turnCoordinator.startPromptTimeout as any).lastState;
+      if (!state || state.completedRef.value) return;
+      state.timedOutRef.value = true;
+      await session.abort();
+    });
+  }) as any;
+
+  const wrappedStartPromptTimeout = turnCoordinator.startPromptTimeout;
+  turnCoordinator.startPromptTimeout = ((...args: any[]) => {
+    const state = (wrappedStartPromptTimeout as any)(...args);
+    (turnCoordinator.startPromptTimeout as any).lastState = state;
+    return state;
+  }) as any;
+
+  try {
+    const result = await runAgentPrompt("test", "web:default", { timeoutMs: 1 }, {
+      getOrCreateRuntime: async () => createRuntime(session) as any,
+      turnCoordinator,
+      clearAttachments: () => {},
+      takeAttachments: () => [],
+      logsDir: createTestLogsDir(),
+      setActiveForkBaseLeaf: () => {},
+      clearActiveForkBaseLeaf: () => {},
+    });
+
+    await Bun.sleep(0);
+
+    expect(result.status).toBe("success");
+    expect(result.result).toBe("done");
+    expect(abortCalls).toBe(0);
+  } finally {
+    globalThis.clearTimeout = originalClearTimeout;
+  }
 });

@@ -1059,14 +1059,12 @@ export async function processChat(
     endChatRun(chatJid);
 
     const cursorAfterEnd = getChatCursor(chatJid);
-    const pendingSteerTimestamp = channel.consumePendingSteering(chatJid);
-    if (pendingSteerTimestamp) {
-      const current = getChatCursor(chatJid);
-      if (!current || current < pendingSteerTimestamp) {
-        setChatCursor(chatJid, pendingSteerTimestamp);
-      }
-    }
+    const pendingSteerTimestamps = channel.consumePendingSteering(chatJid);
 
+    // Steering-only rows are already excluded from getMessagesSince(), so the
+    // chat cursor must stay anchored to the last processed persisted user
+    // message. Advancing the cursor to steer timestamps can skip normal user
+    // messages that were persisted before those steering rows.
     const cursorAfterSteer = getChatCursor(chatJid);
 
     channel.saveState();
@@ -1090,7 +1088,10 @@ export async function processChat(
     log.info("finalizeSuccessfulRun advanced cursor", {
       operation: "process_chat.finalize_successful_run",
       chatJid,
+      cursorBefore: prevCursor,
       cursorAfterEnd,
+      pendingSteerCount: pendingSteerTimestamps.length,
+      pendingSteerTimestamps,
       cursorAfterSteer,
       cursorNow,
       remainingCount: remainingPersisted.length,
