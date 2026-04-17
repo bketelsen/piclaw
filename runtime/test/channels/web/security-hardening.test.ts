@@ -9,6 +9,8 @@
  * - Agent message content length limits
  */
 import { describe, test, expect } from "bun:test";
+import { mkdirSync, rmSync, writeFileSync } from "fs";
+import { join } from "path";
 import { getTestWorkspace, setEnv } from "../../helpers.js";
 
 // ── Post content length validation ──
@@ -388,6 +390,7 @@ describe("SSE client cap", () => {
 
 // ── CSRF origin checks ──
 import { RequestRouterService } from "../../../src/channels/web/request-router-service.js";
+import { getWebOrigin, rememberWebOrigin } from "../../../src/channels/web/auth/request-origin.js";
 
 describe("CSRF origin checks", () => {
   class StubChannel {
@@ -470,6 +473,36 @@ describe("CSRF origin checks", () => {
     const res = await router.handle(req);
     expect(res.status).toBe(401);
     expect(reached).toBe(false);
+  });
+
+  test("blocked unauthenticated requests do not overwrite the remembered web origin", async () => {
+    rememberWebOrigin("web:default", new Request("https://safe.example/app", {
+      headers: { host: "safe.example" },
+    }));
+
+    class AuthChannel extends StubChannel {
+      authGateway = {
+        isAuthEnabled: () => true,
+        isInternalSecretEnabled: () => false,
+        verifyInternalSecret: () => false,
+        isAuthenticated: () => false,
+      };
+    }
+
+    const router = new RequestRouterService(new AuthChannel() as any);
+    const req = new Request("https://evil.example/agent/queue-steer", {
+      method: "POST",
+      headers: {
+        Origin: "https://evil.example",
+        Host: "evil.example",
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ row_id: 1 }),
+    });
+
+    const res = await router.handle(req);
+    expect(res.status).toBe(401);
+    expect(getWebOrigin("web:default")).toBe("https://safe.example");
   });
 
   test("auth-gates /agent/active-chats before route dispatch", async () => {
@@ -684,6 +717,26 @@ describe("CSRF origin checks", () => {
 
     const res = await router.handle(req);
     expect(res.status).toBe(403);
+  });
+
+  test("serveStaticAsset rejects same-prefix sibling traversal paths", async () => {
+    const runtimeRoot = join(import.meta.dir, "..", "..", "..");
+    const staticSiblingDir = join(runtimeRoot, "web", "static-backup");
+    const staticSiblingFile = join(staticSiblingDir, "router-secret.txt");
+
+    mkdirSync(staticSiblingDir, { recursive: true });
+    writeFileSync(staticSiblingFile, "router secret", "utf8");
+
+    try {
+      const router = new RequestRouterService(new StubChannel() as any);
+      const res = await (router as any).serveStaticAsset(
+        new Request("http://localhost/favicon.ico"),
+        "../static-backup/router-secret.txt",
+      );
+      expect(res.status).toBe(404);
+    } finally {
+      rmSync(staticSiblingDir, { recursive: true, force: true });
+    }
   });
 });
 

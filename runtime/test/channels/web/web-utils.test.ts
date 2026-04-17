@@ -6,7 +6,7 @@
  */
 
 import { expect, test } from "bun:test";
-import { existsSync } from "fs";
+import { existsSync, mkdirSync, rmSync, writeFileSync } from "fs";
 import { join } from "path";
 
 import { clampInt, errorJson, jsonResponse, okJson, parseOptionalInt } from "../../../src/channels/web/http/http-utils.js";
@@ -111,6 +111,30 @@ test("static helpers serve files and not-found", async () => {
 
   const notFound = await serveDocsStatic("missing.html", () => new Response("nope", { status: 404 }));
   expect(notFound.status).toBe(404);
+});
+
+test("static helpers reject same-prefix sibling traversal paths", async () => {
+  const root = join(import.meta.dir, "..", "..", "..");
+  const staticSiblingDir = join(root, "web", "static-backup");
+  const docsSiblingDir = join(root, "docs-backup");
+  const staticSiblingFile = join(staticSiblingDir, "secret.txt");
+  const docsSiblingFile = join(docsSiblingDir, "secret.txt");
+
+  mkdirSync(staticSiblingDir, { recursive: true });
+  mkdirSync(docsSiblingDir, { recursive: true });
+  writeFileSync(staticSiblingFile, "static secret", "utf8");
+  writeFileSync(docsSiblingFile, "docs secret", "utf8");
+
+  try {
+    const staticRes = await serveStatic("../static-backup/secret.txt", () => new Response("nope", { status: 404 }));
+    expect(staticRes.status).toBe(404);
+
+    const docsRes = await serveDocsStatic("../docs-backup/secret.txt", () => new Response("nope", { status: 404 }));
+    expect(docsRes.status).toBe(404);
+  } finally {
+    rmSync(staticSiblingDir, { recursive: true, force: true });
+    rmSync(docsSiblingDir, { recursive: true, force: true });
+  }
 });
 
 test("ui bridge stop clears pending requests even when a pending reject throws", () => {
