@@ -125,6 +125,61 @@ test("runScheduledTask logs run and updates task", async () => {
   expect(metrics.taskRunsFailed).toBe(0);
 });
 
+test("runScheduledTask still logs and advances the task after an early execution throw", async () => {
+  const ws = getTestWorkspace();
+  restoreEnv = setEnv({ PICLAW_WORKSPACE: ws.workspace, PICLAW_STORE: ws.store, PICLAW_DATA: ws.data });
+
+  const db = await import("../../src/db.js");
+  db.initDatabase();
+
+  const scheduler = await import("../../src/task-scheduler.js");
+  scheduler.resetSchedulerMetricsForTests();
+
+  const taskId = `task-early-error-${Date.now()}`;
+  db.createTask({
+    id: taskId,
+    chat_jid: "web:default",
+    prompt: "say hi",
+    schedule_type: "interval",
+    schedule_value: "60000",
+    next_run: new Date(Date.now() - 1000).toISOString(),
+    status: "active",
+    created_at: new Date().toISOString(),
+  });
+
+  const deps = {
+    queue: { enqueueTask: (_id: string, fn: () => Promise<void>) => fn() } as any,
+    agentPool: {
+      runAgent: async () => ({ status: "success", result: "Hello" }),
+      saveSessionPosition: async () => {
+        throw new Error("save failed");
+      },
+      restoreSessionPosition: async () => {},
+      getCurrentModelLabel: async () => null,
+      applyControlCommand: async () => ({ status: "success", message: "" }),
+    } as any,
+    sendMessage: async () => {},
+  };
+
+  const task = db.getTaskById(taskId)!;
+  await scheduler.runScheduledTask(task, deps as any);
+
+  const updated = db.getTaskById(taskId)!;
+  expect(updated.last_run).not.toBeNull();
+  expect(updated.last_result).toContain("save failed");
+  expect(updated.next_run).not.toBe(task.next_run);
+
+  const logs = db.getTaskRunLogs(taskId);
+  expect(logs.length).toBe(1);
+  expect(logs[0].status).toBe("error");
+  expect(logs[0].error).toContain("save failed");
+
+  const metrics = scheduler.getSchedulerMetrics();
+  expect(metrics.taskRunsStarted).toBe(1);
+  expect(metrics.taskRunsSucceeded).toBe(0);
+  expect(metrics.taskRunsFailed).toBe(1);
+});
+
 test("runScheduledTask computes the next cron run from the task next_run anchor", async () => {
   const ws = getTestWorkspace();
   restoreEnv = setEnv({

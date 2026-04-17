@@ -263,67 +263,39 @@ export async function runScheduledTask(task: ScheduledTask, deps: SchedulerDeps)
   schedulerMetrics.taskRunsStarted += 1;
   let result: string | null = null;
   let error: string | null = null;
+  try {
+    const kind = task.task_kind === "internal"
+      ? "internal"
+      : task.task_kind === "shell" || task.command
+        ? "shell"
+        : "agent";
 
-  const kind = task.task_kind === "internal"
-    ? "internal"
-    : task.task_kind === "shell" || task.command
-      ? "shell"
-      : "agent";
-
-  if (kind === "internal") {
-    // Switch model if the internal task specifies one (e.g. Dream).
-    const savedModel = task.model ? await deps.agentPool.getCurrentModelLabel(task.chat_jid) : null;
-    if (task.model && (!savedModel || savedModel !== task.model)) {
-      const switchErr = await switchTaskModel(task, deps);
-      if (switchErr) { error = switchErr; }
-    }
-    if (!error) {
-      const out = await runInternalTask(task, deps);
+    if (kind === "internal") {
+      // Switch model if the internal task specifies one (e.g. Dream).
+      const savedModel = task.model ? await deps.agentPool.getCurrentModelLabel(task.chat_jid) : null;
+      if (task.model && (!savedModel || savedModel !== task.model)) {
+        const switchErr = await switchTaskModel(task, deps);
+        if (switchErr) { error = switchErr; }
+      }
+      if (!error) {
+        const out = await runInternalTask(task, deps);
+        if (out.error) {
+          error = out.error;
+        } else {
+          result = out.result;
+        }
+      }
+      // Restore original model after internal task completes.
+      if (task.model) {
+        await restoreOriginalModel(task, deps, savedModel);
+      }
+    } else if (kind === "shell") {
+      const out = await runShellTask(task);
       if (out.error) {
         error = out.error;
-      } else {
+      } else if (out.result) {
         result = out.result;
-      }
-    }
-    // Restore original model after internal task completes.
-    if (task.model) {
-      await restoreOriginalModel(task, deps, savedModel);
-    }
-  } else if (kind === "shell") {
-    const out = await runShellTask(task);
-    if (out.error) {
-      error = out.error;
-    } else if (out.result) {
-      result = out.result;
-      if (out.notify) {
-        const t = formatOutbound(result, detectChannel(task.chat_jid));
-        if (t) {
-          await deps.sendMessage(task.chat_jid, t, { forceRoot: true, source: "scheduled" });
-          await deps.sendNudge?.(t);
-        }
-      }
-    }
-  } else {
-    // Save session position so we can restore after the task.
-    // This isolates the task's prompt/response in a side branch of the session
-    // tree, preventing context pollution of the user's conversation.
-    const savedLeafId = await deps.agentPool.saveSessionPosition(task.chat_jid);
-    const savedModel = await deps.agentPool.getCurrentModelLabel(task.chat_jid);
-
-    try {
-      // Switch model if task specifies one.
-      if (task.model) {
-        if (!savedModel || savedModel !== task.model) {
-          error = await switchTaskModel(task, deps);
-        }
-      }
-
-      if (!error) {
-        const out = await deps.agentPool.runAgent(task.prompt, task.chat_jid);
-        if (out.status === "error") {
-          error = out.error || "Unknown";
-        } else if (out.result) {
-          result = out.result;
+        if (out.notify) {
           const t = formatOutbound(result, detectChannel(task.chat_jid));
           if (t) {
             await deps.sendMessage(task.chat_jid, t, { forceRoot: true, source: "scheduled" });
@@ -331,16 +303,45 @@ export async function runScheduledTask(task: ScheduledTask, deps: SchedulerDeps)
           }
         }
       }
-    } catch (e) {
-      error = e instanceof Error ? e.message : String(e);
-    } finally {
-      // Navigate back to the saved position — the task's prompt and response
-      // stay in a side branch and won't pollute the user's conversation context.
-      await deps.agentPool.restoreSessionPosition(task.chat_jid, savedLeafId);
+    } else {
+      // Save session position so we can restore after the task.
+      // This isolates the task's prompt/response in a side branch of the session
+      // tree, preventing context pollution of the user's conversation.
+      const savedLeafId = await deps.agentPool.saveSessionPosition(task.chat_jid);
+      const savedModel = await deps.agentPool.getCurrentModelLabel(task.chat_jid);
 
-      // Restore the original model if it was changed.
-      await restoreOriginalModel(task, deps, savedModel);
+      try {
+        // Switch model if task specifies one.
+        if (task.model) {
+          if (!savedModel || savedModel !== task.model) {
+            error = await switchTaskModel(task, deps);
+          }
+        }
+
+        if (!error) {
+          const out = await deps.agentPool.runAgent(task.prompt, task.chat_jid);
+          if (out.status === "error") {
+            error = out.error || "Unknown";
+          } else if (out.result) {
+            result = out.result;
+            const t = formatOutbound(result, detectChannel(task.chat_jid));
+            if (t) {
+              await deps.sendMessage(task.chat_jid, t, { forceRoot: true, source: "scheduled" });
+              await deps.sendNudge?.(t);
+            }
+          }
+        }
+      } finally {
+        // Navigate back to the saved position — the task's prompt and response
+        // stay in a side branch and won't pollute the user's conversation context.
+        await deps.agentPool.restoreSessionPosition(task.chat_jid, savedLeafId);
+
+        // Restore the original model if it was changed.
+        await restoreOriginalModel(task, deps, savedModel);
+      }
     }
+  } catch (e) {
+    error = e instanceof Error ? e.message : String(e);
   }
 
   if (error) schedulerMetrics.taskRunsFailed += 1;
