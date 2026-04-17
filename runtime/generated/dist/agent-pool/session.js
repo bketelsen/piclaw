@@ -24,6 +24,7 @@ import { detectChannel } from "../router.js";
 import { builtinExtensionFactories } from "../extensions/index.js";
 import { bindImmediateToolActivation } from "./tool-activation-live-update.js";
 import { ensureExtensionNodeModulesLink } from "./session-node-modules-link.js";
+import { createLogger, debugSuppressedError } from "../utils/logger.js";
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const AGENT_DIR = getAgentDir();
 const EMPTY_STRING_ARRAY = [];
@@ -47,8 +48,8 @@ function ensureValidProcessCwd() {
         if (existsSync(process.cwd()))
             return;
     }
-    catch {
-        // Fall through and reset below.
+    catch (error) {
+        debugSuppressedError(log, "Failed to inspect current working directory; resetting to workspace.", error);
     }
     process.chdir(getWorkspaceDir());
 }
@@ -63,8 +64,9 @@ function ensureValidProcessCwd() {
  * @mariozechner/pi-ai/dist/providers/*.
  */
 const EXTENSIONS_DIR = resolve(__dirname, "../../extensions");
+const log = createLogger("agent-pool.session");
 const OPTIONAL_EXTENSIONS = [
-    { path: resolve(EXTENSIONS_DIR, "integrations", "azure-openai.ts"), envGate: "AOAI_BASE_URL" },
+    { path: resolve(EXTENSIONS_DIR, "integrations", "azure-openai-session", "index.ts"), envGate: "AOAI_BASE_URL" },
     { path: resolve(EXTENSIONS_DIR, "integrations", "context-mode.ts") },
     { path: resolve(EXTENSIONS_DIR, "integrations", "bun-runner", "index.ts") },
     { path: resolve(EXTENSIONS_DIR, "integrations", "keychain", "index.ts") },
@@ -72,12 +74,12 @@ const OPTIONAL_EXTENSIONS = [
     { path: resolve(EXTENSIONS_DIR, "integrations", "proxmox", "index.ts") },
     { path: resolve(EXTENSIONS_DIR, "integrations", "portainer", "index.ts") },
     { path: resolve(EXTENSIONS_DIR, "integrations", "mcp-status-hints", "index.ts") },
-    { path: resolve(EXTENSIONS_DIR, "browser", "cdp-browser", "index.ts") },
+    { path: resolve(EXTENSIONS_DIR, "browser", "cdp-browser-tool", "index.ts") },
     { path: resolve(EXTENSIONS_DIR, "platform", "windows", "powershell", "index.ts"), platforms: ["win32"] },
     { path: resolve(EXTENSIONS_DIR, "platform", "windows", "win-ui", "index.ts"), platforms: ["win32"] },
-    { path: resolve(EXTENSIONS_DIR, "viewers", "office-viewer", "index.ts"), channels: ["web"] },
-    { path: resolve(EXTENSIONS_DIR, "integrations", "office-tools", "index.ts") },
-    { path: resolve(EXTENSIONS_DIR, "viewers", "drawio-editor", "index.ts"), channels: ["web"] },
+    { path: resolve(EXTENSIONS_DIR, "viewers", "office-viewer-tool", "index.ts"), channels: ["web"] },
+    { path: resolve(EXTENSIONS_DIR, "integrations", "office-tools-tool", "index.ts") },
+    { path: resolve(EXTENSIONS_DIR, "viewers", "drawio-editor-tool", "index.ts"), channels: ["web"] },
     { path: resolve(EXTENSIONS_DIR, "experimental", "m365", "index.ts"), envGate: "PICLAW_ENABLE_M365_EXPERIMENTAL" },
 ];
 const PACKAGED_EXTENSION_ENTRIES = [
@@ -305,8 +307,10 @@ async function sanitizePersistedSessionFileBeforeLoad(sessionDir) {
                     }
                 }
             }
-            catch {
-                // Preserve unreadable lines exactly as-is.
+            catch (error) {
+                debugSuppressedError(log, "Preserving unreadable session persistence line during sanitization.", error, {
+                    latestFile,
+                });
             }
             writer.write(`${output}\n`);
             writtenBytes += Buffer.byteLength(output) + 1;
@@ -320,7 +324,11 @@ async function sanitizePersistedSessionFileBeforeLoad(sessionDir) {
             rmSync(tempPath, { force: true });
         }
     }
-    catch {
+    catch (error) {
+        debugSuppressedError(log, "Failed to sanitize persisted session file before load; removing temp file.", error, {
+            latestFile,
+            tempPath,
+        });
         writer.destroy();
         rmSync(tempPath, { force: true });
         throw new Error(`Failed to sanitize persisted session file before load: ${latestFile}`);

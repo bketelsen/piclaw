@@ -99,6 +99,21 @@ export function seedRotatedSession(sessionManager, context, options) {
         sessionManager.appendMessage(message);
     }
 }
+async function restoreCancelledRotationSession(runtime, previousSessionFile) {
+    const activeSessionFile = runtime.session.sessionFile?.trim();
+    if (!activeSessionFile || activeSessionFile === previousSessionFile) {
+        return null;
+    }
+    const result = await runtime.switchSession(previousSessionFile);
+    if (result.cancelled) {
+        return `Failed to restore previous session after cancellation: ${previousSessionFile}`;
+    }
+    const restoredSessionFile = runtime.session.sessionFile?.trim();
+    if (restoredSessionFile !== previousSessionFile) {
+        return `Failed to restore previous session after cancellation: expected ${previousSessionFile} but active session is ${restoredSessionFile || "(none)"}`;
+    }
+    return null;
+}
 /** Rotate a persisted session into a newly-seeded successor session file. */
 export async function rotateSession(session, runtime, options = {}) {
     const reason = options.reason ?? "manual";
@@ -170,7 +185,13 @@ export async function rotateSession(session, runtime, options = {}) {
         if (result.cancelled) {
             if (archived)
                 rmSync(archivePath, { force: true });
-            return { status: "error", reason, compacted, message: "Session rotation cancelled." };
+            const restoreError = await restoreCancelledRotationSession(runtime, previousSessionFile);
+            return {
+                status: "error",
+                reason,
+                compacted,
+                message: restoreError ? `Session rotation cancelled. ${restoreError}` : "Session rotation cancelled.",
+            };
         }
         const activeSession = runtime.session;
         forcePersistSessionFile(activeSession);

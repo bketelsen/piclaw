@@ -15,6 +15,7 @@ import { createLogger } from "../utils/logger.js";
 import { patchConsoleTimestamps } from "./console-timestamps.js";
 import { launchWorkspaceIndexProcess } from "../workspace-index-process.js";
 import { SystemMetricsSampler } from "../channels/web/agent/system-metrics.js";
+import { registerLazyViewerRoutes } from "../channels/web/http/lazy-viewer-routes.js";
 const log = createLogger("runtime.startup");
 const WORKSPACE_SKEL_DIR = resolve(import.meta.dir, "../../../skel");
 const STARTUP_MEMORY_SNAPSHOT_DIR = join(DATA_DIR, "startup-memory-snapshots");
@@ -148,6 +149,7 @@ export function captureStartupMemorySnapshot(agentPool, options = {}) {
 export async function startWebChannel(queue, agentPool) {
     const web = new WebChannel({ queue, agentPool });
     await web.start();
+    registerLazyViewerRoutes();
     captureStartupMemorySnapshot(agentPool, { label: "post-web-start" });
     queueStartupSessionWarmup(agentPool, resolveStartupSessionWarmupOptions());
     web.recoverInflightRuns();

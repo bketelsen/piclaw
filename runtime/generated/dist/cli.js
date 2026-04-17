@@ -54,6 +54,10 @@ function getFlagValue(args, flag) {
         return undefined;
     return value;
 }
+const CLI_SUBCOMMANDS = new Set(["keychain"]);
+function isCliSubcommand(value) {
+    return typeof value === "string" && CLI_SUBCOMMANDS.has(value);
+}
 function consumeLeadingGlobalOptions(args) {
     const remaining = [...args];
     while (remaining.length > 0) {
@@ -66,7 +70,7 @@ function consumeLeadingGlobalOptions(args) {
         }
         if (current === "-w" || current === "--workspace" || current === "-p" || current === "--port" || current === "--host" || current === "--idle-timeout" || current === "--tls-cert" || current === "--tls-key") {
             remaining.shift();
-            if (remaining.length > 0 && !remaining[0]?.startsWith("-")) {
+            if (remaining.length > 0 && !remaining[0]?.startsWith("-") && !isCliSubcommand(remaining[0])) {
                 remaining.shift();
             }
             continue;

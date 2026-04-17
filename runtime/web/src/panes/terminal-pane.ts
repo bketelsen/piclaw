@@ -117,8 +117,8 @@ function createTerminalClientToken(runtimeWindow = typeof window !== 'undefined'
         if (typeof runtimeWindow?.crypto?.randomUUID === 'function') {
             return runtimeWindow.crypto.randomUUID();
         }
-    } catch (_error) {
-        // Fall back to a timestamp/random token below.
+    } catch (error) {
+        console.debug('[terminal-pane] Failed to generate crypto-backed terminal client token; falling back.', error);
     }
     return `terminal-client-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
 }

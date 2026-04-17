@@ -504,8 +504,8 @@ function MainApp({ locationParams, navigate }) {
     const handleCompleteProviderReadyOobe = useCallback(() => {
         setProviderReadyCompleted(true);
         setLocalStorageItem(OOBE_PROVIDER_READY_COMPLETED_KEY, 'true');
-        void completeInstanceOobe('provider-ready').catch(() => {
-            // expected: local dismissal still hides the panel in this browser even if the instance write fails.
+        void completeInstanceOobe('provider-ready').catch((error) => {
+            console.debug('[app] Failed to persist provider-ready OOBE dismissal; keeping local state.', error);
         });
     }, []);
 

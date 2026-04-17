@@ -2239,13 +2239,17 @@ export async function graphFetch(
 				await resp.body.cancel();
 				return;
 			}
-		} catch {
-			// Fall back to draining the body text below.
+		} catch (error) {
+			debugSuppressedError(log, "Failed to cancel Graph response body; draining text instead.", error, {
+				operation: "m365.graph_discard_body.cancel",
+			});
 		}
 		try {
 			await resp.text();
-		} catch {
-			// Best effort only; retry path should not fail because the error body was unreadable.
+		} catch (error) {
+			debugSuppressedError(log, "Failed to drain Graph error response body during retry handling.", error, {
+				operation: "m365.graph_discard_body.text",
+			});
 		}
 	};
 	const handle = async (resp: Response) => {

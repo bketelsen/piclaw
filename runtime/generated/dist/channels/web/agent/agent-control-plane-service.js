@@ -9,6 +9,7 @@
 import { getInflightMessageId, getMessageThreadRootIdById, } from "../../../db.js";
 import { createLogger } from "../../../utils/logger.js";
 import { parseJsonObjectRequest } from "../json-body.js";
+import { completeOobeForInstance, isProviderReadyOobeCompletedForInstance } from "../oobe-instance-state.js";
 const log = createLogger("web");
 export function createWebAgentControlPlaneService(channel, defaults) {
     return new WebAgentControlPlaneService({
@@ -87,6 +88,22 @@ export class WebAgentControlPlaneService {
             const message = error instanceof Error ? error.message : String(error);
             return this.options.json({ error: message || "Failed to dismiss autoresearch panel." }, 500);
         }
+    }
+    async handleAgentOobeComplete(req) {
+        const parsed = await parseJsonObjectRequest(req);
+        if (!parsed.ok)
+            return this.options.json({ error: parsed.error }, 400);
+        const payload = parsed.payload;
+        const kind = typeof payload.kind === "string" && payload.kind.trim() ? payload.kind.trim() : "provider-ready";
+        if (kind !== "provider-ready") {
+            return this.options.json({ error: "Unsupported OOBE completion kind." }, 400);
+        }
+        completeOobeForInstance("provider-ready");
+        return this.options.json({
+            status: "ok",
+            kind,
+            provider_ready_completed_instance: isProviderReadyOobeCompletedForInstance(),
+        });
     }
     async handleAgentQueueState(req) {
         const url = new URL(req.url);

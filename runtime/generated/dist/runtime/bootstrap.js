@@ -45,7 +45,7 @@ export function createDefaultRuntimeBootstrapDeps(core) {
 export async function bootstrapRuntime(deps) {
     const { queue, agentPool, state } = deps.core;
     deps.initializeRuntimeEnvironment(state);
-    deps.registerOptionalProviders(agentPool);
+    await deps.registerOptionalProviders(agentPool);
     deps.log("=== Piclaw - Pi Coding Agent Assistant ===");
     const web = await deps.startWebChannel(queue, agentPool);
     const pushover = await deps.startOptionalPushoverChannel();

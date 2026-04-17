@@ -4,6 +4,7 @@
 import { getDb, replaceMessageContent } from "../../../db.js";
 import { resolveAvatarUrl } from "../media/avatar-service.js";
 import { createAgentStatusContext, createAgentsEndpointContext, createAvatarEndpointContext, createContentEndpointsContext, createPostMutationsContext, createUiEndpointsContext, } from "./endpoint-contexts.js";
+import { isProviderReadyOobeCompletedForInstance } from "../oobe-instance-state.js";
 /** Normalize live identity config into the shared endpoint snapshot shape. */
 export function createWebChannelIdentitySnapshot(identity) {
     return {
@@ -48,6 +49,7 @@ export function createWebChannelEndpointContexts(channel, options) {
                     getBuffer: (turnId, panel) => channel.getBuffer(turnId, panel),
                     getContextUsageForChat: (chatJid) => channel.agentPool.getContextUsageForChat(chatJid),
                     getAvailableModels: (chatJid) => channel.agentPool.getAvailableModels(chatJid),
+                    getProviderReadyCompletedForInstance: () => isProviderReadyOobeCompletedForInstance(),
                 });
             }
             return agentStatusContext;

@@ -84,6 +84,9 @@ export class WebChannelHttpSurfaceService {
     async handleAutoresearchDismiss(req) {
         return await this.channel.controlPlaneService.handleAutoresearchDismiss(req);
     }
+    async handleAgentOobeComplete(req) {
+        return await this.channel.controlPlaneService.handleAgentOobeComplete(req);
+    }
     async handleAgentQueueState(req) {
         return await this.channel.controlPlaneService.handleAgentQueueState(req);
     }

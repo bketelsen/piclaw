@@ -3,7 +3,7 @@ import { resolve } from "node:path";
 
 import { closeDatabase, initDatabase } from "./db.js";
 import { getWorkspaceIndexStatus, refreshWorkspaceIndex, type WorkspaceSearchScope } from "./workspace-search.js";
-import { createLogger } from "./utils/logger.js";
+import { createLogger, debugSuppressedError } from "./utils/logger.js";
 
 const log = createLogger("workspace-index-process");
 const INDEXING_STALE_MS = 5 * 60 * 1000;
@@ -26,15 +26,19 @@ let finalizeWorkspaceIndexProcessImpl: () => void | Promise<void> = () => {
   try {
     const gc = (globalThis as typeof globalThis & { gc?: () => void }).gc;
     if (typeof gc === "function") gc();
-  } catch {
-    // Best-effort cleanup only.
+  } catch (error) {
+    debugSuppressedError(log, "Failed to trigger runtime GC during workspace-index cleanup.", error, {
+      operation: "workspace_index_process.finalize.gc",
+    });
   }
 
   try {
     const bunGc = (globalThis as typeof globalThis & { Bun?: { gc?: (force?: boolean) => void } }).Bun?.gc;
     if (typeof bunGc === "function") bunGc(true);
-  } catch {
-    // Best-effort cleanup only.
+  } catch (error) {
+    debugSuppressedError(log, "Failed to trigger Bun GC during workspace-index cleanup.", error, {
+      operation: "workspace_index_process.finalize.bun_gc",
+    });
   }
 };
 
@@ -156,15 +160,19 @@ export function setWorkspaceIndexProcessFinalizeForTests(finalizer: (() => void 
     try {
       const gc = (globalThis as typeof globalThis & { gc?: () => void }).gc;
       if (typeof gc === "function") gc();
-    } catch {
-      // Best-effort cleanup only.
+    } catch (error) {
+      debugSuppressedError(log, "Failed to trigger runtime GC during workspace-index cleanup.", error, {
+        operation: "workspace_index_process.finalize.gc",
+      });
     }
 
     try {
       const bunGc = (globalThis as typeof globalThis & { Bun?: { gc?: (force?: boolean) => void } }).Bun?.gc;
       if (typeof bunGc === "function") bunGc(true);
-    } catch {
-      // Best-effort cleanup only.
+    } catch (error) {
+      debugSuppressedError(log, "Failed to trigger Bun GC during workspace-index cleanup.", error, {
+        operation: "workspace_index_process.finalize.bun_gc",
+      });
     }
   });
 }

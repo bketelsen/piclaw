@@ -197,8 +197,8 @@ function readProcEntries(): ProcEntry[] {
         ppid: ppidMatch ? Number(ppidMatch[1]) : 0,
         rssKb: rssMatch ? Number(rssMatch[1]) : 0,
       });
-    } catch {
-      // Process exited between directory listing and read.
+    } catch (error) {
+      console.debug("[controlled-test] Process exited before /proc status could be read.", error, { pid: name });
     }
   }
   return entries;

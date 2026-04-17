@@ -52,7 +52,9 @@ test("supervisor idle wrapper terminates its tail child on SIGTERM", async () =>
   } finally {
     if (!proc.killed) {
       proc.kill("SIGKILL");
-      await proc.exited.catch(() => {});
+      await proc.exited.catch((error) => {
+        console.debug("[supervisor-run-piclaw.test] Ignoring exit wait failure during forced cleanup.", error);
+      });
     }
     rmSync(tempHome, { recursive: true, force: true });
   }

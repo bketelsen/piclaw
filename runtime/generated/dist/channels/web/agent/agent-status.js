@@ -56,6 +56,15 @@ export async function handleAgentModelsRequest(req, ctx) {
     const { result, durationMs } = await measureAsync(async () => {
         const chatJid = resolveChatJid(req, ctx.defaultChatJid);
         const payload = await ctx.getAvailableModels(chatJid);
+        if (payload && typeof payload === "object") {
+            return ctx.json({
+                ...payload,
+                oobe: {
+                    ...(payload.oobe ?? {}),
+                    provider_ready_completed_instance: ctx.getProviderReadyCompletedForInstance(),
+                },
+            }, 200);
+        }
         return ctx.json(payload, 200);
     });
     return appendServerTiming(result, {

@@ -77,6 +77,7 @@ export async function handleRestart(session, _command) {
     return {
         status: "success",
         message: `Agent restarted. Killed ${killedLabel}.`,
+        refresh_runtime: true,
     };
 }
 /** Handle /exit: terminate the process so supervisor can restart piclaw. */

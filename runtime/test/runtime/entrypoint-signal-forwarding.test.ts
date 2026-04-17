@@ -68,7 +68,9 @@ run_supervisord_managed ${JSON.stringify(fakeConf)}
   } finally {
     if (!proc.killed) {
       proc.kill("SIGKILL");
-      await proc.exited.catch(() => {});
+      await proc.exited.catch((error) => {
+        console.debug("[entrypoint-signal-forwarding.test] Ignoring exit wait failure during forced cleanup.", error);
+      });
     }
     rmSync(base, { recursive: true, force: true });
   }

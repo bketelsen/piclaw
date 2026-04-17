@@ -52,6 +52,8 @@ const BASE_RECONNECT_DELAY_MS = 2_000; // 2s, 4s, 8s, 16s, 32s
 export class WhatsAppChannel {
     sock;
     connected = false;
+    connectReject = null;
+    connectResolve = null;
     outgoingQueue = [];
     flushing = false;
     opts;
@@ -67,7 +69,19 @@ export class WhatsAppChannel {
     }
     async connect() {
         return new Promise((resolve, reject) => {
-            this.connectInternal(resolve).catch(reject);
+            this.connectResolve = () => {
+                this.connectResolve = null;
+                this.connectReject = null;
+                resolve();
+            };
+            this.connectReject = (error) => {
+                this.connectResolve = null;
+                this.connectReject = null;
+                reject(error instanceof Error ? error : new Error(String(error)));
+            };
+            this.connectInternal(this.connectResolve).catch((error) => {
+                this.settlePendingConnectError(error);
+            });
         });
     }
     async connectInternal(onFirstOpen) {
@@ -132,6 +146,9 @@ export class WhatsAppChannel {
                                 operation: "connection.update.reconnect",
                                 err,
                             });
+                            if (pending) {
+                                this.settlePendingConnectError(err);
+                            }
                         });
                     }, delay);
                 }
@@ -232,6 +249,16 @@ export class WhatsAppChannel {
     async setTyping(jid, isTyping) {
         await sendWhatsAppTypingUpdate(this.sock, jid, isTyping);
     }
+    scheduleQueueFlush(operation) {
+        queueMicrotask(() => {
+            void this.flushOutgoingQueue().catch((err) => {
+                log.error("Failed to flush queued outbound messages", {
+                    operation,
+                    err,
+                });
+            });
+        });
+    }
     async flushOutgoingQueue() {
         if (this.flushing || this.outgoingQueue.length === 0)
             return;
@@ -244,6 +271,9 @@ export class WhatsAppChannel {
         }
         finally {
             this.flushing = false;
+            if (this.connected && this.outgoingQueue.length > 0) {
+                this.scheduleQueueFlush("flush_outgoing_queue.retry_after_race");
+            }
         }
     }
     async requestPairingCode() {
@@ -260,5 +290,11 @@ export class WhatsAppChannel {
             this.pairingRequested = false;
             throw err;
         }
+    }
+    settlePendingConnectError(error) {
+        const reject = this.connectReject;
+        this.connectResolve = null;
+        this.connectReject = null;
+        reject?.(error);
     }
 }

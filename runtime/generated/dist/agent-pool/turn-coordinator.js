@@ -210,16 +210,27 @@ export class AgentTurnCoordinator {
         if (!timeoutMs || timeoutMs <= 0) {
             return { timeoutId: null, timedOutRef, completedRef };
         }
-        const timeoutId = setTimeout(async () => {
-            if (completedRef.value)
-                return;
-            timedOutRef.value = true;
-            this.options.onError?.("Prompt timed out; aborting session", {
-                operation: "start_prompt_timeout",
-                chatJid,
-                timeoutMs,
+        const timeoutId = setTimeout(() => {
+            void (async () => {
+                if (completedRef.value)
+                    return;
+                timedOutRef.value = true;
+                this.options.onError?.("Prompt timed out; aborting session", {
+                    operation: "start_prompt_timeout",
+                    chatJid,
+                    timeoutMs,
+                });
+                await session.abort();
+            })().catch((err) => {
+                if (completedRef.value)
+                    return;
+                this.options.onWarn?.("Failed to abort timed-out prompt", {
+                    operation: "start_prompt_timeout.abort",
+                    chatJid,
+                    timeoutMs,
+                    err,
+                });
             });
-            await session.abort();
         }, timeoutMs);
         return { timeoutId, timedOutRef, completedRef };
     }

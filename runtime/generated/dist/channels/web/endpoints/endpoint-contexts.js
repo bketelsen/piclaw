@@ -23,6 +23,7 @@ export function createAgentStatusContext(deps) {
         getBuffer: deps.getBuffer,
         getContextUsageForChat: deps.getContextUsageForChat,
         getAvailableModels: deps.getAvailableModels,
+        getProviderReadyCompletedForInstance: deps.getProviderReadyCompletedForInstance,
     };
 }
 /** Build the content endpoint context from live channel dependencies. */

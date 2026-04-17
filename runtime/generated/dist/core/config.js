@@ -471,14 +471,14 @@ const configWorkspaceSearchExtensions = pickStringArray(toolsConfig, [
 ]);
 const sessionMaxSizeMb = pickNumber({ PICLAW_SESSION_MAX_SIZE_MB: process.env.PICLAW_SESSION_MAX_SIZE_MB ?? envConfig.PICLAW_SESSION_MAX_SIZE_MB }, [
     "PICLAW_SESSION_MAX_SIZE_MB",
-]) ?? configSessionMaxSizeMb ?? 100;
+]) ?? configSessionMaxSizeMb ?? 32;
 /** Grouped session-file safeguards. */
 export const SESSION_STORAGE_CONFIG = Object.freeze({
     maxSizeMb: sessionMaxSizeMb,
     maxSizeBytes: sessionMaxSizeMb * 1024 * 1024,
     autoRotate: pickBoolean({ PICLAW_SESSION_AUTO_ROTATE: process.env.PICLAW_SESSION_AUTO_ROTATE ?? envConfig.PICLAW_SESSION_AUTO_ROTATE }, [
         "PICLAW_SESSION_AUTO_ROTATE",
-    ]) ?? configSessionAutoRotate ?? false,
+    ]) ?? configSessionAutoRotate ?? true,
 });
 /** Return grouped session-file safeguards for runtime wiring and tests. */
 export function getSessionStorageConfig() {

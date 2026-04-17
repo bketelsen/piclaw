@@ -50,8 +50,11 @@ export async function processMessages(chatJid, deps) {
     if (!hasTrigger)
         return true;
     const channel = detectChannel(chatJid);
-    deps.state.lastAgentTimestamp[chatJid] = messages[messages.length - 1].timestamp;
-    deps.state.saveTimestamps();
+    const nextTimestamp = messages[messages.length - 1].timestamp;
+    const commitLastAgentTimestamp = () => {
+        deps.state.lastAgentTimestamp[chatJid] = nextTimestamp;
+        deps.state.saveTimestamps();
+    };
     const stripTrigger = (text) => {
         if (!text)
             return "";
@@ -82,7 +85,9 @@ export async function processMessages(chatJid, deps) {
                 chatJid,
                 errorMessage: result.message,
             });
+            return true;
         }
+        commitLastAgentTimestamp();
         return true;
     }
     const prompt = formatMessages(promptMessages, channel);
@@ -115,6 +120,7 @@ export async function processMessages(chatJid, deps) {
         if (text)
             await deps.whatsapp.sendMessage(chatJid, text);
     }
+    commitLastAgentTimestamp();
     return true;
 }
 /** Start the polling loop that checks for new messages across all chats. */

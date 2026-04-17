@@ -14,14 +14,14 @@ async function maybeAutoRotateSession(session, runtime, chatJid, options) {
     const autoRotateEnabled = sessionStorageConfig.autoRotate
         || ["1", "true", "yes", "on"].includes((process.env.PICLAW_SESSION_AUTO_ROTATE || "").trim().toLowerCase());
     if (!autoRotateEnabled)
-        return;
+        return session;
     const envThresholdMb = parseInt(process.env.PICLAW_SESSION_MAX_SIZE_MB || "", 10);
     const thresholdBytes = Number.isFinite(envThresholdMb) && envThresholdMb > 0
         ? envThresholdMb * 1024 * 1024
         : sessionStorageConfig.maxSizeBytes;
     const sessionFileSize = getSessionFileSize(session.sessionFile);
     if (sessionFileSize === null || sessionFileSize < thresholdBytes)
-        return;
+        return session;
     const result = await rotateSession(session, runtime, { reason: "automatic" });
     if (result.status === "success") {
         options.onInfo?.("Auto-rotated oversized session", {
@@ -30,13 +30,14 @@ async function maybeAutoRotateSession(session, runtime, chatJid, options) {
             previousSize: result.previousSize ?? sessionFileSize,
             nextSize: result.nextSize ?? "unknown",
         });
-        return;
+        return runtime.session;
     }
     options.onWarn?.("Auto-rotation skipped", {
         operation: "maybe_auto_rotate_session",
         chatJid,
         reason: result.message,
     });
+    return session;
 }
 function estimateMessageTokens(message) {
     if (!message || typeof message !== "object")
@@ -171,8 +172,8 @@ export async function runAgentPrompt(prompt, chatJid, runOptions, options) {
     options.clearAttachments(chatJid);
     try {
         const runtime = await options.getOrCreateRuntime(chatJid);
-        const session = runtime.session;
-        await maybeAutoRotateSession(session, runtime, chatJid, options);
+        let session = runtime.session;
+        session = await maybeAutoRotateSession(session, runtime, chatJid, options);
         await maybeAutoCompactSessionBeforePrompt(session, chatJid, options, runOptions.onEvent);
         pruneOrphanToolResults(session, chatJid);
         const forkBaseLeafId = typeof session.sessionManager?.getLeafId === "function"
@@ -188,10 +189,18 @@ export async function runAgentPrompt(prompt, chatJid, runOptions, options) {
         const unsub = options.turnCoordinator.subscribe(session, chatJid, tracker, runOptions.onEvent);
         const timeoutMs = typeof runOptions.timeoutMs === "number" ? runOptions.timeoutMs : getAgentRuntimeConfig().timeoutMs;
         const { timeoutId, timedOutRef, completedRef } = options.turnCoordinator.startPromptTimeout(session, chatJid, timeoutMs);
+        const finishPromptTimeout = () => {
+            if (!completedRef.value) {
+                completedRef.value = true;
+            }
+            if (timeoutId)
+                clearTimeout(timeoutId);
+        };
         const channel = detectChannel(chatJid);
         return await withChatContext(chatJid, channel, async () => {
             try {
                 await session.prompt(prompt);
+                finishPromptTimeout();
                 options.onInfo?.("session.prompt() resolved", {
                     operation: "run_agent.prompt_resolved",
                     chatJid,
@@ -211,9 +220,7 @@ export async function runAgentPrompt(prompt, chatJid, runOptions, options) {
                 }, idleMaxWaitMs);
             }
             finally {
-                completedRef.value = true;
-                if (timeoutId)
-                    clearTimeout(timeoutId);
+                finishPromptTimeout();
                 unsub();
             }
             const duration = Date.now() - startTime;

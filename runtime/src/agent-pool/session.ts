@@ -38,6 +38,7 @@ import { detectChannel } from "../router.js";
 import { builtinExtensionFactories } from "../extensions/index.js";
 import { bindImmediateToolActivation } from "./tool-activation-live-update.js";
 import { ensureExtensionNodeModulesLink } from "./session-node-modules-link.js";
+import { createLogger, debugSuppressedError } from "../utils/logger.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const AGENT_DIR = getAgentDir();
@@ -72,8 +73,8 @@ function getWorkspaceDir(): string {
 function ensureValidProcessCwd(): void {
   try {
     if (existsSync(process.cwd())) return;
-  } catch {
-    // Fall through and reset below.
+  } catch (error) {
+    debugSuppressedError(log, "Failed to inspect current working directory; resetting to workspace.", error);
   }
 
   process.chdir(getWorkspaceDir());
@@ -95,6 +96,7 @@ type AgentSessionCreateOptions = {
  * @mariozechner/pi-ai/dist/providers/*.
  */
 const EXTENSIONS_DIR = resolve(__dirname, "../../extensions");
+const log = createLogger("agent-pool.session");
 
 type OptionalBundledExtension = {
   path: string;
@@ -362,8 +364,10 @@ async function sanitizePersistedSessionFileBeforeLoad(sessionDir: string): Promi
             changedEntries += 1;
           }
         }
-      } catch {
-        // Preserve unreadable lines exactly as-is.
+      } catch (error) {
+        debugSuppressedError(log, "Preserving unreadable session persistence line during sanitization.", error, {
+          latestFile,
+        });
       }
       writer.write(`${output}\n`);
       writtenBytes += Buffer.byteLength(output) + 1;
@@ -375,7 +379,11 @@ async function sanitizePersistedSessionFileBeforeLoad(sessionDir: string): Promi
     } else {
       rmSync(tempPath, { force: true });
     }
-  } catch {
+  } catch (error) {
+    debugSuppressedError(log, "Failed to sanitize persisted session file before load; removing temp file.", error, {
+      latestFile,
+      tempPath,
+    });
     writer.destroy();
     rmSync(tempPath, { force: true });
     throw new Error(`Failed to sanitize persisted session file before load: ${latestFile}`);
