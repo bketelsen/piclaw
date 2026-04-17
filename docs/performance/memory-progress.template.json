@@ -1,0 +1,10 @@
+{
+  "width": 1200,
+  "height": 780,
+  "title": "Piclaw RAM reduction progress",
+  "subtitle_prefix": "Generated from docs/performance/memory-footprint-history.md",
+  "live_summary_title": "Current live service snapshot",
+  "cold_rss_title": "Cold-session RSS delta (MB)",
+  "cold_elapsed_title": "Cold-session elapsed time (ms)",
+  "max_bars": 8
+}
