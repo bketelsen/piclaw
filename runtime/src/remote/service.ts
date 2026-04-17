@@ -21,6 +21,8 @@ import {
   PING_WINDOW_MS,
   PROPOSAL_LIMIT,
   PROPOSAL_WINDOW_MS,
+  RESULT_LIMIT,
+  RESULT_WINDOW_MS,
   REVOKE_LIMIT,
   REVOKE_WINDOW_MS,
 } from "./limits.js";
@@ -32,6 +34,7 @@ import {
   handleExecute,
   handlePing,
   handleProposal,
+  handleResult,
   handleRevoke,
   type RemoteOperationHandlersContext,
 } from "./service-operations.js";
@@ -64,6 +67,7 @@ export class RemoteInteropService {
   private readonly pingLimiter = new SlidingWindowLimiter(PING_LIMIT, PING_WINDOW_MS);
   private readonly executeLimiter = new SlidingWindowLimiter(EXECUTE_LIMIT, EXECUTE_WINDOW_MS);
   private readonly revokeLimiter = new SlidingWindowLimiter(REVOKE_LIMIT, REVOKE_WINDOW_MS);
+  private readonly resultLimiter = new SlidingWindowLimiter(RESULT_LIMIT, RESULT_WINDOW_MS);
   private readonly executeConcurrency = new RemoteExecuteConcurrency(4, 1);
 
   constructor(
@@ -98,6 +102,7 @@ export class RemoteInteropService {
       proposalLimiter: this.proposalLimiter,
       executeLimiter: this.executeLimiter,
       revokeLimiter: this.revokeLimiter,
+      resultLimiter: this.resultLimiter,
       executeConcurrency: this.executeConcurrency,
       agentPool: this.agentPool,
       remoteConfig: this.remoteConfig,
@@ -144,6 +149,10 @@ export class RemoteInteropService {
 
     if (req.method === "POST" && pathname === "/api/remote/execute") {
       return handleExecute(req, this.operationContext());
+    }
+
+    if (req.method === "POST" && pathname === "/api/remote/result") {
+      return handleResult(req, this.operationContext());
     }
 
     return jsonResponse({ error: "Not found" }, 404);

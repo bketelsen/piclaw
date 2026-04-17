@@ -41,6 +41,7 @@ export interface RemoteOperationHandlersContext {
   proposalLimiter: SlidingWindowLimiter;
   executeLimiter: SlidingWindowLimiter;
   revokeLimiter: SlidingWindowLimiter;
+  resultLimiter: SlidingWindowLimiter;
   executeConcurrency: RemoteExecuteConcurrency;
   agentPool?: AgentPool;
   remoteConfig: Readonly<RemoteInteropConfig>;
@@ -267,6 +268,51 @@ export async function handleRevoke(req: Request, context: RemoteOperationHandler
   });
   logAudit(peer, "/api/remote/revoke", "revoked", "revoked");
   return jsonResponse({ status: "revoked", trust_epoch: nextEpoch });
+}
+
+/** Handle `/api/remote/result` signed result callbacks from a remote peer. */
+export async function handleResult(req: Request, context: RemoteOperationHandlersContext): Promise<Response> {
+  const peer = requirePeer(req);
+  if (peer instanceof Response) return peer;
+
+  const jsonError = requireJson(req);
+  if (jsonError) return jsonResponse({ error: jsonError }, 415);
+  const lengthCheck = checkContentLength(req, DEFAULT_MAX_RESPONSE_BYTES);
+  if (!lengthCheck.ok) return jsonResponse({ error: lengthCheck.error }, lengthCheck.status);
+
+  const bodyBytes = await readBodyBytes(req);
+  const sig = verifySignedRequest(req, bodyBytes, peer, context.nonceCache);
+  if (!sig.ok) {
+    logAudit(peer, "/api/remote/result", "denied", undefined, sig.error);
+    return jsonResponse({ error: sig.error }, 401);
+  }
+
+  if (!context.resultLimiter.allow(peer.instance_id)) {
+    return jsonResponse({ error: "Result callback rate limit exceeded." }, 429);
+  }
+
+  const payload = parseJsonBytes(bodyBytes, DEFAULT_MAX_RESPONSE_BYTES);
+  if (payload.error) return jsonResponse({ error: payload.error }, 400);
+
+  const negotiationId = getTrimmedStringField(payload.data, "negotiation_id");
+  if (!negotiationId) return jsonResponse({ error: "Missing negotiation_id." }, 400);
+
+  const decision = getTrimmedStringField(payload.data, "decision") || "unknown";
+  const result = typeof payload.data.result === "string" ? payload.data.result : null;
+  const reason = typeof payload.data.reason === "string" ? payload.data.reason : null;
+
+  logAudit(peer, "/api/remote/result", decision, decision);
+
+  const peerLabel = peer.display_name ?? `${peer.instance_id.slice(0, 6)}…`;
+  if (decision === "accept_execute" && result) {
+    context.notify?.(`**Result from ${peerLabel}** (proposal \`${negotiationId}\`):\n${result.slice(0, 1000)}${result.length > 1000 ? "…" : ""}`);
+  } else if (decision === "deny") {
+    context.notify?.(`**${peerLabel}** rejected proposal \`${negotiationId}\`${reason ? ": " + reason : "."}`);
+  } else {
+    context.notify?.(`**${peerLabel}** returned decision \`${decision}\` for proposal \`${negotiationId}\`.`);
+  }
+
+  return jsonResponse({ status: "ok" });
 }
 
 // ─── Proposal execution (called via IPC, not HTTP) ───────────────────────────
