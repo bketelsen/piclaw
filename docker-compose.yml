@@ -2,6 +2,7 @@ services:
   pibox:
     image: pibox:latest
     shm_size: '256m'
+    init: true
     container_name: pibox
     hostname: pibox
     environment:

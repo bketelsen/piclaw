@@ -15,9 +15,12 @@ AGENT_SKILLS_SEED_DIR="/usr/local/share/piclaw/agent-skills"
 DEFAULT_SUPERVISOR_CONF="/etc/supervisor/supervisord.conf"
 SUPERVISOR_CONF_ENV_SET="${SUPERVISOR_CONF+x}"
 SUPERVISOR_CONF="${SUPERVISOR_CONF:-$DEFAULT_SUPERVISOR_CONF}"
+SUPERVISORD_BIN="${SUPERVISORD_BIN:-/usr/bin/supervisord}"
 WORKSPACE_SUPERVISOR_DIR="/workspace/.piclaw/supervisor"
 SUPERVISOR_DEFAULTS_DIR="/usr/local/share/piclaw/supervisor"
 WORKSPACE_SUPERVISOR_MANIFEST="$WORKSPACE_SUPERVISOR_DIR/.defaults-manifest"
+SUPERVISOR_PID=""
+SUPERVISOR_SHUTDOWN_REQUESTED=0
 
 log() {
     echo "[entrypoint] $*"
@@ -229,6 +232,74 @@ ensure_config_link() {
     ln -sfn "$target" "$link"
 }
 
+validate_supervisor_config() {
+    local conf="$1"
+    if [ ! -f "$conf" ]; then
+        return 1
+    fi
+    "$SUPERVISORD_BIN" -n -c "$conf" -t >/tmp/piclaw-supervisord-validate.log 2>&1
+}
+
+forward_supervisor_signal() {
+    local signal="$1"
+
+    if [ -n "$SUPERVISOR_PID" ] && kill -0 "$SUPERVISOR_PID" 2>/dev/null; then
+        kill -"$signal" "$SUPERVISOR_PID" 2>/dev/null || true
+    else
+        SUPERVISOR_SHUTDOWN_REQUESTED=1
+    fi
+}
+
+run_supervisord_managed() {
+    local conf="$1"
+    local exit_code=0
+
+    SUPERVISOR_PID=""
+    SUPERVISOR_SHUTDOWN_REQUESTED=0
+    trap 'forward_supervisor_signal TERM' TERM
+    trap 'forward_supervisor_signal INT' INT
+    trap 'forward_supervisor_signal HUP' HUP
+    trap 'forward_supervisor_signal QUIT' QUIT
+
+    "$SUPERVISORD_BIN" -n -c "$conf" &
+    SUPERVISOR_PID=$!
+
+    if [ "$SUPERVISOR_SHUTDOWN_REQUESTED" -eq 1 ]; then
+        forward_supervisor_signal TERM
+    fi
+
+    wait "$SUPERVISOR_PID" || exit_code=$?
+    SUPERVISOR_PID=""
+    trap - TERM INT HUP QUIT
+    return "$exit_code"
+}
+
+resolve_supervisor_conf() {
+    local requested="$1"
+
+    if validate_supervisor_config "$requested"; then
+        printf '%s\n' "$requested"
+        return 0
+    fi
+
+    if [ "$SUPERVISOR_CONF_ENV_SET" = "x" ]; then
+        echo "Supervisor config validation failed for explicit SUPERVISOR_CONF=$requested" >&2
+        cat /tmp/piclaw-supervisord-validate.log >&2 2>/dev/null || true
+        return 1
+    fi
+
+    if [ "$requested" != "$DEFAULT_SUPERVISOR_CONF" ] && validate_supervisor_config "$DEFAULT_SUPERVISOR_CONF"; then
+        log "Supervisor config $requested failed validation; falling back to $DEFAULT_SUPERVISOR_CONF"
+        cat /tmp/piclaw-supervisord-validate.log >&2 2>/dev/null || true
+        printf '%s\n' "$DEFAULT_SUPERVISOR_CONF"
+        return 0
+    fi
+
+    echo "Supervisor config validation failed for $requested" >&2
+    cat /tmp/piclaw-supervisord-validate.log >&2 2>/dev/null || true
+    return 1
+}
+
 apply_puid_pgid_remap
 
 if [ ! -f "$MARKER_FILE" ] || [ ! -f "$HOME_DIR/.bashrc" ]; then
@@ -358,48 +429,15 @@ mkdir -p /var/log/piclaw /var/run/supervisor
 chown -R agent:agent /var/log/piclaw
 chmod 755 /usr/local/bin/run-piclaw.sh 2>/dev/null || true
 
-validate_supervisor_config() {
-    local conf="$1"
-    if [ ! -f "$conf" ]; then
-        return 1
-    fi
-    /usr/bin/supervisord -n -c "$conf" -t >/tmp/piclaw-supervisord-validate.log 2>&1
-}
-
-resolve_supervisor_conf() {
-    local requested="$1"
-
-    if validate_supervisor_config "$requested"; then
-        printf '%s\n' "$requested"
-        return 0
-    fi
-
-    if [ "$SUPERVISOR_CONF_ENV_SET" = "x" ]; then
-        echo "Supervisor config validation failed for explicit SUPERVISOR_CONF=$requested" >&2
-        cat /tmp/piclaw-supervisord-validate.log >&2 2>/dev/null || true
-        return 1
-    fi
-
-    if [ "$requested" != "$DEFAULT_SUPERVISOR_CONF" ] && validate_supervisor_config "$DEFAULT_SUPERVISOR_CONF"; then
-        log "Supervisor config $requested failed validation; falling back to $DEFAULT_SUPERVISOR_CONF"
-        cat /tmp/piclaw-supervisord-validate.log >&2 2>/dev/null || true
-        printf '%s\n' "$DEFAULT_SUPERVISOR_CONF"
-        return 0
-    fi
-
-    echo "Supervisor config validation failed for $requested" >&2
-    cat /tmp/piclaw-supervisord-validate.log >&2 2>/dev/null || true
-    return 1
-}
-
 log "=== PiClaw - Pi Coding Agent Sandbox ==="
 
-if [ ! -x /usr/bin/supervisord ]; then
-    echo "Missing supervisord binary at /usr/bin/supervisord" >&2
+if [ ! -x "$SUPERVISORD_BIN" ]; then
+    echo "Missing supervisord binary at $SUPERVISORD_BIN" >&2
     exit 1
 fi
 
 SUPERVISOR_CONF="$(resolve_supervisor_conf "$SUPERVISOR_CONF")" || exit 1
 log "Starting supervisord with config: $SUPERVISOR_CONF"
 
-exec /usr/bin/supervisord -n -c "$SUPERVISOR_CONF"
+run_supervisord_managed "$SUPERVISOR_CONF"
+exit $?

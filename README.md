@@ -24,6 +24,7 @@ It is built for people who want a practical, stateful agent they can run locally
 mkdir -p ./home ./workspace
 
 docker run -d \
+  --init \
   --name piclaw \
   --restart unless-stopped \
   -p 8080:8080 \
@@ -34,6 +35,9 @@ docker run -d \
 ```
 
 Open `http://localhost:8080` and type `/login` to configure your LLM provider, including custom OpenAI-compatible endpoints when you are not using one of the built-in hosted providers.
+
+> [!TIP]
+> Keep `--init` enabled for `docker run` / `podman run` so the runtime inserts a tiny init process for signal forwarding and zombie reaping. The bundled `docker-compose.yml` now sets the equivalent `init: true` flag.
 
 | Mount | Container path | Contents |
 |---|---|---|
