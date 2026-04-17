@@ -1,3 +1,44 @@
+/**
+ * SCRIPT_JDOC:
+ * {
+ *   "summary": "Shared lifecycle helpers for packaged Proxmox VM scripts.",
+ *   "aliases": [
+ *     "proxmox vm lifecycle helper"
+ *   ],
+ *   "domains": [
+ *     "proxmox",
+ *     "vm",
+ *     "virtualization"
+ *   ],
+ *   "verbs": [
+ *     "inspect",
+ *     "start",
+ *     "stop",
+ *     "resume"
+ *   ],
+ *   "nouns": [
+ *     "helper",
+ *     "library"
+ *   ],
+ *   "keywords": [
+ *     "proxmox",
+ *     "vm",
+ *     "lifecycle",
+ *     "helper",
+ *     "library"
+ *   ],
+ *   "guidance": [
+ *     "Helper module used by packaged runnable scripts.",
+ *     "Not a direct entrypoint."
+ *   ],
+ *   "examples": [
+ *     "Used by proxmox-start-vm.ts and related entrypoints."
+ *   ],
+ *   "kind": "read-only",
+ *   "weight": "lightweight",
+ *   "role": "module"
+ * }
+ */
 import { runProxmoxWorkflow, type ProxmoxApiConfig, type ProxmoxWorkflowName } from "../../../src/proxmox/client.js";
 
 const DEFAULT_BASE_URL = "https://proxmox.example.com:8006/api2/json";

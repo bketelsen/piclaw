@@ -259,6 +259,7 @@ const groupDefinitions: GroupDefinition[] = [
         "http-dispatch-content.test.ts",
         "http-dispatch-media.test.ts",
         "http-dispatch-shell.test.ts",
+        "lazy-viewer-routes.test.ts",
         "system-metrics.test.ts",
         "web-channel-constructor-wiring-factory.test.ts",
         "http-dispatch-workspace.test.ts",
@@ -328,7 +329,7 @@ const groupDefinitions: GroupDefinition[] = [
       "tools/",
       "utils/",
     ].some((prefix) => relativePath.startsWith(prefix))
-      || (relativePath.startsWith("channels/") && basenameIsOneOf(relativePath, ["formatting.test.ts", "whatsapp-presence.test.ts"])),
+      || (relativePath.startsWith("channels/") && basenameIsOneOf(relativePath, ["formatting.test.ts", "whatsapp-presence.test.ts", "whatsapp.test.ts"])),
   },
   {
     id: "extensions",
