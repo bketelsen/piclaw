@@ -515,4 +515,69 @@ describe("Web adaptive-card/side-prompt service", () => {
     expect(errorBody).toContain("event: side_prompt_error");
     expect(errorBody).toContain('"error":"stream exploded"');
   });
+
+  test("keeps side-prompt SSE streams alive with heartbeats and clears them on abort", async () => {
+    const originalSetInterval = globalThis.setInterval;
+    const originalClearInterval = globalThis.clearInterval;
+    const intervals: Array<{ fn: TimerHandler; ms?: number; token: object }> = [];
+    const cleared: object[] = [];
+
+    globalThis.setInterval = ((fn: TimerHandler, ms?: number) => {
+      const token = {};
+      intervals.push({ fn, ms, token });
+      return token as ReturnType<typeof setInterval>;
+    }) as typeof setInterval;
+
+    globalThis.clearInterval = ((token: object) => {
+      cleared.push(token);
+    }) as typeof clearInterval;
+
+    try {
+      const abortController = new AbortController();
+      const fixture = createFixture({
+        agentPool: {
+          runSidePrompt: async () => await new Promise<never>(() => {}),
+        },
+      });
+
+      const response = await fixture.service.handleAgentSidePromptStream(createRequest("/agent/side-prompt/stream", {
+        method: "POST",
+        body: JSON.stringify({ prompt: "Keepalive?", chat_jid: "web:stream" }),
+        signal: abortController.signal,
+      }));
+      expect(response.status).toBe(200);
+
+      const reader = response.body?.getReader();
+      expect(reader).toBeDefined();
+
+      const startChunk = await reader!.read();
+      const startBody = new TextDecoder().decode(startChunk.value);
+      expect(startBody).toContain("event: side_prompt_start");
+      expect(intervals).toHaveLength(1);
+      expect(intervals[0]?.ms).toBe(30000);
+
+      const heartbeatHandler = intervals[0]?.fn;
+      expect(typeof heartbeatHandler).toBe("function");
+      if (typeof heartbeatHandler === "function") {
+        heartbeatHandler();
+      }
+
+      const heartbeatCommentChunk = await reader!.read();
+      const heartbeatCommentBody = new TextDecoder().decode(heartbeatCommentChunk.value);
+      expect(heartbeatCommentBody).toContain(": heartbeat");
+
+      const heartbeatEventChunk = await reader!.read();
+      const heartbeatEventBody = new TextDecoder().decode(heartbeatEventChunk.value);
+      expect(heartbeatEventBody).toContain("event: heartbeat");
+      expect(heartbeatEventBody).toContain('"chat_jid":"web:stream"');
+
+      abortController.abort();
+      const doneChunk = await reader!.read();
+      expect(doneChunk.done).toBe(true);
+      expect(cleared).toContain(intervals[0]?.token);
+    } finally {
+      globalThis.setInterval = originalSetInterval;
+      globalThis.clearInterval = originalClearInterval;
+    }
+  });
 });

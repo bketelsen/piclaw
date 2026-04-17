@@ -3230,6 +3230,50 @@ test("web channel commits TOTP setup only after successful same-card confirmatio
   expect(verifyRes.status).toBe(200);
 });
 
+test("web channel invalidates existing sessions when TOTP setup is first confirmed", async () => {
+  const fixture = await createStoredTotpCardFixture({
+    command: { type: "totp", action: "enrol" },
+  });
+  expect(fixture.parsed.ok).toBe(true);
+  if (!fixture.parsed.ok) return;
+
+  fixture.db.createWebSession("pre-setup-session", fixture.db.DEFAULT_WEB_USER_ID, 3600, "passkey");
+
+  const req = new Request("http://test/agent/card-action", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "Cookie": "piclaw_session=pre-setup-session" },
+    body: JSON.stringify({
+      post_id: fixture.sourceRowId,
+      thread_id: fixture.sourceRowId,
+      card_id: fixture.cardId,
+      action: {
+        type: "Action.Submit",
+        title: "Confirm setup",
+        data: {
+          intent: "totp-confirm",
+          __totp_token: fixture.token,
+          confirmation_code: totpCode(fixture.parsed.state.secret),
+        },
+      },
+    }),
+  });
+
+  const res = await (fixture.web as any).handleRequest(req);
+  expect(res.status).toBe(200);
+  const setCookie = res.headers.get("Set-Cookie");
+  expect(setCookie).toContain("piclaw_session=");
+  expect(fixture.config.WEB_RUNTIME_CONFIG.totpSecret).toBe(fixture.parsed.state.secret);
+  expect(fixture.db.getWebSession("pre-setup-session")).toBeNull();
+
+  const nextSessionToken = setCookie?.match(/piclaw_session=([^;]+)/)?.[1];
+  expect(nextSessionToken).toBeTruthy();
+  expect(fixture.db.getWebSession(decodeURIComponent(nextSessionToken || ""))?.auth_method).toBe("totp");
+
+  const timeline = fixture.db.getTimeline("web:default", 10);
+  const feedback = timeline.find((entry: any) => entry.id !== fixture.sourceRowId && entry.data?.content?.includes("Existing web sessions were invalidated."));
+  expect(feedback).toBeDefined();
+});
+
 test("web channel leaves TOTP setup unchanged on invalid same-card confirmation", async () => {
   const fixture = await createStoredTotpCardFixture({
     command: { type: "totp", action: "enrol" },
