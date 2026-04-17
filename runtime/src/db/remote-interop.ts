@@ -356,6 +356,32 @@ export function getRemoteRequestById(id: string): RemoteRequestRecord | null {
   return row ?? null;
 }
 
+/** Return all pending remote requests, newest first. */
+export function getPendingRemoteRequests(): RemoteRequestRecord[] {
+  const db = getDb();
+  return db
+    .prepare(
+      `SELECT id, peer_instance_id, request_type, status, prompt, created_at, decision, remote_mode, error, result
+       FROM remote_requests
+       WHERE status = 'pending'
+       ORDER BY created_at DESC`
+    )
+    .all() as RemoteRequestRecord[];
+}
+
+/** Update the decision, result, and status of a remote request. */
+export function updateRemoteRequestDecision(
+  id: string,
+  decision: string,
+  result?: string | null,
+  error?: string | null,
+): void {
+  const db = getDb();
+  db.prepare(
+    `UPDATE remote_requests SET decision = ?, result = ?, error = ?, status = ? WHERE id = ?`
+  ).run(decision, result ?? null, error ?? null, decision === "accepted" ? "completed" : decision, id);
+}
+
 /** Append an audit event for remote interop endpoint activity. */
 export function logRemoteAudit(entry: RemoteAuditRecord): void {
   const db = getDb();
