@@ -92,6 +92,39 @@ test("attach_file tool stores media and registers attachment", async () => {
   expect(media?.metadata?.kind).toBe("file");
 });
 
+test("attach_file can register attachments in an injected registry", async () => {
+  const ws = getTestWorkspace();
+  restoreEnv = setEnv({
+    PICLAW_WORKSPACE: ws.workspace,
+    PICLAW_STORE: ws.store,
+    PICLAW_DATA: ws.data,
+  });
+
+  const db = await import("../../src/db.js");
+  db.initDatabase();
+
+  const { WORKSPACE_DIR } = await import("../../src/core/config.js");
+  mkdirSync(WORKSPACE_DIR, { recursive: true });
+  const filePath = join(WORKSPACE_DIR, "injected.txt");
+  writeFileSync(filePath, "hello", "utf8");
+
+  const { AttachmentRegistry } = await import("../../src/agent-pool/attachments.js");
+  const { createFileAttachmentsExtension } = await import("../../src/extensions/file-attachments.js");
+
+  const registry = new AttachmentRegistry();
+  const unrelatedRegistry = new AttachmentRegistry();
+  const fake = makeFakeApi();
+  createFileAttachmentsExtension(registry)(fake.api);
+
+  const tool = fake.tools.get("attach_file");
+  expect(tool).toBeDefined();
+
+  await withChatContext("web:default", "web", () => tool.execute("call", { path: "injected.txt" }));
+
+  expect(registry.take("web:default")).toHaveLength(1);
+  expect(unrelatedRegistry.take("web:default")).toHaveLength(0);
+});
+
 test("attach_file reports missing file", async () => {
   const ws = getTestWorkspace();
   restoreEnv = setEnv({

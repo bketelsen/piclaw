@@ -30,10 +30,11 @@ import {
   type SettingsManager,
 } from "@mariozechner/pi-coding-agent";
 
+import type { AttachmentRegistry } from "./attachments.js";
 import { SESSIONS_DIR, WORKSPACE_DIR } from "../core/config.js";
 import { buildChannelSystemPromptAppendix } from "../channels/formatting.js";
 import { detectChannel } from "../router.js";
-import { builtinExtensionFactories } from "../extensions/index.js";
+import { createBuiltinExtensionFactories } from "../extensions/index.js";
 import { bindImmediateToolActivation } from "./tool-activation-live-update.js";
 import { ensureExtensionNodeModulesLink } from "./session-node-modules-link.js";
 
@@ -146,6 +147,7 @@ export async function createSessionInDir(
     tools: NonNullable<AgentSessionCreateOptions["tools"]>;
     customTools?: unknown[];
     extensionFactories?: ExtensionFactory[];
+    attachmentRegistry?: AttachmentRegistry;
     chatJid?: string;
   }
 ): Promise<AgentSessionRuntime> {
@@ -161,7 +163,10 @@ export async function createSessionInDir(
       modelRegistry: options.modelRegistry,
       settingsManager: options.settingsManager,
       resourceLoaderOptions: {
-        extensionFactories: [...builtinExtensionFactories, ...(options.extensionFactories ?? [])],
+        extensionFactories: [
+          ...createBuiltinExtensionFactories({ attachmentRegistry: options.attachmentRegistry }),
+          ...(options.extensionFactories ?? []),
+        ],
         additionalExtensionPaths: getBundledExtensionPaths(),
         ...(channelSystemPromptAppendix
           ? {
@@ -203,6 +208,7 @@ export async function createDefaultSession(
     tools: NonNullable<AgentSessionCreateOptions["tools"]>;
     customTools?: unknown[];
     extensionFactories?: ExtensionFactory[];
+    attachmentRegistry?: AttachmentRegistry;
   }
 ): Promise<AgentSessionRuntime> {
   const chatSessionDir = ensureSessionDir(chatJid);

@@ -28,7 +28,8 @@
  *   - agent-pool/session.ts passes builtinExtensionFactories to the resource loader.
  */
 import type { ExtensionFactory } from "@mariozechner/pi-coding-agent";
-import { fileAttachments } from "./file-attachments.js";
+import type { AttachmentRegistry } from "../agent-pool/attachments.js";
+import { createFileAttachmentsExtension } from "./file-attachments.js";
 import { messagesCrud } from "./messages-crud.js";
 import { modelControl } from "./model-control.js";
 import { internalTools } from "./internal-tools.js";
@@ -48,25 +49,32 @@ import { exitProcess } from "./exit-process.js";
 import { autoresearchSupervisor } from "./autoresearch-supervisor.js";
 import { imageProcessing } from "./image-processing.js";
 
+/** Build the built-in extension factory list used for session creation. */
+export function createBuiltinExtensionFactories(options?: {
+  attachmentRegistry?: AttachmentRegistry;
+}): ExtensionFactory[] {
+  return [
+    createFileAttachmentsExtension(options?.attachmentRegistry),
+    messagesCrud,
+    modelControl,
+    internalTools,
+    runtimeScripts,
+    toolActivation,
+    sqlIntrospect,
+    scheduledTasks,
+    workspaceSearch,
+    workspaceMemoryBootstrap,
+    dreamMaintenance,
+    uiThemeExtension,
+    smartCompaction,
+    sendAdaptiveCard,
+    sendDashboardWidget,
+    openWorkspaceFile,
+    exitProcess,
+    autoresearchSupervisor,
+    imageProcessing,
+  ];
+}
+
 /** Array of all built-in extension factories to register on session creation. */
-export const builtinExtensionFactories: ExtensionFactory[] = [
-  fileAttachments,
-  messagesCrud,
-  modelControl,
-  internalTools,
-  runtimeScripts,
-  toolActivation,
-  sqlIntrospect,
-  scheduledTasks,
-  workspaceSearch,
-  workspaceMemoryBootstrap,
-  dreamMaintenance,
-  uiThemeExtension,
-  smartCompaction,
-  sendAdaptiveCard,
-  sendDashboardWidget,
-  openWorkspaceFile,
-  exitProcess,
-  autoresearchSupervisor,
-  imageProcessing,
-];
+export const builtinExtensionFactories: ExtensionFactory[] = createBuiltinExtensionFactories();

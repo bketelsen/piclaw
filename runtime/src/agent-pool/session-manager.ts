@@ -16,6 +16,7 @@ import {
   restoreClaimedDeferredBranchSeed,
   seedSessionManagerFromDeferredBranchSeed,
 } from "./branch-seeding.js";
+import type { AttachmentRegistry } from "./attachments.js";
 import { getChatBranchByChatJid } from "../db.js";
 import { createDefaultSession, createSessionInDir, ensureNamedSessionDir, ensureSessionDir } from "./session.js";
 import { forcePersistSessionFile, seedRotatedSession } from "../session-rotation.js";
@@ -35,6 +36,7 @@ export interface AgentSessionManagerOptions {
   authStorage: AuthStorage;
   modelRegistry: ModelRegistry;
   settingsManager: SettingsManager;
+  attachmentRegistry?: AttachmentRegistry;
   createDefaultTools: () => NonNullable<Parameters<typeof createDefaultSession>[1]["tools"]>;
   createCustomToolOverrides?: () => unknown[];
   getSessionExtensionFactories?: (chatJid: string) => Promise<ExtensionFactory[]>;
@@ -126,6 +128,7 @@ export class AgentSessionManager {
             authStorage: this.options.authStorage,
             modelRegistry: this.options.modelRegistry,
             settingsManager: this.options.settingsManager,
+            attachmentRegistry: this.options.attachmentRegistry,
             tools: this.options.createDefaultTools(),
             customTools: this.options.createCustomToolOverrides?.() ?? [],
             extensionFactories,
@@ -176,6 +179,7 @@ export class AgentSessionManager {
           authStorage: this.options.authStorage,
           modelRegistry: this.options.modelRegistry,
           settingsManager: this.options.settingsManager,
+          attachmentRegistry: this.options.attachmentRegistry,
           tools: this.options.createDefaultTools(),
           customTools: this.options.createCustomToolOverrides?.() ?? [],
           extensionFactories,

@@ -35,3 +35,40 @@ test("createAgentPoolServices wires the extracted helper services together", () 
   expect(services.branchManager).toBeDefined();
   expect(services.runtimeFacade.isStreaming("web:default")).toBe(false);
 });
+
+test("createAgentPoolServices scopes attachment registries per pool", () => {
+  const authStorage = AuthStorage.create();
+  const modelRegistry = ModelRegistry.inMemory(authStorage);
+  const settingsManager = createSettingsManager();
+
+  const first = createAgentPoolServices({
+    pool: new Map(),
+    sidePool: new Map(),
+    activeForkBaseLeafByChat: new Map(),
+    authStorage,
+    modelRegistry,
+    settingsManager,
+    workspaceDir: "/workspace",
+  });
+  const second = createAgentPoolServices({
+    pool: new Map(),
+    sidePool: new Map(),
+    activeForkBaseLeafByChat: new Map(),
+    authStorage,
+    modelRegistry,
+    settingsManager,
+    workspaceDir: "/workspace",
+  });
+
+  first.attachments.register("web:default", {
+    id: 1,
+    name: "report.txt",
+    contentType: "text/plain",
+    size: 6,
+    kind: "file",
+    sourcePath: "/tmp/report.txt",
+  });
+
+  expect(first.attachments.take("web:default")).toHaveLength(1);
+  expect(second.attachments.take("web:default")).toHaveLength(0);
+});

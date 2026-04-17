@@ -4,7 +4,7 @@
 
 import type { AuthStorage, ExtensionFactory, ModelRegistry, SettingsManager } from "@mariozechner/pi-coding-agent";
 
-import { getAttachmentRegistry } from "./attachments.js";
+import { AttachmentRegistry } from "./attachments.js";
 import { getSshConfig } from "../db.js";
 import { createChatSshCoreExtension, resolveSshCoreConfigFromChatConfig } from "../extensions/ssh-core.js";
 import { AgentBranchManager } from "./branch-manager.js";
@@ -40,7 +40,7 @@ export interface AgentPoolServiceFactoryOptions extends AgentPoolLogHooks {
 
 /** Concrete helper instances composed into AgentPool. */
 export interface AgentPoolServices {
-  attachments: ReturnType<typeof getAttachmentRegistry>;
+  attachments: AttachmentRegistry;
   sessionBinder: AgentSessionBinder;
   toolFactory: AgentToolFactory;
   turnCoordinator: AgentTurnCoordinator;
@@ -49,7 +49,9 @@ export interface AgentPoolServices {
   branchManager: AgentBranchManager;
 }
 
-async function resolveSessionExtensionFactories(chatJid: string): Promise<ExtensionFactory[]> {
+async function resolveSessionExtensionFactories(
+  chatJid: string,
+): Promise<ExtensionFactory[]> {
   let sshConfig: ReturnType<typeof getSshConfig> | undefined;
   try {
     sshConfig = getSshConfig(chatJid);
@@ -69,7 +71,7 @@ async function resolveSessionExtensionFactories(chatJid: string): Promise<Extens
  * Keeps constructor wiring in one place so AgentPool itself remains a thin façade.
  */
 export function createAgentPoolServices(options: AgentPoolServiceFactoryOptions): AgentPoolServices {
-  const attachments = getAttachmentRegistry();
+  const attachments = new AttachmentRegistry();
   const sessionBinder = new AgentSessionBinder({
     pool: options.pool,
     onError: options.onError,
@@ -120,6 +122,7 @@ export function createAgentPoolServices(options: AgentPoolServiceFactoryOptions)
     authStorage: options.authStorage,
     modelRegistry: options.modelRegistry,
     settingsManager: options.settingsManager,
+    attachmentRegistry: attachments,
     createDefaultTools: () => toolFactory.createDefaultTools(),
     createCustomToolOverrides: () => toolFactory.createCustomToolOverrides(),
     getSessionExtensionFactories: (chatJid) => resolveSessionExtensionFactories(chatJid),
