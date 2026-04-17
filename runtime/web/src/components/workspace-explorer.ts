@@ -564,6 +564,36 @@ function buildWorkspaceIndexTitle(snapshot) {
     return lines.join('\n');
 }
 
+function getWorkspaceTouchEventTargetElement(event) {
+    const target = event?.target;
+    if (target && typeof target === 'object') return target;
+    return target?.parentElement || null;
+}
+
+function isWorkspaceTouchDragHandleTarget(targetEl) {
+    return Boolean(targetEl?.closest?.('.workspace-node-icon, .workspace-label-text'));
+}
+
+export function getWorkspaceTouchStartIntent(event, renamingPath = null) {
+    const targetEl = getWorkspaceTouchEventTargetElement(event);
+    const row = targetEl?.closest?.('.workspace-row');
+    if (!row) return null;
+    const type = row.dataset.type;
+    const path = row.dataset.path;
+    if (!path || path === '.') return null;
+    if (renamingPath === path) return null;
+    const touch = event?.touches?.[0];
+    if (!touch) return null;
+
+    return {
+        type,
+        path,
+        dragPath: isWorkspaceTouchDragHandleTarget(targetEl) ? path : null,
+        startX: touch.clientX,
+        startY: touch.clientY,
+    };
+}
+
 // ── WorkspaceExplorer ─────────────────────────────────────────────────────────
 
 /** Preact component: file tree explorer with upload, rename, and preview. */
@@ -625,7 +655,6 @@ export function WorkspaceExplorer({
     const uploadInputRef  = useRef(null);
     const uploadTargetRef = useRef('.');
     const uploadProgressTimerRef = useRef(0);
-    const longPressTimerRef = useRef(null);
     const touchDragRef     = useRef({ path: null, dragging: false, startX: 0, startY: 0 });
     const mouseDragRef     = useRef({ path: null, dragging: false, startX: 0, startY: 0 });
     const dragExpandRef    = useRef({ path: null, timer: 0 });
@@ -1271,10 +1300,6 @@ export function WorkspaceExplorer({
                 clearTimeout(debouncedVisibilityRef.current);
                 debouncedVisibilityRef.current = 0;
             }
-            if (longPressTimerRef.current) {
-                clearTimeout(longPressTimerRef.current);
-                longPressTimerRef.current = null;
-            }
             setWorkspaceVisibility(false, showHiddenRef.current).catch((error) => {
                 console.debug('[workspace-explorer] Workspace visibility teardown ping failed.', error, {
                     showHidden: showHiddenRef.current,
@@ -1692,38 +1717,18 @@ export function WorkspaceExplorer({
     }, [clearSelection, deleteFileAtPath, expanded, rows, scrollRowIntoView, selectedPath]);
 
     const handleRowTouchStart = useCallback((event) => {
-        const targetEl = getEventTargetElement(event);
-        const row = targetEl?.closest?.('.workspace-row');
-        if (!row) return;
-        const type = row.dataset.type;
-        const path = row.dataset.path;
-        if (!path || path === '.') return;
-        if (renamingPathRef.current === path) return;
-        const touch = event?.touches?.[0];
-        if (!touch) return;
+        const intent = getWorkspaceTouchStartIntent(event, renamingPathRef.current);
+        if (!intent) return;
 
         touchDragRef.current = {
-            path: isRowDragHandleTarget(targetEl) ? path : null,
+            path: intent.dragPath,
             dragging: false,
-            startX: touch.clientX,
-            startY: touch.clientY,
+            startX: intent.startX,
+            startY: intent.startY,
         };
-
-        if (type !== 'file') return;
-        if (longPressTimerRef.current) clearTimeout(longPressTimerRef.current);
-        longPressTimerRef.current = setTimeout(() => {
-            longPressTimerRef.current = null;
-            if (touchDragRef.current?.dragging) return;
-            deleteFileAtPath(path);
-        }, 600);
-    }, [deleteFileAtPath]);
+    }, []);
 
     const handleRowTouchEnd = useCallback(() => {
-        if (longPressTimerRef.current) {
-            clearTimeout(longPressTimerRef.current);
-            longPressTimerRef.current = null;
-        }
-
         const dragState = touchDragRef.current;
         if (dragState?.dragging && dragState.path) {
             const target = dropTargetRef.current || resolveDropTargetPath();
@@ -1743,22 +1748,11 @@ export function WorkspaceExplorer({
     const handleRowTouchMove = useCallback((event) => {
         const dragState = touchDragRef.current;
         const touch = event?.touches?.[0];
-        if (!touch || !dragState?.path) {
-            if (longPressTimerRef.current) {
-                clearTimeout(longPressTimerRef.current);
-                longPressTimerRef.current = null;
-            }
-            return;
-        }
+        if (!touch || !dragState?.path) return;
 
         const dx = Math.abs(touch.clientX - dragState.startX);
         const dy = Math.abs(touch.clientY - dragState.startY);
         const moved = dx > 8 || dy > 8;
-
-        if (moved && longPressTimerRef.current) {
-            clearTimeout(longPressTimerRef.current);
-            longPressTimerRef.current = null;
-        }
 
         if (!dragState.dragging && moved) {
             dragState.dragging = true;
