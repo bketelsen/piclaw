@@ -107,6 +107,8 @@ export function composeMainAppLifecycleCompositionOptions(options: UseMainAppOrc
     pendingRequestRef: refs.pendingRequestRef,
     thoughtBufferRef: refs.thoughtBufferRef,
     draftBufferRef: refs.draftBufferRef,
+    previewResyncPendingRef: refs.previewResyncPendingRef,
+    previewResyncGenerationRef: refs.previewResyncGenerationRef,
     setAgentStatus: setters.setAgentStatus,
     setAgentDraft: setters.setAgentDraft,
     setAgentPlan: setters.setAgentPlan,

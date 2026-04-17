@@ -252,6 +252,8 @@ interface ComposeRealtimeLifecycleOptionsInput {
   pendingRequestRef: RefBox<any>;
   draftBufferRef: RefBox<string>;
   thoughtBufferRef: RefBox<string>;
+  previewResyncPendingRef: RefBox<boolean>;
+  previewResyncGenerationRef: RefBox<number>;
   steerQueuedTurnIdRef: RefBox<string | null>;
   thoughtExpandedRef: RefBox<boolean>;
   draftExpandedRef: RefBox<boolean>;
@@ -321,6 +323,8 @@ export function composeRealtimeLifecycleOptions(input: ComposeRealtimeLifecycleO
     pendingRequestRef: input.pendingRequestRef,
     draftBufferRef: input.draftBufferRef,
     thoughtBufferRef: input.thoughtBufferRef,
+    previewResyncPendingRef: input.previewResyncPendingRef,
+    previewResyncGenerationRef: input.previewResyncGenerationRef,
     steerQueuedTurnIdRef: input.steerQueuedTurnIdRef,
     thoughtExpandedRef: input.thoughtExpandedRef,
     draftExpandedRef: input.draftExpandedRef,

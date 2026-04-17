@@ -25,6 +25,8 @@ function createDeps() {
   const clearQueueCalls: number[] = [];
   let refreshQueueCalls = 0;
   let agentStatus: any = null;
+  let agentDraft: any = { text: '', totalLines: 0 };
+  let agentThought: any = { text: '', totalLines: 0 };
 
   const deps: HandleAppSseEventDependencies = {
     currentChatJid: 'chat:alpha',
@@ -36,6 +38,8 @@ function createDeps() {
     pendingRequestRef: { current: null },
     draftBufferRef: { current: '' },
     thoughtBufferRef: { current: '' },
+    previewResyncPendingRef: { current: false },
+    previewResyncGenerationRef: { current: 0 },
     steerQueuedTurnIdRef: { current: null },
     thoughtExpandedRef: { current: false },
     draftExpandedRef: { current: false },
@@ -58,9 +62,13 @@ function createDeps() {
     setAgentStatus: (next) => {
       agentStatus = applyUpdate(agentStatus, next);
     },
-    setAgentDraft: () => undefined,
+    setAgentDraft: (next) => {
+      agentDraft = applyUpdate(agentDraft, next);
+    },
     setAgentPlan: () => undefined,
-    setAgentThought: () => undefined,
+    setAgentThought: (next) => {
+      agentThought = applyUpdate(agentThought, next);
+    },
     setPendingRequest: () => undefined,
     clearAgentRunState: () => undefined,
     getAgentStatus: async () => null,
@@ -110,7 +118,19 @@ function createDeps() {
     getClearQueueCalls: () => clearQueueCalls,
     getRefreshQueueCalls: () => refreshQueueCalls,
     getAgentStatusState: () => agentStatus,
+    getAgentDraftState: () => agentDraft,
+    getAgentThoughtState: () => agentThought,
   };
+}
+
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  let reject!: (reason?: unknown) => void;
+  const promise = new Promise<T>((res, rej) => {
+    resolve = res;
+    reject = rej;
+  });
+  return { promise, resolve, reject };
 }
 
 test('handleAppSseEvent routes status-panel widget events and clears finished pending actions', () => {
@@ -168,6 +188,76 @@ test('handleAppSseEvent restores active agent status on reconnect', async () => 
     turn_id: 'turn-42',
     started_at: '2026-03-30T21:00:00.000Z',
   });
+});
+
+test('handleAppSseEvent drops preview updates until reconnect snapshot restore completes', async () => {
+  const state = createDeps();
+  const statusRequest = deferred<any>();
+  state.deps.draftBufferRef.current = 'stale draft';
+  state.deps.thoughtBufferRef.current = 'stale thought';
+  state.deps.getAgentStatus = async () => statusRequest.promise;
+
+  handleAppSseEvent('connected', { app_asset_version: 'test' }, state.deps);
+
+  expect(state.deps.previewResyncPendingRef.current).toBe(true);
+  expect(state.deps.draftBufferRef.current).toBe('');
+  expect(state.deps.thoughtBufferRef.current).toBe('');
+  expect(state.getAgentDraftState()).toEqual({ text: '', totalLines: 0 });
+  expect(state.getAgentThoughtState()).toEqual({ text: '', totalLines: 0 });
+
+  handleAppSseEvent('agent_draft_delta', {
+    chat_jid: 'chat:alpha',
+    delta: ' should not append',
+  }, state.deps);
+  handleAppSseEvent('agent_thought_delta', {
+    chat_jid: 'chat:alpha',
+    delta: ' should not append',
+  }, state.deps);
+  handleAppSseEvent('agent_draft', {
+    chat_jid: 'chat:alpha',
+    text: 'ignore full draft until restore',
+    total_lines: 1,
+  }, state.deps);
+  handleAppSseEvent('agent_thought', {
+    chat_jid: 'chat:alpha',
+    text: 'ignore full thought until restore',
+    total_lines: 1,
+  }, state.deps);
+
+  expect(state.deps.draftBufferRef.current).toBe('');
+  expect(state.deps.thoughtBufferRef.current).toBe('');
+  expect(state.getAgentDraftState()).toEqual({ text: '', totalLines: 0 });
+  expect(state.getAgentThoughtState()).toEqual({ text: '', totalLines: 0 });
+
+  statusRequest.resolve({
+    status: 'active',
+    data: {
+      chat_jid: 'chat:alpha',
+      type: 'intent',
+      title: 'Restoring preview',
+      turn_id: 'turn-99',
+    },
+    draft: { text: 'snapshot draft', totalLines: 1 },
+    thought: { text: 'snapshot thought', totalLines: 1 },
+  });
+  await statusRequest.promise;
+  await new Promise((resolve) => setTimeout(resolve, 0));
+
+  expect(state.deps.previewResyncPendingRef.current).toBe(false);
+  expect(state.deps.draftBufferRef.current).toBe('snapshot draft');
+  expect(state.deps.thoughtBufferRef.current).toBe('snapshot thought');
+
+  handleAppSseEvent('agent_draft_delta', {
+    chat_jid: 'chat:alpha',
+    delta: ' after restore',
+  }, state.deps);
+  handleAppSseEvent('agent_thought_delta', {
+    chat_jid: 'chat:alpha',
+    delta: ' after restore',
+  }, state.deps);
+
+  expect(state.deps.draftBufferRef.current).toBe('snapshot draft after restore');
+  expect(state.deps.thoughtBufferRef.current).toBe('snapshot thought after restore');
 });
 
 test('handleAppSseEvent skips duplicate reconnect recovery during a fresh cold-open activation', async () => {

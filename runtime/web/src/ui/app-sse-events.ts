@@ -57,6 +57,8 @@ export interface HandleAppSseEventDependencies {
   pendingRequestRef: RefBox<any>;
   draftBufferRef: RefBox<string>;
   thoughtBufferRef: RefBox<string>;
+  previewResyncPendingRef: RefBox<boolean>;
+  previewResyncGenerationRef: RefBox<number>;
   steerQueuedTurnIdRef: RefBox<string | null>;
   thoughtExpandedRef: RefBox<boolean>;
   draftExpandedRef: RefBox<boolean>;
@@ -125,6 +127,8 @@ export function handleAppSseEvent(
     pendingRequestRef,
     draftBufferRef,
     thoughtBufferRef,
+    previewResyncPendingRef,
+    previewResyncGenerationRef,
     steerQueuedTurnIdRef,
     thoughtExpandedRef,
     draftExpandedRef,
@@ -216,6 +220,11 @@ export function handleAppSseEvent(
     if (handleUiVersionDrift(data?.app_asset_version)) {
       return;
     }
+    const resyncGeneration = previewResyncGenerationRef.current + 1;
+    previewResyncGenerationRef.current = resyncGeneration;
+    previewResyncPendingRef.current = true;
+    draftBufferRef.current = '';
+    thoughtBufferRef.current = '';
     setAgentStatus(null);
     setAgentDraft({ text: '', totalLines: 0 });
     setAgentPlan('');
@@ -224,6 +233,9 @@ export function handleAppSseEvent(
     pendingRequestRef.current = null;
     clearAgentRunState();
     if (isAppChatActivationRecent(currentChatJid)) {
+      if (previewResyncGenerationRef.current === resyncGeneration) {
+        previewResyncPendingRef.current = false;
+      }
       return;
     }
 
@@ -253,6 +265,11 @@ export function handleAppSseEvent(
       })
       .catch((error) => {
         console.warn('Failed to fetch agent status:', error);
+      })
+      .finally(() => {
+        if (previewResyncGenerationRef.current === resyncGeneration) {
+          previewResyncPendingRef.current = false;
+        }
       });
 
     if (isMainTimelineView(viewStateRef.current)) {
@@ -360,6 +377,7 @@ export function handleAppSseEvent(
 
   if (eventType === 'agent_draft_delta') {
     if (!isCurrentChatEvent) return;
+    if (previewResyncPendingRef.current) return;
     if (shouldIgnoreMismatchedTurn(turnId, currentTurnIdRef.current)) {
       return;
     }
@@ -383,6 +401,7 @@ export function handleAppSseEvent(
 
   if (eventType === 'agent_draft') {
     if (!isCurrentChatEvent) return;
+    if (previewResyncPendingRef.current) return;
     if (shouldIgnoreMismatchedTurn(turnId, currentTurnIdRef.current)) {
       return;
     }
@@ -404,6 +423,7 @@ export function handleAppSseEvent(
 
   if (eventType === 'agent_thought_delta') {
     if (!isCurrentChatEvent) return;
+    if (previewResyncPendingRef.current) return;
     if (shouldIgnoreMismatchedTurn(turnId, currentTurnIdRef.current)) {
       return;
     }
@@ -423,6 +443,7 @@ export function handleAppSseEvent(
 
   if (eventType === 'agent_thought') {
     if (!isCurrentChatEvent) return;
+    if (previewResyncPendingRef.current) return;
     if (shouldIgnoreMismatchedTurn(turnId, currentTurnIdRef.current)) {
       return;
     }

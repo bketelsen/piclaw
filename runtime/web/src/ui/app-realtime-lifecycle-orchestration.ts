@@ -29,6 +29,8 @@ interface UseRealtimeLifecycleOrchestrationOptions {
   pendingRequestRef: RefBox<any>;
   draftBufferRef: RefBox<string>;
   thoughtBufferRef: RefBox<string>;
+  previewResyncPendingRef: RefBox<boolean>;
+  previewResyncGenerationRef: RefBox<number>;
   steerQueuedTurnIdRef: RefBox<string | null>;
   thoughtExpandedRef: RefBox<boolean>;
   draftExpandedRef: RefBox<boolean>;
@@ -103,6 +105,8 @@ export function useRealtimeLifecycleOrchestration(options: UseRealtimeLifecycleO
     pendingRequestRef,
     draftBufferRef,
     thoughtBufferRef,
+    previewResyncPendingRef,
+    previewResyncGenerationRef,
     steerQueuedTurnIdRef,
     thoughtExpandedRef,
     draftExpandedRef,
@@ -168,6 +172,8 @@ export function useRealtimeLifecycleOrchestration(options: UseRealtimeLifecycleO
       pendingRequestRef,
       draftBufferRef,
       thoughtBufferRef,
+      previewResyncPendingRef,
+      previewResyncGenerationRef,
       steerQueuedTurnIdRef,
       thoughtExpandedRef,
       draftExpandedRef,
@@ -240,6 +246,8 @@ export function useRealtimeLifecycleOrchestration(options: UseRealtimeLifecycleO
     notifyForFinalResponse,
     pendingRequestRef,
     preserveTimelineScrollTop,
+    previewResyncGenerationRef,
+    previewResyncPendingRef,
     refreshActiveChatAgents,
     refreshActiveEditorFromWorkspace,
     refreshContextUsage,
