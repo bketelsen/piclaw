@@ -59,16 +59,25 @@ export interface SessionIdleWaitResult {
 }
 
 export const DEFAULT_SESSION_IDLE_SETTLE_TICKS = 20;
+export const DEFAULT_SESSION_IDLE_MAX_WAIT_MS = 10_000;
 
 /** Wait until a session fully settles after a prompt completes. */
 export async function waitForSessionIdle(
   session: { isStreaming?: boolean; isCompacting?: boolean; isRetrying?: boolean },
   settleTicks = DEFAULT_SESSION_IDLE_SETTLE_TICKS,
   onSettled?: (result: SessionIdleWaitResult) => void,
+  maxWaitMs = DEFAULT_SESSION_IDLE_MAX_WAIT_MS,
 ): Promise<void> {
   let idleTicks = 0;
   const startTime = Date.now();
   while (idleTicks < settleTicks) {
+    const totalWaitMs = Date.now() - startTime;
+    if (maxWaitMs > 0 && totalWaitMs >= maxWaitMs) {
+      throw new Error(
+        `Timed out waiting for session idle after ${formatTimeoutDuration(maxWaitMs)} ` +
+          `(streaming=${Boolean(session.isStreaming)}, compacting=${Boolean(session.isCompacting)}, retrying=${Boolean(session.isRetrying)})`,
+      );
+    }
     if (!session.isStreaming && !session.isCompacting && !session.isRetrying) {
       idleTicks += 1;
     } else {

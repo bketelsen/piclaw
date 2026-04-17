@@ -1,6 +1,7 @@
 import { expect, test } from "bun:test";
 
 import {
+  DEFAULT_SESSION_IDLE_MAX_WAIT_MS,
   DEFAULT_SESSION_IDLE_SETTLE_TICKS,
   extractAssistantText,
   extractAssistantThinking,
@@ -32,6 +33,7 @@ test("prompt utils extract assistant text and thinking blocks", () => {
 
 test("waitForSessionIdle uses a 1s default settle window", () => {
   expect(DEFAULT_SESSION_IDLE_SETTLE_TICKS).toBe(20);
+  expect(DEFAULT_SESSION_IDLE_MAX_WAIT_MS).toBe(10_000);
 });
 
 test("waitForSessionIdle does not settle during a 600ms mid-run idle gap", async () => {
@@ -64,4 +66,16 @@ test("waitForSessionIdle does not settle during a 600ms mid-run idle gap", async
 
   expect(result).toBe("pending");
   await expect(waitPromise).resolves.toBeUndefined();
+});
+
+test("waitForSessionIdle times out when the session never settles", async () => {
+  const session = {
+    isStreaming: false,
+    isCompacting: false,
+    isRetrying: true,
+  };
+
+  await expect(waitForSessionIdle(session, 2, undefined, 120)).rejects.toThrow(
+    "Timed out waiting for session idle after 0.1s (streaming=false, compacting=false, retrying=true)",
+  );
 });
