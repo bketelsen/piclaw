@@ -17,6 +17,7 @@ SUPERVISOR_CONF_ENV_SET="${SUPERVISOR_CONF+x}"
 SUPERVISOR_CONF="${SUPERVISOR_CONF:-$DEFAULT_SUPERVISOR_CONF}"
 WORKSPACE_SUPERVISOR_DIR="/workspace/.piclaw/supervisor"
 SUPERVISOR_DEFAULTS_DIR="/usr/local/share/piclaw/supervisor"
+WORKSPACE_SUPERVISOR_MANIFEST="$WORKSPACE_SUPERVISOR_DIR/.defaults-manifest"
 
 log() {
     echo "[entrypoint] $*"
@@ -42,6 +43,87 @@ chown_if_exists() {
     if [ -e "$path" ]; then
         chown -R agent:agent "$path" 2>/dev/null || true
     fi
+}
+
+file_sha256() {
+    local path="$1"
+    sha256sum "$path" | awk '{print $1}'
+}
+
+load_supervisor_manifest() {
+    local manifest_path="$1"
+    local -n manifest_ref="$2"
+
+    if [ ! -f "$manifest_path" ]; then
+        return
+    fi
+
+    while IFS=$'\t' read -r rel hash; do
+        [ -n "$rel" ] || continue
+        [ -n "$hash" ] || continue
+        manifest_ref["$rel"]="$hash"
+    done < "$manifest_path"
+}
+
+sync_workspace_supervisor_defaults() {
+    local defaults_dir="$1"
+    local workspace_dir="$2"
+    local manifest_path="$3"
+
+    [ -d "$defaults_dir" ] || return 0
+
+    mkdir -p "$workspace_dir/conf.d"
+    chown agent:agent /workspace/.piclaw "$workspace_dir" "$workspace_dir/conf.d" 2>/dev/null || true
+
+    local manifest_exists=0
+    if [ -f "$manifest_path" ]; then
+        manifest_exists=1
+    fi
+
+    declare -A previous_hashes=()
+    load_supervisor_manifest "$manifest_path" previous_hashes
+
+    while IFS= read -r -d '' source; do
+        local rel="${source#$defaults_dir/}"
+        local target="$workspace_dir/$rel"
+        local source_hash
+        source_hash="$(file_sha256 "$source")"
+        mkdir -p "$(dirname "$target")"
+
+        if [ ! -f "$target" ]; then
+            cp "$source" "$target"
+            chown agent:agent "$target" 2>/dev/null || true
+            continue
+        fi
+
+        local target_hash
+        target_hash="$(file_sha256 "$target")"
+        local previous_hash="${previous_hashes[$rel]:-}"
+
+        if [ -n "$previous_hash" ]; then
+            if [ "$target_hash" = "$previous_hash" ] && [ "$source_hash" != "$target_hash" ]; then
+                cp "$source" "$target"
+                chown agent:agent "$target" 2>/dev/null || true
+            fi
+            continue
+        fi
+
+        if [ "$manifest_exists" -eq 0 ] && [ "$source_hash" != "$target_hash" ]; then
+            local backup="$target.preseed.$(date +%s%N).bak"
+            cp "$target" "$backup"
+            chown agent:agent "$backup" 2>/dev/null || true
+            cp "$source" "$target"
+            chown agent:agent "$target" 2>/dev/null || true
+            log "Reseeded workspace supervisor default $rel (previous copy backed up to $(basename "$backup"))"
+        fi
+    done < <(find "$defaults_dir" -maxdepth 2 -type f \( -name 'supervisord.conf' -o -path "$defaults_dir/conf.d/*.conf" \) -print0)
+
+    : > "$manifest_path"
+    while IFS= read -r -d '' source; do
+        local rel="${source#$defaults_dir/}"
+        printf '%s\t%s\n' "$rel" "$(file_sha256 "$source")" >> "$manifest_path"
+    done < <(find "$defaults_dir" -maxdepth 2 -type f \( -name 'supervisord.conf' -o -path "$defaults_dir/conf.d/*.conf" \) -print0)
+    chown agent:agent "$manifest_path" 2>/dev/null || true
 }
 
 record_runtime_ids() {
@@ -262,24 +344,10 @@ if [ -d "/workspace" ] && [ ! -f "/workspace/notes/memory/README.md" ]; then
 fi
 
 if [ -d "/workspace" ]; then
-    mkdir -p "$WORKSPACE_SUPERVISOR_DIR/conf.d"
-    chown agent:agent /workspace/.piclaw "$WORKSPACE_SUPERVISOR_DIR" "$WORKSPACE_SUPERVISOR_DIR/conf.d" 2>/dev/null || true
-
-    if [ -f "$SUPERVISOR_DEFAULTS_DIR/supervisord.conf" ] && [ ! -f "$WORKSPACE_SUPERVISOR_DIR/supervisord.conf" ]; then
-        cp "$SUPERVISOR_DEFAULTS_DIR/supervisord.conf" "$WORKSPACE_SUPERVISOR_DIR/supervisord.conf"
-        chown agent:agent "$WORKSPACE_SUPERVISOR_DIR/supervisord.conf"
-    fi
-
-    if [ -d "$SUPERVISOR_DEFAULTS_DIR/conf.d" ]; then
-        while IFS= read -r -d '' conf; do
-            conf_name="$(basename "$conf")"
-            conf_target="$WORKSPACE_SUPERVISOR_DIR/conf.d/$conf_name"
-            if [ ! -f "$conf_target" ]; then
-                cp "$conf" "$conf_target"
-                chown agent:agent "$conf_target"
-            fi
-        done < <(find "$SUPERVISOR_DEFAULTS_DIR/conf.d" -maxdepth 1 -type f -name '*.conf' -print0)
-    fi
+    sync_workspace_supervisor_defaults \
+        "$SUPERVISOR_DEFAULTS_DIR" \
+        "$WORKSPACE_SUPERVISOR_DIR" \
+        "$WORKSPACE_SUPERVISOR_MANIFEST"
 
     if [ "$SUPERVISOR_CONF" = "$DEFAULT_SUPERVISOR_CONF" ] && [ -f "$WORKSPACE_SUPERVISOR_DIR/supervisord.conf" ]; then
         SUPERVISOR_CONF="$WORKSPACE_SUPERVISOR_DIR/supervisord.conf"
