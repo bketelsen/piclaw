@@ -242,7 +242,7 @@ describe("SSE client cap", () => {
     }
   });
 
-  test("broadcastEvent filters chat-scoped SSE events per subscribed chat", () => {
+  test("broadcastEvent only delivers chat-scoped SSE events to matching chat subscribers", () => {
     const seenA: Uint8Array[] = [];
     const seenB: Uint8Array[] = [];
     const seenGlobal: Uint8Array[] = [];
@@ -258,7 +258,7 @@ describe("SSE client cap", () => {
 
     expect(seenA.length).toBe(1);
     expect(seenB.length).toBe(0);
-    expect(seenGlobal.length).toBe(1);
+    expect(seenGlobal.length).toBe(0);
 
     for (const client of channel.clients) {
       clearTimeout(client.heartbeat);
