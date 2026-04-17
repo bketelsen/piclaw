@@ -9,6 +9,8 @@ set -euo pipefail
 
 DEFAULT_BREW_REMOTE="https://github.com/Homebrew/brew.git"
 DEFAULT_CORE_REMOTE="https://github.com/Homebrew/homebrew-core.git"
+HOMEBREW_INSTALL_COMMIT="de0b0bddf1c78731dcd16d953b2f5d29d070e229"
+HOMEBREW_INSTALL_SCRIPT_SHA256="dfd5145fe2aa5956a600e35848765273f5798ce6def01bd08ecec088a1268d91"
 
 choose_remote() {
   local fallback="$1"
@@ -185,7 +187,14 @@ export HOMEBREW_CACHE="${HOMEBREW_CACHE:-/tmp/homebrew-cache}"
 mkdir -p "$HOMEBREW_CACHE"
 
 BREW_INSTALL_SCRIPT="$(mktemp)"
-curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh -o "$BREW_INSTALL_SCRIPT"
+curl -fsSL "https://raw.githubusercontent.com/Homebrew/install/${HOMEBREW_INSTALL_COMMIT}/install.sh" -o "$BREW_INSTALL_SCRIPT"
+actual_brew_install_sha256=$(sha256sum "$BREW_INSTALL_SCRIPT" | awk '{print $1}')
+if [ "$actual_brew_install_sha256" != "$HOMEBREW_INSTALL_SCRIPT_SHA256" ]; then
+  echo "Checksum mismatch for pinned Homebrew install script" >&2
+  echo "Expected: $HOMEBREW_INSTALL_SCRIPT_SHA256" >&2
+  echo "Actual:   $actual_brew_install_sha256" >&2
+  exit 1
+fi
 /bin/bash "$BREW_INSTALL_SCRIPT"
 rm -f "$BREW_INSTALL_SCRIPT"
 
