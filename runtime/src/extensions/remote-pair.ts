@@ -18,6 +18,7 @@ import {
   getRemotePeerByFingerprint,
   getPairRequestById,
   getPendingPairRequest,
+  getPendingPairRequests,
   updatePairRequestStatus,
   updateRemotePeer,
   upsertRemotePeer,
@@ -603,27 +604,29 @@ export const remotePair: ExtensionFactory = (pi: ExtensionAPI) => {
   // On session start, notify the operator of any pending inbound pair requests
   // so they know to run /pair accept. Does not initiate any network activity.
   pi.on("session_start", () => {
-    let pendingPeers: RemotePeerRecord[];
+    let pending: RemotePairRequestRecord[];
     try {
-      pendingPeers = getAllRemotePeers().filter((p) => p.status === "pending");
+      pending = getPendingPairRequests().filter(
+        (r) => new Date(r.expires_at) > new Date()
+      );
     } catch {
-      pendingPeers = [];
+      pending = [];
     }
-    if (!pendingPeers.length) return;
+    if (!pending.length) return;
 
     log.info("Pending inbound pair requests on startup", {
       operation: "remote-pair.startup-notify",
-      count: pendingPeers.length,
+      count: pending.length,
     });
 
-    const lines = pendingPeers.map((p) => {
-      const fp = formatFingerprint(p.instance_id);
-      const name = p.display_name ? ` (${p.display_name})` : "";
-      return `- \`${fp}\`${name}`;
+    const lines = pending.map((r) => {
+      const fp = formatFingerprint(r.instance_id);
+      const name = r.display_name ? ` (${r.display_name})` : "";
+      return `- \`${r.id}\` — \`${fp}\`${name}`;
     });
     pi.sendMessage({
       customType: "remote-pair",
-      content: `**Pending pair requests:**\n${lines.join("\n")}\n\nRun \`/pair accept <fingerprint>\` to accept one.`,
+      content: `**Pending pair requests:**\n${lines.join("\n")}\n\nRun \`/pair accept <request_id>\` to accept.`,
       display: true,
     });
   });
