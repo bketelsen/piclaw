@@ -12,6 +12,7 @@ export function handleAgentStatusRequest(req, ctx) {
         const chatJid = resolveChatJid(req, ctx.defaultChatJid);
         const status = ctx.getAgentStatus(chatJid);
         if (!status) {
+            ctx.recoverStaleInflightRun(chatJid, { hasActiveStatus: false });
             return ctx.json({ status: "idle", data: null });
         }
         const turnId = (status.turn_id || status.turnId);

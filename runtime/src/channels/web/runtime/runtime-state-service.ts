@@ -23,7 +23,9 @@ import {
 import { PendingSteeringStore } from "./pending-steering.js";
 import {
   recoverInflightRuns as recoverWebInflightRuns,
+  recoverStaleInflightRun as recoverWebStaleInflightRun,
   resumePendingChats as resumeWebPendingChats,
+  type RecoverStaleInflightRunOptions,
   type WebRecoveryContext,
   type WebRecoveryStore,
 } from "./recovery.js";
@@ -131,6 +133,10 @@ export class WebChannelRuntimeStateService {
 
   recoverInflightRuns(store?: WebRecoveryStore): void {
     recoverWebInflightRuns(this.getRecoveryContext(), store);
+  }
+
+  recoverStaleInflightRun(chatJid: string, options?: RecoverStaleInflightRunOptions, store?: WebRecoveryStore): boolean {
+    return recoverWebStaleInflightRun(this.getRecoveryContext(), chatJid, options, store);
   }
 
   resumePendingChats(chatJid?: string, store?: WebRecoveryStore): void {

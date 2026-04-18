@@ -38,6 +38,7 @@ export interface WebChannelPrototypeMembers extends WebChannelLike {
   handleFetch(req: Request, server?: Bun.Server<WebSocketSessionData>): Promise<Response | undefined>;
   handleRequest(req: Request): Promise<Response>;
   recoverInflightRuns(): void;
+  recoverStaleInflightRun(chatJid: string, options?: { hasActiveStatus?: boolean; minAgeMs?: number }): boolean;
   resumePendingChats(chatJid?: string): void;
   loadState(): void;
   processChat(chatJid: string, agentId: string, threadRootId?: number | null): Promise<void>;
@@ -280,6 +281,13 @@ export function installWebChannelPrototype(
       value: withRuntimePublicSurface((service): void => {
         service.recoverInflightRuns();
       }),
+    },
+    recoverStaleInflightRun: {
+      configurable: true,
+      writable: true,
+      value: withRuntimePublicSurface((service, chatJid: string, options?: { hasActiveStatus?: boolean; minAgeMs?: number }): boolean => (
+        service.recoverStaleInflightRun(chatJid, options)
+      )),
     },
     resumePendingChats: {
       configurable: true,

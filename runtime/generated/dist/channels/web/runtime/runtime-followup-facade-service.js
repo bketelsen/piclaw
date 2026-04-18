@@ -67,6 +67,9 @@ export class WebChannelRuntimeFollowupFacadeService {
     recoverInflightRuns() {
         this.deps.getRuntimeState().recoverInflightRuns();
     }
+    recoverStaleInflightRun(chatJid, options) {
+        return this.deps.getRuntimeState().recoverStaleInflightRun(chatJid, options);
+    }
     resumePendingChats(chatJid) {
         this.deps.getRuntimeState().resumePendingChats(chatJid);
     }

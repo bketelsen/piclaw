@@ -166,6 +166,11 @@ export function installWebChannelPrototype(target, defaults) {
                 service.recoverInflightRuns();
             }),
         },
+        recoverStaleInflightRun: {
+            configurable: true,
+            writable: true,
+            value: withRuntimePublicSurface((service, chatJid, options) => (service.recoverStaleInflightRun(chatJid, options))),
+        },
         resumePendingChats: {
             configurable: true,
             writable: true,

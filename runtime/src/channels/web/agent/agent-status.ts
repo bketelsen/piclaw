@@ -10,6 +10,7 @@ export interface AgentStatusContext {
   defaultChatJid: string;
   json(payload: unknown, status?: number): Response;
   getAgentStatus(chatJid: string): Record<string, unknown> | null;
+  recoverStaleInflightRun(chatJid: string, options?: { hasActiveStatus?: boolean; minAgeMs?: number }): boolean;
   getBuffer(turnId: string, panel: "thought" | "draft"): WebAgentBufferEntry | undefined;
   getContextUsageForChat(
     chatJid: string
@@ -29,6 +30,7 @@ export function handleAgentStatusRequest(req: Request, ctx: AgentStatusContext):
     const chatJid = resolveChatJid(req, ctx.defaultChatJid);
     const status = ctx.getAgentStatus(chatJid);
     if (!status) {
+      ctx.recoverStaleInflightRun(chatJid, { hasActiveStatus: false });
       return ctx.json({ status: "idle", data: null });
     }
 

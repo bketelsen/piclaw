@@ -12,6 +12,7 @@ function createContext(overrides: Partial<AgentStatusContext> = {}): AgentStatus
     defaultChatJid: "web:default",
     json: createJsonResponder(),
     getAgentStatus: () => null,
+    recoverStaleInflightRun: () => false,
     getBuffer: () => undefined,
     getContextUsageForChat: async () => null,
     getAvailableModels: async () => ({ models: [] }),
@@ -27,6 +28,22 @@ describe("web agent status helpers", () => {
 
     expect(res.status).toBe(200);
     expect(res.headers.get("Server-Timing")).toContain("agent_status;dur=");
+    expect(await res.json()).toEqual({ status: "idle", data: null });
+  });
+
+  test("handleAgentStatusRequest triggers stale inflight recovery when no active status exists", async () => {
+    const req = new Request("https://example.com/agent/status?chat_jid=web:ux");
+    const calls: Array<{ chatJid: string; hasActiveStatus?: boolean }> = [];
+    const res = handleAgentStatusRequest(req, createContext({
+      getAgentStatus: () => null,
+      recoverStaleInflightRun: (chatJid, options) => {
+        calls.push({ chatJid, hasActiveStatus: options?.hasActiveStatus });
+        return true;
+      },
+    }));
+
+    expect(res.status).toBe(200);
+    expect(calls).toEqual([{ chatJid: "web:ux", hasActiveStatus: false }]);
     expect(await res.json()).toEqual({ status: "idle", data: null });
   });
 

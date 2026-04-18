@@ -40,6 +40,7 @@ type RuntimeFollowupRuntimeState = Pick<
   | "resumeChat"
   | "skipFailedOnModelSwitch"
   | "recoverInflightRuns"
+  | "recoverStaleInflightRun"
   | "resumePendingChats"
   | "loadState"
   | "saveState"
@@ -171,6 +172,10 @@ export class WebChannelRuntimeFollowupFacadeService {
 
   recoverInflightRuns(): void {
     this.deps.getRuntimeState().recoverInflightRuns();
+  }
+
+  recoverStaleInflightRun(chatJid: string, options?: { hasActiveStatus?: boolean; minAgeMs?: number }): boolean {
+    return this.deps.getRuntimeState().recoverStaleInflightRun(chatJid, options);
   }
 
   resumePendingChats(chatJid?: string): void {

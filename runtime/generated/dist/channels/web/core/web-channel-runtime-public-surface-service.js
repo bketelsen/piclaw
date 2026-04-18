@@ -66,6 +66,9 @@ export class WebChannelRuntimePublicSurfaceService {
     recoverInflightRuns() {
         this.channel.runtimeFollowupFacade.recoverInflightRuns();
     }
+    recoverStaleInflightRun(chatJid, options) {
+        return this.channel.runtimeFollowupFacade.recoverStaleInflightRun(chatJid, options);
+    }
     resumePendingChats(chatJid) {
         this.channel.runtimeFollowupFacade.resumePendingChats(chatJid);
     }

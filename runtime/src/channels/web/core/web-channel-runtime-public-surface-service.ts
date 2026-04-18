@@ -27,6 +27,7 @@ type WebChannelRuntimePublicSurfaceFollowupFacade = Pick<
   | "resumeChat"
   | "skipFailedOnModelSwitch"
   | "recoverInflightRuns"
+  | "recoverStaleInflightRun"
   | "resumePendingChats"
   | "loadState"
   | "saveState"
@@ -175,6 +176,10 @@ export class WebChannelRuntimePublicSurfaceService {
 
   recoverInflightRuns(): void {
     this.channel.runtimeFollowupFacade.recoverInflightRuns();
+  }
+
+  recoverStaleInflightRun(chatJid: string, options?: { hasActiveStatus?: boolean; minAgeMs?: number }): boolean {
+    return this.channel.runtimeFollowupFacade.recoverStaleInflightRun(chatJid, options);
   }
 
   resumePendingChats(chatJid?: string): void {

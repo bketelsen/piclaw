@@ -40,6 +40,69 @@ const defaultStore = {
  * pathological restart loops.
  */
 const MAX_INFLIGHT_AGE_MS = 30 * 60 * 1000;
+const RUNTIME_STALE_INFLIGHT_GRACE_MS = 15_000;
+/** Recover one stale inflight run during normal runtime, not only on startup. */
+export function recoverStaleInflightRun(ctx, chatJid, options = {}, store = defaultStore) {
+    if (!chatJid || options.hasActiveStatus)
+        return false;
+    const inflight = store.getInflightRuns().find((entry) => entry.chatJid === chatJid);
+    if (!inflight)
+        return false;
+    const replyState = store.getAgentReplyStateAfter(inflight.chatJid, inflight.startedAt);
+    const now = typeof ctx.now === "function" ? ctx.now() : Date.now();
+    const inflightAge = now - new Date(inflight.startedAt).getTime();
+    const minAgeMs = Number.isFinite(options.minAgeMs) ? Number(options.minAgeMs) : RUNTIME_STALE_INFLIGHT_GRACE_MS;
+    try {
+        store.transaction(() => {
+            if (replyState === "terminal") {
+                log.info("Runtime stale-inflight recovery cleared terminal marker", {
+                    operation: "recover_stale_inflight_run.clear_terminal",
+                    chatJid: inflight.chatJid,
+                    startedAt: inflight.startedAt,
+                });
+                store.clearInflightMarker(inflight.chatJid);
+                return;
+            }
+            if (replyState === "partial") {
+                log.info("Runtime stale-inflight recovery cleared partial marker", {
+                    operation: "recover_stale_inflight_run.clear_partial",
+                    chatJid: inflight.chatJid,
+                    startedAt: inflight.startedAt,
+                });
+                store.clearInflightMarker(inflight.chatJid);
+                return;
+            }
+            if (inflightAge < minAgeMs) {
+                return;
+            }
+            log.warn("Runtime stale-inflight recovery rolled back chat", {
+                operation: "recover_stale_inflight_run.rollback",
+                chatJid: inflight.chatJid,
+                startedAt: inflight.startedAt,
+                inflightAgeSeconds: Math.round(inflightAge / 1000),
+            });
+            store.rollbackInflightRun(inflight.chatJid, inflight.prevTs);
+        });
+    }
+    catch (error) {
+        log.error("Runtime stale-inflight recovery failed", {
+            operation: "recover_stale_inflight_run",
+            chatJid,
+            err: error,
+        });
+        return false;
+    }
+    if (replyState === "none" && inflightAge >= minAgeMs) {
+        ctx.enqueue(async () => {
+            if ((ctx.recoveryDelayMs ?? 0) > 0) {
+                await (ctx.sleep ? ctx.sleep(ctx.recoveryDelayMs) : Bun.sleep(ctx.recoveryDelayMs));
+            }
+            await ctx.processChat(inflight.chatJid, ctx.defaultAgentId);
+        }, `resume:${inflight.chatJid}`, recoveryLaneKey(inflight.chatJid));
+        return true;
+    }
+    return replyState === "partial" || replyState === "terminal";
+}
 /** Recover interrupted runs left inflight after a restart. */
 export function recoverInflightRuns(ctx, store = defaultStore) {
     const inflights = store.getInflightRuns();

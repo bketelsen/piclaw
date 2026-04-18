@@ -12,7 +12,7 @@ import { AgentStatusStore } from "../agent/agent-status-store.js";
 import { WebChannelState } from "./channel-state.js";
 import { getThreadRootId as getThreadRootIdForChat, resumeChat as resumeWebChat, skipFailedOnModelSwitch as skipFailedOnModelSwitchForChat, } from "./chat-run-control.js";
 import { PendingSteeringStore } from "./pending-steering.js";
-import { recoverInflightRuns as recoverWebInflightRuns, resumePendingChats as resumeWebPendingChats, } from "./recovery.js";
+import { recoverInflightRuns as recoverWebInflightRuns, recoverStaleInflightRun as recoverWebStaleInflightRun, resumePendingChats as resumeWebPendingChats, } from "./recovery.js";
 /**
  * Dedicated seam for WebChannel recovery/resume wiring and runtime state.
  *
@@ -61,6 +61,9 @@ export class WebChannelRuntimeStateService {
     }
     recoverInflightRuns(store) {
         recoverWebInflightRuns(this.getRecoveryContext(), store);
+    }
+    recoverStaleInflightRun(chatJid, options, store) {
+        return recoverWebStaleInflightRun(this.getRecoveryContext(), chatJid, options, store);
     }
     resumePendingChats(chatJid, store) {
         resumeWebPendingChats(this.getRecoveryContext(), chatJid, store);

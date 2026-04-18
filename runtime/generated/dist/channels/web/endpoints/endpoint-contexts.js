@@ -20,6 +20,7 @@ export function createAgentStatusContext(deps) {
         defaultChatJid: deps.defaultChatJid,
         json: deps.json,
         getAgentStatus: deps.getAgentStatus,
+        recoverStaleInflightRun: deps.recoverStaleInflightRun,
         getBuffer: deps.getBuffer,
         getContextUsageForChat: deps.getContextUsageForChat,
         getAvailableModels: deps.getAvailableModels,
