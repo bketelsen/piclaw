@@ -20,60 +20,46 @@
     flex-direction: column-reverse;
 }
 
-/* Swipe navigation indicator — two side pills above everything */
+/* Swipe navigation indicator — centered pill, themed */
 .chat-swipe-indicator {
     display: none;
     position: fixed;
     top: 50%;
-    left: 0;
-    right: 0;
-    transform: translateY(-50%);
+    left: 50%;
+    transform: translate(-50%, -50%);
     z-index: 9999;
     align-items: center;
-    justify-content: space-between;
+    justify-content: center;
+    gap: 8px;
     pointer-events: none;
-    padding: 0 12px;
+    /* Fixed size so it never jumps */
+    min-width: 160px;
+    max-width: 260px;
+    padding: 12px 22px;
+    border-radius: var(--radius-full, 9999px);
+    /* Theme colours */
+    background: var(--accent-color, #1d9bf0);
+    color: var(--bg-primary, #fff);
+    border: 1.5px solid color-mix(in srgb, var(--accent-color, #1d9bf0) 70%, var(--bg-primary, #fff) 30%);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.18);
     transition: opacity 0.1s ease-out;
 }
 
-.chat-swipe-pill {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    padding: 10px 16px;
-    border-radius: 24px;
-    background: var(--swipe-pill-bg, rgba(0, 0, 0, 0.72));
-    backdrop-filter: blur(10px);
-    -webkit-backdrop-filter: blur(10px);
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    color: rgba(255, 255, 255, 0.65);
-    font-size: 13px;
-    font-weight: 500;
-    white-space: nowrap;
-    max-width: 42vw;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    transition: background 0.1s, color 0.1s, transform 0.1s;
-    transform: scale(0.92);
-}
-
-.chat-swipe-pill-active {
-    background: var(--accent, #6495ed);
-    color: #fff;
-    border-color: transparent;
-    transform: scale(1);
-}
-
-.chat-swipe-pill-chevron {
-    font-size: 18px;
+.chat-swipe-chevron {
+    font-size: 22px;
     font-weight: 700;
     line-height: 1;
     flex-shrink: 0;
+    opacity: 0.9;
 }
 
-.chat-swipe-pill-name {
+.chat-swipe-name {
+    font-size: var(--font-size-sm, 13px);
+    font-weight: 600;
+    white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+    letter-spacing: 0.01em;
 }
 
 .timeline.normal {

@@ -200,8 +200,8 @@ function ensureIndicatorElement(_container: HTMLElement): HTMLElement {
     indicator = document.createElement('div');
     indicator.className = 'chat-swipe-indicator';
     indicator.innerHTML =
-      '<div class="chat-swipe-pill chat-swipe-pill-left"><span class="chat-swipe-pill-chevron">‹</span><span class="chat-swipe-pill-name"></span></div>' +
-      '<div class="chat-swipe-pill chat-swipe-pill-right"><span class="chat-swipe-pill-name"></span><span class="chat-swipe-pill-chevron">›</span></div>';
+      '<span class="chat-swipe-chevron"></span>' +
+      '<span class="chat-swipe-name"></span>';
     document.body.appendChild(indicator);
   }
   return indicator;
@@ -215,23 +215,16 @@ function showIndicator(
 ): void {
   const progress = Math.min(Math.abs(dx) / 100, 1);
   indicator.style.display = 'flex';
-  indicator.style.opacity = String(Math.min(progress * 2, 1));
+  indicator.style.opacity = String(Math.min(progress * 2.5, 1));
 
-  const leftPill = indicator.querySelector('.chat-swipe-pill-left') as HTMLElement | null;
-  const rightPill = indicator.querySelector('.chat-swipe-pill-right') as HTMLElement | null;
+  const isNext = dx < 0;
+  const target = isNext ? neighbours.next : neighbours.prev;
 
-  if (leftPill) {
-    const nameEl = leftPill.querySelector('.chat-swipe-pill-name') as HTMLElement | null;
-    if (nameEl) nameEl.textContent = neighbours.prev?.name ?? '';
-    leftPill.classList.toggle('chat-swipe-pill-active', dx > 0);
-    leftPill.style.display = neighbours.prev ? 'flex' : 'none';
-  }
-  if (rightPill) {
-    const nameEl = rightPill.querySelector('.chat-swipe-pill-name') as HTMLElement | null;
-    if (nameEl) nameEl.textContent = neighbours.next?.name ?? '';
-    rightPill.classList.toggle('chat-swipe-pill-active', dx < 0);
-    rightPill.style.display = neighbours.next ? 'flex' : 'none';
-  }
+  const chevron = indicator.querySelector('.chat-swipe-chevron') as HTMLElement | null;
+  if (chevron) chevron.textContent = isNext ? '›' : '‹';
+
+  const nameEl = indicator.querySelector('.chat-swipe-name') as HTMLElement | null;
+  if (nameEl) nameEl.textContent = target?.name ?? '';
 }
 
 function hideIndicator(indicator: HTMLElement): void {
