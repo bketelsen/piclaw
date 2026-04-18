@@ -122,6 +122,14 @@ Recovery logic (`recoverInflightRuns`):
 
 That keeps restart recovery on the same code path as an explicit reload instead of depending on a lucky post-reboot user action.
 
+### Automatic recovery markers in the web UI
+
+When a turn is recovered and eventually completes, the stored assistant message can carry a `recovery_marker` content block.
+
+The web timeline renders that as a compact `Recovered automatically` chip on the post metadata row, with the classifier exposed in the tooltip when available. If automatic recovery exhausts its retry budget and the server has to fall back to publishing the draft buffer, the final text also includes a short note explaining how many recovery attempts were made before it gave up.
+
+That means the user-facing surface is no longer a silent binary of “worked” vs “mysteriously resumed somehow” — successful recovery leaves a visible breadcrumb, and exhausted recovery leaves a more explicit failure note.
+
 ## Adaptive Card actions
 
 The web UI can render `adaptive_card` content blocks inline in timeline posts and route card actions back through the normal web channel.
@@ -180,6 +188,8 @@ The persistence model is intentionally split:
 - backend truth decides whether the compaction-related affordance is currently warranted
 - browser-local state is reserved for lightweight local UI memory such as dismissal/seen state
 
+The web shell now also restores the **last known context usage for the active chat from `localStorage`** before issuing the fresh `/agent/context` request. That gives the footer an immediate post-reload value instead of a brief blank state while the runtime is still waking up.
+
 ## Request timing / perf tracing
 
 Hot web paths now emit correlated backend timing and browser-visible request traces.
@@ -206,6 +216,17 @@ The web UI now keeps a bounded cache of recent timeline snapshots and uses nearb
 - the cache is used together with the newer refresh-coalescing/warm-session work so thread switches can often render from something fresher than a cold network round-trip
 
 This is not backend truth — it is browser-local performance state intended purely to reduce visible latency around timeline revisits and nearby-thread navigation.
+
+## Model restore across reloads
+
+Piclaw now persists the active model choice strongly enough that a runtime reload or restart can restore it on the next warm session instead of quietly dropping back to whatever happened to be convenient.
+
+There are two practical consequences:
+
+- post-reload UI state can show the last known model/context footprint immediately from browser-local memory while the backend finishes hydrating
+- session-manager/runtime restoration paths reapply the resolved provider/model when the session comes back, so a reload is less likely to feel like a personality transplant
+
+This is especially relevant for web flows that depend on quick restarts or recovery, because the restored model state now survives the same turbulence as the pending-turn recovery path.
 
 ## Scheduled tasks / IPC
 

@@ -83,7 +83,7 @@ describe("runtime startup helpers", () => {
         cmd: [
           TEST_SHELL,
           "-lc",
-          "bun -e \"import { captureStartupMemorySnapshot } from './src/runtime/startup.js'; captureStartupMemorySnapshot({ getMemoryInstrumentationSnapshot() { return { cachedMainSessions: 0, cachedSideSessions: 0, activeForkBaseLeaves: 0, activeChats: 0, sessionManager: { createInFlight: 0, branchSeedRealizationsInFlight: 0, invalidDeferredSeedErrors: 0, prewarmInFlight: 0, queuedPrewarms: 0, prewarmQueueLength: 0, prewarmCooldowns: 0 } }; } }, { label: 'post-web-start' });\"",
+          "bun -e \"import { captureStartupMemorySnapshot } from './src/runtime/startup.js'; captureStartupMemorySnapshot({ getMemoryInstrumentationSnapshot() { return { cachedMainSessions: 0, cachedSideSessions: 0, activeForkBaseLeaves: 0, activeChats: 0, sessionManager: { createInFlight: 0, branchSeedRealizationsInFlight: 0, invalidDeferredSeedErrors: 0, prewarmInFlight: 0, queuedPrewarms: 0, prewarmQueueLength: 0, prewarmCooldowns: 0 }, recovery: { attemptsTotal: 0, recoveredRuns: 0, exhaustedRuns: 0 } }; } }, { label: 'post-web-start' });\"",
         ],
         cwd: RUNTIME_DIR,
         env: {
@@ -117,6 +117,9 @@ describe("runtime startup helpers", () => {
         queued_prewarms: 0,
         prewarm_queue_length: 0,
         prewarm_cooldowns: 0,
+        recovery_attempts_total: 0,
+        recovery_recovered_runs: 0,
+        recovery_exhausted_runs: 0,
       });
     } finally {
       ws.cleanup();

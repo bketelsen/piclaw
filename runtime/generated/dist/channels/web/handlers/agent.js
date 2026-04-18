@@ -163,7 +163,7 @@ function buildRecoveryExhaustedCard(turnId, threadId, attemptsUsed, classifier) 
         },
     };
 }
-function summarizeCommandStatusTitle(message, fallback = "Command failed") {
+export function summarizeCommandStatusTitle(message, fallback = "Command failed") {
     const raw = typeof message === "string" ? message.trim() : "";
     if (!raw)
         return fallback;

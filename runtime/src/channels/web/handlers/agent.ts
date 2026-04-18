@@ -202,7 +202,7 @@ function buildRecoveryExhaustedCard(turnId: string, threadId: number | null | un
   };
 }
 
-function summarizeCommandStatusTitle(message: unknown, fallback = "Command failed"): string {
+export function summarizeCommandStatusTitle(message: unknown, fallback = "Command failed"): string {
   const raw = typeof message === "string" ? message.trim() : "";
   if (!raw) return fallback;
   const unfenced = stripMarkdownCodeFenceMarkers(raw);

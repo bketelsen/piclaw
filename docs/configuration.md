@@ -21,6 +21,7 @@ This document covers all `piclaw` configuration options: environment variables, 
 | `PICLAW_WEB_TERMINAL_ENABLED` | `1` on Linux/macOS, `0` on Windows | Enable or disable the authenticated web terminal backend/pane |
 | `PICLAW_WEB_VNC_TARGETS` | _(empty)_ | JSON allowlist for VNC targets (or use `PICLAW_VNC_TARGETS`). Supports array or object form. |
 | `PICLAW_WEB_VNC_ALLOW_DIRECT` | `1` on Linux/macOS/Windows | Allow or disable direct VNC targets supplied at runtime (`PICLAW_VNC_ALLOW_DIRECT` alias) |
+| `PICLAW_WEB_NOTIFICATION_DEBUG_LABELS` | `0` | Append `[Local]` / `[Web Push]` markers to notification titles for delivery debugging |
 | `PICLAW_WEB_TLS_CERT` | _(empty)_ | Path to TLS certificate; enables HTTPS |
 | `PICLAW_WEB_TLS_KEY` | _(empty)_ | Path to TLS private key; enables HTTPS |
 | `PICLAW_WEB_MAX_CONTENT_CHARS` | `262144` | Max message size in characters; oversized messages are truncated with metadata |
@@ -63,6 +64,18 @@ Or in `.piclaw/config.json`:
 When direct-connect is disabled and no saved targets exist, the VNC pane now shows an explicit empty-state message instead of suggesting a direct connection path that the host will reject anyway.
 
 CLI overrides: `piclaw --port`, `--host`, `--idle-timeout`, `--tls-cert`, `--tls-key`.
+
+### Notification delivery debug labels
+
+By default, PiClaw keeps browser-local notifications and service-worker Web Push titles clean.
+
+If you want explicit source markers while validating delivery routing, set:
+
+```bash
+PICLAW_WEB_NOTIFICATION_DEBUG_LABELS=1
+```
+
+That appends labels like `[Local]` and `[Web Push]` to notification titles so local-vs-push behavior can be checked without digging through logs first.
 
 ### Reverse proxy / tunnel deployments
 

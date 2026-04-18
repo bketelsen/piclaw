@@ -369,6 +369,7 @@ const groupDefinitions: GroupDefinition[] = [
           "btw.test.ts",
           "compose-model-refresh.test.ts",
           "chat-window.test.ts",
+          "chat-swipe-navigation.test.ts",
           "compose-box.test.ts",
           "compose-layout.test.ts",
           "compose-session-switcher.test.ts",

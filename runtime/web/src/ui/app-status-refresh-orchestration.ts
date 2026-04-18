@@ -20,8 +20,10 @@ export function persistContextUsage(chatJid: string, payload: unknown): void {
   if (data.percent == null) return;
   try {
     setLocalStorageItem(CONTEXT_STORAGE_PREFIX + chatJid, JSON.stringify(payload));
-  } catch {
-    // ignore
+  } catch (error) {
+    console.debug('[app-status-refresh] Ignoring best-effort context usage persistence failure.', error, {
+      chatJid,
+    });
   }
 }
 
