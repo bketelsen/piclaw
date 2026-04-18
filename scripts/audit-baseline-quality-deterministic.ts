@@ -366,6 +366,7 @@ const groupDefinitions: GroupDefinition[] = [
           "compose-box.test.ts",
           "compose-layout.test.ts",
           "compose-session-switcher.test.ts",
+          "connection-status.test.ts",
           "session-tree-widget.test.ts",
           "use-timeline.test.ts",
           "mobile-viewport.test.ts",
