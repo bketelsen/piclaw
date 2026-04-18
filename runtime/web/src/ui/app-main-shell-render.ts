@@ -1,7 +1,5 @@
 import { html } from '../vendor/preact-htm.js';
 import { ComposeBox, QueuedFollowupStack } from '../components/compose-box.js';
-import { isLikelySafariBrowser } from './app-pane-runtime-orchestration.js';
-import { isEligibleChatSwipeTarget, resetChatSwipeTouchState, resolveAdjacentSwipeChatJid, shouldTriggerTouchChatSwipe } from './chat-swipe-navigation.js';
 import { OobePanel } from '../components/oobe-panel.js';
 import { BtwPanel } from '../components/btw-panel.js';
 import { FloatingWidgetPane } from '../components/floating-widget-pane.js';
@@ -142,8 +140,6 @@ export function renderMainShell(options: MainShellRenderOptions): any {
     toggleZenMode,
     handlePopOutPane,
     isWebAppMode,
-    chatSwipeTouchStateRef,
-    chatSwipeWheelStateRef,
     editorContainerRef,
     editorInstanceRef,
     detachedTabs,
@@ -263,90 +259,6 @@ export function renderMainShell(options: MainShellRenderOptions): any {
   const handleComposeFocus = () => {
     if (isIOSDevice()) return;
     scrollToBottom();
-  };
-
-  const handleChatSurfaceBranchSwitch = (direction: 'next' | 'prev') => {
-    const nextChatJid = resolveAdjacentSwipeChatJid({
-      candidates: activeChatAgents,
-      currentChatJid,
-      direction,
-    });
-    if (nextChatJid) {
-      handleBranchPickerChange(nextChatJid);
-    }
-  };
-
-  const handleChatSurfaceTouchStart = (event: any) => {
-    const state = chatSwipeTouchStateRef?.current;
-    if (!state) return;
-    resetChatSwipeTouchState(state);
-    if (!isIOSDevice?.()) return;
-    if (event?.touches?.length !== 1) return;
-    if (!isEligibleChatSwipeTarget(event?.target)) return;
-    const touch = event.touches[0];
-    if (!touch) return;
-    state.active = true;
-    state.startX = touch.clientX;
-    state.startY = touch.clientY;
-    state.lastX = touch.clientX;
-    state.lastY = touch.clientY;
-    state.startedAt = Date.now();
-  };
-
-  const handleChatSurfaceTouchMove = (event: any) => {
-    const state = chatSwipeTouchStateRef?.current;
-    if (!state?.active || state.cancelled) return;
-    const touch = event?.touches?.[0];
-    if (!touch) return;
-    state.lastX = touch.clientX;
-    state.lastY = touch.clientY;
-    const dx = state.lastX - state.startX;
-    const dy = state.lastY - state.startY;
-    if (!state.horizontalLocked) {
-      if (Math.abs(dy) > 16 && Math.abs(dy) >= Math.abs(dx)) {
-        state.cancelled = true;
-        return;
-      }
-      if (Math.abs(dx) > 12 && Math.abs(dx) > Math.abs(dy) * 1.15) {
-        state.horizontalLocked = true;
-      }
-    }
-    if (state.horizontalLocked && event?.cancelable) {
-      event.preventDefault();
-    }
-  };
-
-  const handleChatSurfaceTouchEnd = () => {
-    const state = chatSwipeTouchStateRef?.current;
-    if (!state?.active) return;
-    const dx = state.lastX - state.startX;
-    const dy = state.lastY - state.startY;
-    const elapsedMs = Date.now() - state.startedAt;
-    const shouldNavigate = !state.cancelled && shouldTriggerTouchChatSwipe({ dx, dy, elapsedMs });
-    resetChatSwipeTouchState(state);
-    if (!shouldNavigate) return;
-    handleChatSurfaceBranchSwitch(dx < 0 ? 'next' : 'prev');
-  };
-
-  const handleChatSurfaceTouchCancel = () => {
-    resetChatSwipeTouchState(chatSwipeTouchStateRef?.current);
-  };
-
-  const handleChatSurfaceWheel = (event: any) => {
-    const state = chatSwipeWheelStateRef?.current;
-    if (!state) return;
-    if (isIOSDevice?.()) return;
-    if (!isLikelySafariBrowser()) return;
-    if (!isEligibleChatSwipeTarget(event?.target)) return;
-    const deltaX = Number(event?.deltaX || 0);
-    const deltaY = Number(event?.deltaY || 0);
-    if (!Number.isFinite(deltaX) || Math.abs(deltaX) < 72) return;
-    if (Math.abs(deltaX) <= Math.abs(deltaY) * 1.35) return;
-    if (event?.cancelable) event.preventDefault();
-    const now = Date.now();
-    if (now - state.lastTriggeredAt < 450) return;
-    state.lastTriggeredAt = now;
-    handleChatSurfaceBranchSwitch(deltaX > 0 ? 'next' : 'prev');
   };
 
   return html`
@@ -608,11 +520,6 @@ export function renderMainShell(options: MainShellRenderOptions): any {
           reverse=${isMainTimelineView}
           removingPostIds=${removingPostIds}
           searchQuery=${searchQuery}
-          onTouchStart=${handleChatSurfaceTouchStart}
-          onTouchMove=${handleChatSurfaceTouchMove}
-          onTouchEnd=${handleChatSurfaceTouchEnd}
-          onTouchCancel=${handleChatSurfaceTouchCancel}
-          onWheel=${handleChatSurfaceWheel}
         />
         <${AgentStatus}
           status=${isCompactionStatus(agentStatus) ? null : agentStatus}

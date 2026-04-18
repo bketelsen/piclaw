@@ -20,6 +20,43 @@
     flex-direction: column-reverse;
 }
 
+/* Swipe navigation indicator */
+.chat-swipe-indicator {
+    display: none;
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    width: 36px;
+    z-index: 90;
+    align-items: center;
+    justify-content: center;
+    pointer-events: none;
+    background: linear-gradient(
+        to right,
+        var(--swipe-indicator-bg, rgba(var(--accent-rgb, 100, 149, 237), 0.18)),
+        transparent
+    );
+    transition: opacity 0.12s ease-out;
+}
+
+.chat-swipe-indicator[style*="right: 0"] {
+    background: linear-gradient(
+        to left,
+        var(--swipe-indicator-bg, rgba(var(--accent-rgb, 100, 149, 237), 0.18)),
+        transparent
+    );
+}
+
+.chat-swipe-chevron {
+    font-size: 28px;
+    font-weight: 700;
+    line-height: 1;
+    color: var(--accent, #6495ed);
+    opacity: 0.85;
+    text-shadow: 0 0 6px rgba(var(--accent-rgb, 100, 149, 237), 0.35);
+    transition: transform 0.1s ease-out;
+}
+
 .timeline.normal {
     flex-direction: column;
 }

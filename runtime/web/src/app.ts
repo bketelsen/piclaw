@@ -55,6 +55,10 @@ import {
     handleOpenWorkspaceFileBrowserRequest,
 } from './ui/app-extension-ui-browser-actions.js';
 import {
+    attachChatSwipeNavigation,
+} from './ui/chat-swipe-navigation.js';
+import { isLikelySafariBrowser } from './ui/app-pane-runtime-orchestration.js';
+import {
     OOBE_PROVIDER_MISSING_DISMISSED_KEY,
     OOBE_PROVIDER_READY_COMPLETED_KEY,
     resolveOobePanelState,
@@ -469,6 +473,18 @@ function MainApp({ locationParams, navigate }) {
             readStoredNumber: getLocalStorageNumber,
         },
     });
+
+    /* ── chat swipe navigation (native touch listeners) ── */
+    useEffect(() => {
+        return attachChatSwipeNavigation({
+            timelineRef: surface.timelineRef,
+            activeChatAgents: surface.activeChatAgents,
+            currentChatJid,
+            onSwitch: (nextChatJid) => branchPaneActions.handleBranchPickerChange(nextChatJid),
+            isIOSDevice,
+            isLikelySafari: isLikelySafariBrowser,
+        });
+    }, [surface.timelineRef, surface.activeChatAgents, currentChatJid, branchPaneActions.handleBranchPickerChange]);
 
     const oobePanelState = useMemo(() => resolveOobePanelState({
         panePopoutMode,

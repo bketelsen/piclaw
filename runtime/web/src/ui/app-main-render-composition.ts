@@ -95,8 +95,6 @@ export function composeRenderedMainAppOptions(input: {
       renameBranchDraftState: input.surface.renameBranchDraftState,
       isRenamingBranch: input.surface.isRenamingBranch,
       isWebAppMode: input.surface.isWebAppMode,
-      chatSwipeTouchStateRef: input.surface.chatSwipeTouchStateRef,
-      chatSwipeWheelStateRef: input.surface.chatSwipeWheelStateRef,
       TERMINAL_TAB_PATH: input.helpers.terminalTabPath,
       isIOSDevice: input.helpers.isIOSDevice,
       currentBranchRecord: input.surface.currentBranchRecord,

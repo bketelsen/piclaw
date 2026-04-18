@@ -56,34 +56,35 @@ export function resetChatSwipeTouchState(state: ChatSwipeTargetState | null | un
   state.startedAt = 0;
 }
 
+const INTERACTIVE_SELECTOR = [
+  'input',
+  'textarea',
+  'select',
+  'button',
+  'label',
+  'a',
+  '[contenteditable="true"]',
+  '[role="button"]',
+  '[data-no-chat-swipe]',
+  '.compose-box',
+  '.compose-model-popup',
+  '.compose-session-popup',
+  '.workspace-explorer',
+  '.editor-pane-container',
+  '.dock-panel',
+  '.terminal-pane-content',
+  '.attachment-preview-modal',
+  '.rename-branch-overlay',
+  '.agent-request-modal',
+  '.adaptive-card-container input',
+  '.adaptive-card-container textarea',
+  '.adaptive-card-container select',
+  '.adaptive-card-container button',
+].join(', ');
+
 export function isEligibleChatSwipeTarget(target: unknown): boolean {
   if (!target || !hasClosest(target)) return false;
-  const interactiveSelector = [
-    'input',
-    'textarea',
-    'select',
-    'button',
-    'label',
-    'a',
-    '[contenteditable="true"]',
-    '[role="button"]',
-    '[data-no-chat-swipe]',
-    '.compose-box',
-    '.compose-model-popup',
-    '.compose-session-popup',
-    '.workspace-explorer',
-    '.editor-pane-container',
-    '.dock-panel',
-    '.terminal-pane-content',
-    '.attachment-preview-modal',
-    '.rename-branch-overlay',
-    '.agent-request-modal',
-    '.adaptive-card-container input',
-    '.adaptive-card-container textarea',
-    '.adaptive-card-container select',
-    '.adaptive-card-container button',
-  ].join(', ');
-  return !target.closest(interactiveSelector);
+  return !target.closest(INTERACTIVE_SELECTOR);
 }
 
 export function resolveSwipeableChatAgents(candidates: unknown, currentChatJid: string): string[] {
@@ -136,4 +137,209 @@ export function shouldTriggerTouchChatSwipe(options: {
   return Math.abs(options.dx) >= minDistancePx
     && Math.abs(options.dx) > Math.abs(options.dy) * axisRatio
     && options.elapsedMs <= maxElapsedMs;
+}
+
+/* ────────────────────────────────────────────────────────────────────────────
+ * Visual swipe indicator
+ * ──────────────────────────────────────────────────────────────────────────── */
+
+function ensureIndicatorElement(container: HTMLElement): HTMLElement {
+  let indicator = container.querySelector('.chat-swipe-indicator') as HTMLElement | null;
+  if (!indicator) {
+    indicator = document.createElement('div');
+    indicator.className = 'chat-swipe-indicator';
+    indicator.innerHTML = '<span class="chat-swipe-chevron"></span>';
+    container.appendChild(indicator);
+  }
+  return indicator;
+}
+
+function showIndicator(indicator: HTMLElement, dx: number, containerWidth: number): void {
+  const progress = Math.min(Math.abs(dx) / 120, 1);
+  const side = dx < 0 ? 'right' : 'left';
+  const otherSide = dx < 0 ? 'left' : 'right';
+  indicator.style.display = 'flex';
+  indicator.style[side as any] = '0';
+  indicator.style[otherSide as any] = 'auto';
+  indicator.style.opacity = String(Math.min(progress * 1.2, 1));
+  const chevron = indicator.querySelector('.chat-swipe-chevron') as HTMLElement | null;
+  if (chevron) {
+    chevron.textContent = dx < 0 ? '›' : '‹';
+    chevron.style.transform = `translateX(${dx < 0 ? -1 : 1}px) scale(${0.7 + progress * 0.3})`;
+  }
+}
+
+function hideIndicator(indicator: HTMLElement): void {
+  indicator.style.display = 'none';
+  indicator.style.opacity = '0';
+}
+
+/* ────────────────────────────────────────────────────────────────────────────
+ * Native-listener hook for chat swipe navigation
+ *
+ * Attaches touchstart/touchmove/touchend/touchcancel as native (non-passive)
+ * event listeners on the timeline DOM element. Preact synthetic events are
+ * passive on iOS scroll containers, so they cannot preventDefault and the
+ * browser's own scroll/back-swipe gesture wins.
+ * ──────────────────────────────────────────────────────────────────────────── */
+
+export interface UseChatSwipeNavigationOptions {
+  /** Ref whose `.current` is the timeline DOM element. */
+  timelineRef: { current: HTMLElement | null };
+  /** Full agent list (active + current). */
+  activeChatAgents: ChatSwipeCandidate[];
+  /** Current chat jid. */
+  currentChatJid: string;
+  /** Called with the next chat_jid to switch to. */
+  onSwitch: (nextChatJid: string) => void;
+  /** Return true when the device is iOS/iPadOS. */
+  isIOSDevice: () => boolean;
+  /** Return true for macOS Safari (trackpad wheel). */
+  isLikelySafari?: () => boolean;
+}
+
+/**
+ * Imperative setup — call from a useEffect. Returns a cleanup function.
+ */
+export function attachChatSwipeNavigation(options: UseChatSwipeNavigationOptions): () => void {
+  const {
+    timelineRef,
+    activeChatAgents,
+    currentChatJid,
+    onSwitch,
+    isIOSDevice: checkIOS,
+    isLikelySafari,
+  } = options;
+
+  const el = timelineRef.current;
+  if (!el) return () => {};
+
+  const isIOS = checkIOS();
+  const isSafari = typeof isLikelySafari === 'function' ? isLikelySafari() : false;
+
+  if (!isIOS && !isSafari) return () => {};
+
+  const state = createChatSwipeTouchState();
+  const wheelState = createChatSwipeWheelState();
+  let indicator: HTMLElement | null = null;
+
+  function getIndicator(): HTMLElement {
+    if (!indicator) {
+      // attach to the timeline's parent (.container) so it overlays correctly
+      const host = el!.parentElement ?? el!;
+      indicator = ensureIndicatorElement(host);
+    }
+    return indicator;
+  }
+
+  function doSwitch(direction: 'next' | 'prev') {
+    const nextChatJid = resolveAdjacentSwipeChatJid({
+      candidates: activeChatAgents,
+      currentChatJid,
+      direction,
+    });
+    if (nextChatJid) onSwitch(nextChatJid);
+  }
+
+  /* ── touch handlers (iOS) ── */
+
+  function onTouchStart(event: TouchEvent) {
+    resetChatSwipeTouchState(state);
+    if (!isIOS) return;
+    if (event.touches.length !== 1) return;
+    if (!isEligibleChatSwipeTarget(event.target)) return;
+    const touch = event.touches[0];
+    state.active = true;
+    state.startX = touch.clientX;
+    state.startY = touch.clientY;
+    state.lastX = touch.clientX;
+    state.lastY = touch.clientY;
+    state.startedAt = Date.now();
+  }
+
+  function onTouchMove(event: TouchEvent) {
+    if (!state.active || state.cancelled) return;
+    const touch = event.touches[0];
+    if (!touch) return;
+    state.lastX = touch.clientX;
+    state.lastY = touch.clientY;
+    const dx = state.lastX - state.startX;
+    const dy = state.lastY - state.startY;
+
+    if (!state.horizontalLocked) {
+      // If vertical motion dominates early, cancel the swipe
+      if (Math.abs(dy) > 16 && Math.abs(dy) >= Math.abs(dx)) {
+        state.cancelled = true;
+        hideIndicator(getIndicator());
+        return;
+      }
+      // Lock to horizontal once we have a clear horizontal bias
+      if (Math.abs(dx) > 12 && Math.abs(dx) > Math.abs(dy) * 1.15) {
+        state.horizontalLocked = true;
+      }
+    }
+
+    if (state.horizontalLocked) {
+      // Prevent vertical scroll while swiping horizontally
+      if (event.cancelable) event.preventDefault();
+      showIndicator(getIndicator(), dx, el!.clientWidth);
+    }
+  }
+
+  function onTouchEnd() {
+    if (!state.active) return;
+    const dx = state.lastX - state.startX;
+    const dy = state.lastY - state.startY;
+    const elapsedMs = Date.now() - state.startedAt;
+    const shouldNavigate = !state.cancelled && shouldTriggerTouchChatSwipe({ dx, dy, elapsedMs });
+
+    hideIndicator(getIndicator());
+    resetChatSwipeTouchState(state);
+    if (shouldNavigate) {
+      doSwitch(dx < 0 ? 'next' : 'prev');
+    }
+  }
+
+  function onTouchCancel() {
+    hideIndicator(getIndicator());
+    resetChatSwipeTouchState(state);
+  }
+
+  /* ── wheel handler (macOS Safari trackpad) ── */
+
+  function onWheel(event: WheelEvent) {
+    if (isIOS) return;
+    if (!isSafari) return;
+    if (!isEligibleChatSwipeTarget(event.target)) return;
+    const deltaX = event.deltaX;
+    const deltaY = event.deltaY;
+    if (!Number.isFinite(deltaX) || Math.abs(deltaX) < 72) return;
+    if (Math.abs(deltaX) <= Math.abs(deltaY) * 1.35) return;
+    if (event.cancelable) event.preventDefault();
+    const now = Date.now();
+    if (now - wheelState.lastTriggeredAt < 450) return;
+    wheelState.lastTriggeredAt = now;
+    doSwitch(deltaX > 0 ? 'next' : 'prev');
+  }
+
+  /* ── attach listeners ── */
+
+  el.addEventListener('touchstart', onTouchStart, { passive: true });
+  el.addEventListener('touchmove', onTouchMove, { passive: false });
+  el.addEventListener('touchend', onTouchEnd, { passive: true });
+  el.addEventListener('touchcancel', onTouchCancel, { passive: true });
+  el.addEventListener('wheel', onWheel, { passive: false });
+
+  return () => {
+    el.removeEventListener('touchstart', onTouchStart);
+    el.removeEventListener('touchmove', onTouchMove);
+    el.removeEventListener('touchend', onTouchEnd);
+    el.removeEventListener('touchcancel', onTouchCancel);
+    el.removeEventListener('wheel', onWheel);
+    if (indicator) {
+      hideIndicator(indicator);
+      indicator.remove();
+      indicator = null;
+    }
+  };
 }

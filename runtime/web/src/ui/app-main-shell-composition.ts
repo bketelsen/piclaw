@@ -71,8 +71,6 @@ export function composeMainAppShellOptions(input: ComposeMainAppShellOptionsInpu
     showEditorPaneContainer: paneRuntime.showEditorPaneContainer,
     toggleZenMode: paneRuntime.toggleZenMode,
     isWebAppMode: shellState.isWebAppMode,
-    chatSwipeTouchStateRef: shellState.chatSwipeTouchStateRef,
-    chatSwipeWheelStateRef: shellState.chatSwipeWheelStateRef,
     editorContainerRef: paneRuntime.editorContainerRef,
     editorInstanceRef: paneRuntime.editorInstanceRef,
     dockContainerRef: paneRuntime.dockContainerRef,

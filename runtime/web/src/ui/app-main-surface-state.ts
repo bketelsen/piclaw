@@ -148,8 +148,6 @@ export function useMainAppSurfaceState(options: {
   const renameBranchInFlightRef = useRef(false);
   const [isRenamingBranch, setIsRenamingBranch] = useState(false);
   const renameBranchLockUntilRef = useRef(0);
-  const chatSwipeTouchStateRef = useRef({ active: false, horizontalLocked: false, cancelled: false, startX: 0, startY: 0, lastX: 0, lastY: 0, startedAt: 0 });
-  const chatSwipeWheelStateRef = useRef({ lastTriggeredAt: 0, accumX: 0 });
   const [isRenameBranchFormOpen, setIsRenameBranchFormOpen] = useState(false);
   const [renameBranchNameDraft, setRenameBranchNameDraft] = useState('');
   const renameBranchDraftState = useMemo(
@@ -263,8 +261,6 @@ export function useMainAppSurfaceState(options: {
     isRenamingBranch,
     setIsRenamingBranch,
     renameBranchLockUntilRef,
-    chatSwipeTouchStateRef,
-    chatSwipeWheelStateRef,
     isRenameBranchFormOpen,
     setIsRenameBranchFormOpen,
     renameBranchNameDraft,
