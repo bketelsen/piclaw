@@ -496,9 +496,12 @@ export class AgentRuntimeFacade {
             : Boolean(session?.model?.reasoning ?? currentModelOption?.reasoning);
         const providerUsage = session?.model?.provider
             ? (peekProviderUsage(session.model.provider, { allowStale: true }) ?? null)
-            : null;
-        if (session?.model?.provider) {
-            void warmProviderUsage(this.options.authStorage, session.model.provider);
+            : currentModelOption?.provider
+                ? (peekProviderUsage(currentModelOption.provider, { allowStale: true }) ?? null)
+                : null;
+        const activeProvider = session?.model?.provider ?? currentModelOption?.provider ?? null;
+        if (activeProvider) {
+            void warmProviderUsage(this.options.authStorage, activeProvider);
         }
         const thinkingProvider = session?.model?.provider ?? currentModelOption?.provider ?? null;
         const thinkingLevelLabel = thinkingLevel && thinkingProvider
