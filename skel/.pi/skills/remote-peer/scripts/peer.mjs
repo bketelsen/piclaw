@@ -16,7 +16,8 @@
  *   PICLAW_STORE     — piclaw store dir (default: /workspace/.piclaw/store)
  */
 
-import { readFileSync } from "fs";
+import { readFileSync, mkdirSync, writeFileSync } from "fs";
+import { join } from "path";
 import { createHash, createPrivateKey, sign } from "crypto";
 import { Database } from "bun:sqlite";
 
@@ -106,7 +107,7 @@ async function sendToPeer(peer, prompt) {
       "X-Sig-Version": "v1",
       "X-Signature": signature,
       "X-Trust-Epoch": String(peer.trust_epoch),
-      "X-Request-Hop": "1",
+      "X-Request-Hop": "0",
     },
     body,
   });
@@ -185,36 +186,117 @@ function cmdPending() {
   }
 }
 
-function cmdDecide(id, verdict) {
+/**
+ * Write an IPC task file to trigger proposal execution via the agent pool.
+ * This mirrors what `/pair approve` does in the runtime.
+ */
+function writeExecuteProposalIpc(proposalId) {
+  const dir = join(DATA_DIR, "ipc", "tasks");
+  mkdirSync(dir, { recursive: true });
+  const payload = JSON.stringify({ type: "execute_proposal", proposal_id: proposalId });
+  writeFileSync(join(dir, `proposal-${proposalId}-${Date.now()}.json`), payload);
+}
+
+/**
+ * Push a signed rejection callback to the requesting peer's /api/remote/result endpoint.
+ * Best-effort — failures are logged but don't block the local decision.
+ */
+async function pushRejectionCallback(db, proposal, reason) {
+  const peer = db.query("SELECT * FROM remote_peers WHERE instance_id = ? AND status = 'paired'").get(proposal.peer_instance_id);
+  if (!peer?.base_url) return;
+
+  const identity = loadIdentity();
+  const endpoint = "/api/remote/result";
+  const body = JSON.stringify({
+    negotiation_id: proposal.id,
+    decision: "deny",
+    reason: reason || "Rejected by operator.",
+  });
+  const bodyBytes = new TextEncoder().encode(body);
+  const timestamp = new Date().toISOString();
+  const nonce = `nonce-${crypto.randomUUID().replace(/-/g, "")}`;
+
+  const canonical = buildCanonical({
+    method: "POST", path: endpoint, contentType: "application/json",
+    bodyHash: hashBody(bodyBytes), timestamp, nonce,
+    instanceId: identity.instance_id, trustEpoch: peer.trust_epoch,
+  });
+  const signature = signPayload(identity, canonical);
+
+  try {
+    await fetch(`${peer.base_url.replace(/\/$/, "")}${endpoint}`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Instance-Id": identity.instance_id,
+        "X-Timestamp": timestamp,
+        "X-Nonce": nonce,
+        "X-Sig-Version": "v1",
+        "X-Signature": signature,
+        "X-Trust-Epoch": String(peer.trust_epoch),
+        "X-Request-Hop": "0",
+      },
+      body,
+    });
+  } catch (err) {
+    console.warn(`  (could not notify peer: ${err.message})`);
+  }
+}
+
+async function cmdDecide(id, verdict) {
   if (!id || !["accept", "reject"].includes(verdict)) {
     console.error("Usage: peer.mjs decide <request-id> accept|reject");
     process.exit(1);
   }
-  const db     = openDb();
-  const status = verdict === "accept" ? "accepted" : "rejected";
-  const result = db.run(
-    "UPDATE remote_requests SET status = ?, decision = ? WHERE id = ? AND status = 'pending'",
-    [status, status, id]
-  );
-  if (result.changes === 0) {
+  const db = openDb();
+  const proposal = db.query("SELECT * FROM remote_requests WHERE id = ? AND status = 'pending'").get(id);
+  if (!proposal) {
     console.log(`No pending request found with id "${id}".`);
+    return;
+  }
+
+  if (verdict === "accept") {
+    // Write IPC task file so the runtime executes the proposal via the agent pool.
+    // The runtime's IPC watcher will pick this up and call executeApprovedProposal.
+    writeExecuteProposalIpc(id);
+    console.log(`Request ${id} → queued for execution.`);
   } else {
-    console.log(`Request ${id} → ${status}.`);
+    // Reject: update DB and push rejection callback to the requesting peer.
+    db.run(
+      "UPDATE remote_requests SET status = ?, decision = ?, error = ? WHERE id = ?",
+      ["rejected", "rejected", "Rejected by operator.", id]
+    );
+    await pushRejectionCallback(db, proposal);
+    console.log(`Request ${id} → rejected.`);
   }
 }
 
-function cmdDecideAll(verdict) {
+async function cmdDecideAll(verdict) {
   if (!["accept", "reject"].includes(verdict)) {
     console.error("Usage: peer.mjs decide-all accept|reject");
     process.exit(1);
   }
-  const db     = openDb();
-  const status = verdict === "accept" ? "accepted" : "rejected";
-  const result = db.run(
-    "UPDATE remote_requests SET status = ?, decision = ? WHERE status = 'pending'",
-    [status, status]
-  );
-  console.log(`${result.changes} request(s) → ${status}.`);
+  const db = openDb();
+  const rows = db.query("SELECT * FROM remote_requests WHERE status = 'pending'").all();
+  if (!rows.length) {
+    console.log("No pending requests.");
+    return;
+  }
+
+  let count = 0;
+  for (const proposal of rows) {
+    if (verdict === "accept") {
+      writeExecuteProposalIpc(proposal.id);
+    } else {
+      db.run(
+        "UPDATE remote_requests SET status = ?, decision = ?, error = ? WHERE id = ?",
+        ["rejected", "rejected", "Rejected by operator.", proposal.id]
+      );
+      await pushRejectionCallback(db, proposal);
+    }
+    count++;
+  }
+  console.log(`${count} request(s) → ${verdict === "accept" ? "queued for execution" : "rejected"}.`);
 }
 
 // ---------------------------------------------------------------------------
@@ -226,8 +308,8 @@ switch (cmd) {
   case "list":        cmdList();                          break;
   case "send":        await cmdSend(args[0], args.slice(1).join(" ")); break;
   case "pending":     cmdPending();                       break;
-  case "decide":      cmdDecide(args[0], args[1]);        break;
-  case "decide-all":  cmdDecideAll(args[0]);              break;
+  case "decide":      await cmdDecide(args[0], args[1]);  break;
+  case "decide-all":  await cmdDecideAll(args[0]);        break;
   default:
     console.log("Commands: list | send <peer> <prompt> | pending | decide <id> accept|reject | decide-all accept|reject");
     process.exit(1);
