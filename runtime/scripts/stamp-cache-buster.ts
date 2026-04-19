@@ -33,8 +33,11 @@ function computeBundleContentHash(): string {
   for (const file of bundleFiles) {
     try {
       hash.update(readFileSync(file));
-    } catch {
-      // File may not exist in minimal builds; skip.
+    } catch (e) {
+      // File may not exist in minimal builds; skip but log if unexpected.
+      if (existsSync(file)) {
+        console.warn(`[cache-buster] failed to read ${file}: ${e instanceof Error ? e.message : e}`);
+      }
     }
   }
   return hash.digest("hex").slice(0, 12);
