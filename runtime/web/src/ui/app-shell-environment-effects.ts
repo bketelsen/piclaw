@@ -218,7 +218,7 @@ export function useAppShellEnvironmentEffects(options: UseAppShellEnvironmentEff
       brandingRef.current.title = title;
     }
 
-    const favicon = document.getElementById('dynamic-favicon');
+    const favicon = document.getElementById('dynamic-favicon') as HTMLLinkElement | null;
     if (!favicon) return;
 
     const defaultHref = favicon.getAttribute('data-default') || favicon.getAttribute('href') || '/favicon.ico';
@@ -228,14 +228,23 @@ export function useAppShellEnvironmentEffects(options: UseAppShellEnvironmentEff
       const cacheBust = avatarUrl
         ? `${baseHref}${baseHref.includes('?') ? '&' : '?'}v=${avatarVersion || Date.now()}`
         : baseHref;
-      // Safari ignores href changes on existing <link rel="icon"> elements.
-      // Replace the node entirely so Safari picks up the new favicon.
-      const replacement = document.createElement('link');
-      replacement.id = 'dynamic-favicon';
-      replacement.rel = 'icon';
-      replacement.setAttribute('data-default', defaultHref);
-      replacement.href = cacheBust;
-      favicon.parentNode?.replaceChild(replacement, favicon);
+      // Update the existing node first (works in Chrome/Edge/Firefox).
+      favicon.href = cacheBust;
+      // Safari aggressively caches favicons and often ignores href changes.
+      // Force a re-evaluation by briefly removing and re-appending the node.
+      // Wrapped in rAF so the removal and re-insert happen in separate
+      // microtask/paint cycles, which Safari needs to notice the change.
+      const parent = favicon.parentNode;
+      if (parent) {
+        requestAnimationFrame(() => {
+          try {
+            parent.removeChild(favicon);
+            // Safari needs a forced style recalc between remove and re-add
+            void (document.head || document.documentElement).offsetHeight;
+            parent.appendChild(favicon);
+          } catch { /* node already moved / disposed */ }
+        });
+      }
       brandingRef.current.avatarBase = avatarKey;
     }
   }, [brandingRef]);
