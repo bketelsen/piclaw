@@ -435,6 +435,17 @@ Outputs:
 
 ## Updates
 
+### 2026-04-19 — Slices 7–8 implemented
+- Slice 7: fonts approved and vendored (IBM Plex Sans + JetBrains Mono Nerd Font Mono)
+- Slice 8: cross-reference pass complete — all 9 visual-artifact-producing skills
+  now reference the visual-artifact-generator and visual-design skills:
+  - visual-design, azure-cost-chart, azure-metrics-chart, azure-subscription-diagram,
+    graphite-power-chart, token-chart, adaptive-cards-authoring, situate-daily-notes,
+    kanban-management
+- Also fixed widget CSP (`font-src 'self'`) and confirmed font loading in
+  interactive dashboard widgets.
+- Next: Slice 9 (ship + validate end to end).
+
 ### 2026-04-19 — Slices 1–6a implemented
 - Shipped all command/prompt templates:
   - `commands/generate-web-diagram.md` (Slice 1 — architecture/system explainer)
