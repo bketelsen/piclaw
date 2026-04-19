@@ -246,6 +246,26 @@ export async function buildAvatarResponse(kind, source, req) {
     const file = Bun.file(meta.file);
     if (!(await file.exists()))
         return null;
+    // Support ?format=png for favicon use — Safari cannot render WebP favicons.
+    const url = new URL(req.url, "http://localhost");
+    const wantsPng = url.searchParams.get("format") === "png" && (meta.contentType === "image/webp" || meta.file.endsWith(".webp"));
+    if (wantsPng) {
+        try {
+            const sharp = (await import("sharp")).default;
+            const pngBuf = await sharp(meta.file).png().toBuffer();
+            return new Response(new Uint8Array(pngBuf), {
+                status: 200,
+                headers: {
+                    "Content-Type": "image/png",
+                    "Content-Length": String(pngBuf.byteLength),
+                    "Cache-Control": "no-cache",
+                },
+            });
+        }
+        catch {
+            // sharp unavailable — fall through to original format
+        }
+    }
     const size = file.size ?? 0;
     const headers = {
         "Content-Type": meta.contentType || "application/octet-stream",

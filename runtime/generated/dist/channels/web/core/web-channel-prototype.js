@@ -350,6 +350,11 @@ export function installWebChannelPrototype(target, defaults) {
             writable: true,
             value: withHttpSurface(async (service, req) => await service.handleAgentDebug(req)),
         },
+        handleAgentCommands: {
+            configurable: true,
+            writable: true,
+            value: withHttpSurface(async (service, req) => await service.handleAgentCommands(req)),
+        },
         handleAutoresearchStatus: {
             configurable: true,
             writable: true,

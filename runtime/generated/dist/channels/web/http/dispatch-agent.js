@@ -34,6 +34,11 @@ const EXACT_AGENT_ROUTES = [
     },
     {
         method: "GET",
+        path: "/agent/commands",
+        handle: (channel, req) => channel.handleAgentCommands(req),
+    },
+    {
+        method: "GET",
         path: "/agent/debug",
         handle: (channel, req) => channel.handleAgentDebug(req),
     },

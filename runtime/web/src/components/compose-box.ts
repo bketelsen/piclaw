@@ -719,7 +719,10 @@ export function ComposeBox({
                     description: c.description || '',
                 }));
             })
-            .catch(() => { /* keep hardcoded fallback */ });
+            .catch((e) => {
+                // keep hardcoded fallback — dynamic commands are optional
+                console.debug("[compose] failed to fetch dynamic commands", e);
+            });
         return () => { cancelled = true; };
     }, [currentChatJid]);
 

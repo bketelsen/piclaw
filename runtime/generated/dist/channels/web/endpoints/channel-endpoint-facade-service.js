@@ -3,6 +3,7 @@
  */
 import { handleAgentContextRequest, handleAgentModelsRequest, handleAgentStatusRequest, } from "../agent/agent-status.js";
 import { handleAgentDebugRequest } from "../agent/agent-debug.js";
+import { handleAgentCommandsRequest } from "../agent/agent-commands.js";
 import { handleSessionTreeRequest, } from "../agent/session-tree.js";
 import { handleSystemMetricsRequest } from "../agent/system-metrics.js";
 import { handleHashtagRequest, handleSearchRequest, handleThoughtRequest, handleThreadRequest, handleTimelineRequest, } from "./content-endpoints.js";
@@ -87,6 +88,13 @@ export class WebChannelEndpointFacadeService {
     }
     async handleAgentDebug(req) {
         return await handleAgentDebugRequest(req, {
+            defaultChatJid: this.options.defaultChatJid,
+            agentPool: this.options.agentPool,
+            json: (payload, status = 200) => this.options.json(payload, status),
+        });
+    }
+    async handleAgentCommands(req) {
+        return await handleAgentCommandsRequest(req, {
             defaultChatJid: this.options.defaultChatJid,
             agentPool: this.options.agentPool,
             json: (payload, status = 200) => this.options.json(payload, status),

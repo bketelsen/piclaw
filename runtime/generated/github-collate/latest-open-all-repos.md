@@ -1,11 +1,11 @@
 # GitHub issues + PR digest
 
-Generated: 2026-04-19T10:03:02.356Z
+Generated: 2026-04-19T22:02:46.339Z
 
 ## Summary
 
 - State filter: `open`
-- Repos scanned: **13**
+- Repos scanned: **14**
 - Included private repos: **no**
 - Repos with items: **0**
 - Total items: **0**

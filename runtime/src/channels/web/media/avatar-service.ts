@@ -282,8 +282,9 @@ export async function buildAvatarResponse(kind: AvatarKind, source: string, req:
           "Cache-Control": "no-cache",
         },
       });
-    } catch {
+    } catch (e) {
       // sharp unavailable — fall through to original format
+      log.debug("PNG conversion unavailable for favicon", { err: e });
     }
   }
 

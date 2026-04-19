@@ -75,6 +75,9 @@ export class WebChannelHttpSurfaceService {
     async handleAgentDebug(req) {
         return await this.channel.endpointFacade.handleAgentDebug(req);
     }
+    async handleAgentCommands(req) {
+        return await this.channel.endpointFacade.handleAgentCommands(req);
+    }
     async handleAutoresearchStatus(req) {
         return await this.channel.controlPlaneService.handleAutoresearchStatus(req);
     }
