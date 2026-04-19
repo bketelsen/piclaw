@@ -142,6 +142,40 @@ test('refreshContextUsageForChat ignores stale chat responses', async () => {
   expect(contextState).toBeNull();
 });
 
+test('refreshContextUsageForChat does not overwrite cached state with null-percent API response', async () => {
+  const activeChatJidRef = { current: 'chat:alpha' };
+  let contextState: any = { tokens: 5000, contextWindow: 128000, percent: 3.9 };
+
+  await refreshContextUsageForChat({
+    currentChatJid: 'chat:alpha',
+    activeChatJidRef,
+    getAgentContext: async () => ({ tokens: null, contextWindow: null, percent: null }),
+    setContextUsage: (next) => {
+      contextState = typeof next === 'function' ? next(contextState) : next;
+    },
+  });
+
+  // The null-percent response from inactive pools must not overwrite
+  // the previously cached/restored context usage.
+  expect(contextState).toEqual({ tokens: 5000, contextWindow: 128000, percent: 3.9 });
+});
+
+test('refreshContextUsageForChat updates state when API returns real data', async () => {
+  const activeChatJidRef = { current: 'chat:alpha' };
+  let contextState: any = null;
+
+  await refreshContextUsageForChat({
+    currentChatJid: 'chat:alpha',
+    activeChatJidRef,
+    getAgentContext: async () => ({ tokens: 8000, contextWindow: 128000, percent: 6.25 }),
+    setContextUsage: (next) => {
+      contextState = typeof next === 'function' ? next(contextState) : next;
+    },
+  });
+
+  expect(contextState).toEqual({ tokens: 8000, contextWindow: 128000, percent: 6.25 });
+});
+
 test('refreshAutoresearchStatusForChat updates panels and clears autoresearch pending actions', async () => {
   const activeChatJidRef = { current: 'chat:alpha' };
   let panelState = new Map<string, any>();

@@ -113,7 +113,11 @@ export async function refreshContextUsageForChat(options: RefreshContextUsageFor
   try {
     const contextPayload = await getAgentContext(targetChatJid);
     if (activeChatJidRef.current !== targetChatJid) return;
-    if (contextPayload) {
+    // Only update state when the server returns meaningful context data.
+    // After a reload or for inactive chats, the API returns
+    // { tokens: null, contextWindow: null, percent: null } which would
+    // overwrite the cached localStorage value restored on chat switch.
+    if (contextPayload && contextPayload.percent != null) {
       setContextUsage(contextPayload);
       persistContextUsage(targetChatJid, contextPayload);
     }
