@@ -46,7 +46,7 @@ if (!existsSync(drawioIndex)) {
 // Multiple instances of @codemirror/state break `instanceof` checks at runtime,
 // producing "Unrecognized extension value in extension set" errors.
 // Remove any nested duplicates so every package resolves to the single root copy.
-const CM_SINGLETONS = ["@codemirror/state", "@codemirror/view", "@codemirror/language"];
+const CM_SINGLETONS = ["@codemirror/commands", "@codemirror/state", "@codemirror/view", "@codemirror/language"];
 const nodeModules = resolve(ROOT, "node_modules");
 
 import { readdirSync, rmSync } from "node:fs";

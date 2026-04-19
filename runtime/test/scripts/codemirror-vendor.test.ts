@@ -68,6 +68,19 @@ test("generic vendored dependency build script writes codemirror bundle + metada
   rmSync(base, { recursive: true, force: true });
 });
 
+test("codemirror package overrides pin the singleton command/state/view/language set", () => {
+  const pkg = JSON.parse(readFileSync("/workspace/piclaw/package.json", "utf8")) as {
+    overrides?: Record<string, string>;
+  };
+
+  expect(pkg.overrides).toMatchObject({
+    "@codemirror/commands": "6.10.3",
+    "@codemirror/state": "6.6.0",
+    "@codemirror/view": "6.41.0",
+    "@codemirror/language": "6.12.3",
+  });
+});
+
 test("codemirror vendor bundle keeps EditorState compatible with exported minimalSetup", async () => {
   const base = join(tmpdir(), `piclaw-codemirror-vendor-runtime-${Date.now()}`);
   const outFile = join(base, "codemirror.js");
