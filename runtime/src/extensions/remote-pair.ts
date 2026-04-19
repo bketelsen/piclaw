@@ -29,7 +29,6 @@ import {
   updateOutboundPairRequestStatus,
   getPendingRemoteRequests,
   getRemoteRequestById,
-  updateRemoteRequestDecision,
   type RemotePeerRecord,
   type RemotePairRequestRecord,
   type RemoteRequestRecord,
@@ -350,33 +349,26 @@ async function runRejectProposalFlow(idOrReason: string, pi: ExtensionAPI): Prom
     return;
   }
 
-  updateRemoteRequestDecision(proposalId, "rejected", null, reason || null);
-
-  // Push rejection callback to the peer if possible.
   const peer = getRemotePeer(proposal.peer_instance_id);
-  if (peer?.base_url) {
-    try {
-      const identity = loadOrCreateIdentity();
-      const endpoint = "/api/remote/result";
-      const body = JSON.stringify({
-        negotiation_id: proposalId,
-        decision: "deny",
-        reason: reason || "Rejected by operator.",
-      });
-      const bodyBytes = new TextEncoder().encode(body);
-      const headers = buildSignedRequestHeaders(identity, endpoint, bodyBytes, peer.trust_epoch ?? undefined);
-      await fetch(`${peer.base_url}${endpoint}`, { method: "POST", headers, body });
-    } catch (err) {
-      log.warn("Failed to push rejection callback", { operation: "remote-pair.reject-callback", err });
-    }
-  }
-
   const peerLabel = peer?.display_name ?? formatFingerprint(proposal.peer_instance_id);
+
   pi.sendMessage({
     customType: "remote-pair",
     content: `Proposal \`${proposalId}\` from **${peerLabel}** rejected.${reason ? ` Reason: ${reason}` : ""}`,
     display: true,
   });
+
+  // Write an IPC task file to trigger rejection via the runtime (which handles
+  // DB update + signed rejection callback push).
+  try {
+    const dir = join(DATA_DIR, "ipc", "tasks");
+    mkdirSync(dir, { recursive: true });
+    const payload = JSON.stringify({ type: "reject_proposal", proposal_id: proposalId, reason: reason || undefined });
+    writeFileSync(join(dir, `reject-${proposalId}-${Date.now()}.json`), payload);
+  } catch (err) {
+    log.error("Failed to write reject_proposal IPC task", { operation: "remote-pair.reject", err });
+    pi.sendMessage({ customType: "remote-pair", content: `Reject failed: could not queue rejection.`, display: true });
+  }
 }
 
 function runApproveProposalFlow(proposalId: string, pi: ExtensionAPI): void {
