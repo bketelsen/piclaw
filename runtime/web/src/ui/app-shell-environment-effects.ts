@@ -221,42 +221,34 @@ export function useAppShellEnvironmentEffects(options: UseAppShellEnvironmentEff
     const favicon = document.getElementById('dynamic-favicon') as HTMLLinkElement | null;
     if (!favicon) return;
 
-    const defaultHref = favicon.getAttribute('data-default') || favicon.getAttribute('href') || '/favicon.ico';
-    // Request PNG format for favicons — Safari cannot render WebP in the
-    // tab icon context even though it supports WebP for regular images.
-    const baseHref = avatarUrl
-      ? `${avatarUrl}${avatarUrl.includes('?') ? '&' : '?'}format=png`
-      : defaultHref;
-    const avatarKey = avatarUrl ? `${avatarUrl}|${avatarVersion || ''}` : defaultHref;
+    const avatarKey = avatarUrl ? `${avatarUrl}|${avatarVersion || ''}` : '';
     if (brandingRef.current.avatarBase !== avatarKey) {
-      const cacheBust = avatarUrl
-        ? `${baseHref}&v=${avatarVersion || Date.now()}`
-        : baseHref;
+      brandingRef.current.avatarBase = avatarKey;
+
+      if (!avatarUrl) return;
 
       // Remove competing static <link rel="icon"> elements so Safari doesn't
-      // prefer a sized PNG over our dynamic favicon.  Keep apple-touch-icon
-      // links intact (those are only used for home-screen bookmarks).
-      if (avatarUrl) {
-        document.querySelectorAll('link[rel="icon"]:not(#dynamic-favicon)').forEach((el) => el.remove());
-      }
+      // prefer a sized PNG over our dynamic favicon.
+      document.querySelectorAll('link[rel="icon"]:not(#dynamic-favicon)').forEach((el) => el.remove());
 
-      // Set type so Safari knows this is a PNG image.
-      favicon.setAttribute('type', 'image/png');
-      favicon.href = cacheBust;
-
-      // Safari aggressively caches favicons and often ignores href changes.
-      // Force a re-evaluation by briefly removing and re-appending the node.
-      const parent = favicon.parentNode;
-      if (parent) {
-        requestAnimationFrame(() => {
-          try {
-            parent.removeChild(favicon);
-            void (document.head || document.documentElement).offsetHeight;
-            parent.appendChild(favicon);
-          } catch { /* node already moved / disposed */ }
+      // Fetch the avatar as PNG and convert to a data URI.  This completely
+      // bypasses Safari's aggressive URL-based favicon cache.
+      const pngUrl = `${avatarUrl}${avatarUrl.includes('?') ? '&' : '?'}format=png&v=${avatarVersion || Date.now()}`;
+      fetch(pngUrl)
+        .then((res) => (res.ok ? res.blob() : Promise.reject(res.status)))
+        .then((blob) => {
+          const reader = new FileReader();
+          reader.onloadend = () => {
+            if (typeof reader.result !== 'string') return;
+            favicon.setAttribute('type', 'image/png');
+            favicon.href = reader.result;
+          };
+          reader.readAsDataURL(blob);
+        })
+        .catch(() => {
+          // Fallback: set the URL directly (works in Chrome/Edge/Firefox)
+          favicon.href = pngUrl;
         });
-      }
-      brandingRef.current.avatarBase = avatarKey;
     }
   }, [brandingRef]);
 

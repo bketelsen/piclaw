@@ -35,11 +35,9 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <title>PiClaw</title>
     <meta name="apple-mobile-web-app-title" content="PiClaw">
-    <link rel="stylesheet" href="/static/dist/app.bundle.css?v=829049e05e49">
-    <link rel="manifest" href="/manifest.json?v=829049e05e49">
-    <link id="dynamic-favicon" rel="icon" href="/favicon.ico" data-default="/favicon.ico">
-    <link rel="icon" type="image/png" sizes="192x192" href="/static/icon-192.png">
-    <link rel="icon" type="image/png" sizes="512x512" href="/static/icon-512.png">
+    <link rel="stylesheet" href="/static/dist/app.bundle.css?v=d57b3d6242b1">
+    <link rel="manifest" href="/manifest.json?v=d57b3d6242b1">
+    <link id="dynamic-favicon" rel="icon" type="image/png" href="data:,">
     <link rel="apple-touch-icon" href="/apple-touch-icon.png">
     <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon-180x180.png">
     <link rel="apple-touch-icon" sizes="167x167" href="/apple-touch-icon-167x167.png">
@@ -148,10 +146,10 @@
       }
     }
     </script>
-    <script type="module" src="/static/dist/app.bundle.js?v=829049e05e49"></script>
+    <script type="module" src="/static/dist/app.bundle.js?v=d57b3d6242b1"></script>
     <script type="module">
         // Fallback error display for module errors
-        import('/static/dist/app.bundle.js?v=829049e05e49').catch(function(e) {
+        import('/static/dist/app.bundle.js?v=d57b3d6242b1').catch(function(e) {
             document.getElementById('app').innerHTML = '<pre style="padding:20px;color:red;">Module Error: ' + e.message + '</pre>';
         });
     </script>
