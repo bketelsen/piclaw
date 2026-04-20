@@ -6,9 +6,11 @@
  *
  * Consumers: web/http/dispatch-workspace.ts routes workspace paths here.
  */
-import { closeSync, openSync, readSync } from "fs";
+import { closeSync, openSync, readSync, statSync } from "fs";
 import { errorJson, jsonResponse } from "../http/http-utils.js";
 import { WorkspaceService } from "../workspace/service.js";
+import { resolveWorkspacePath, toRelativePath } from "../workspace/paths.js";
+import { formatMtime } from "../workspace/file-utils.js";
 const workspaceService = new WorkspaceService();
 /**
  * Handle GET `/workspace/tree` requests for sidebar tree listing.
@@ -30,6 +32,27 @@ export function handleWorkspaceFile(req) {
     const url = new URL(req.url);
     const result = workspaceService.getFile(url.searchParams.get("path"), url.searchParams.get("max"), url.searchParams.get("mode"));
     return jsonResponse(result.body, result.status);
+}
+/**
+ * Handle GET `/workspace/stat` requests — lightweight mtime-only check.
+ * Returns { path, mtime, size } without reading file content.
+ */
+export function handleWorkspaceStat(req) {
+    const url = new URL(req.url);
+    const targetPath = resolveWorkspacePath(url.searchParams.get("path"));
+    if (!targetPath)
+        return jsonResponse({ error: "Invalid path" }, 400);
+    try {
+        const stats = statSync(targetPath);
+        return jsonResponse({
+            path: toRelativePath(targetPath),
+            mtime: formatMtime(stats),
+            size: stats.size,
+        }, 200);
+    }
+    catch {
+        return jsonResponse({ error: "File not found" }, 404);
+    }
 }
 /**
  * Handle GET `/workspace/branch` requests to resolve the nearest git branch.
