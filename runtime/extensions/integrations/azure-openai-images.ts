@@ -13,13 +13,6 @@ const FOUNDRY_IMAGE_MODEL_ID = process.env.FOUNDRY_IMAGE_MODEL_ID || "flux-2-pro
 const FOUNDRY_IMAGE_API_VERSION = process.env.FOUNDRY_IMAGE_API_VERSION || "preview";
 const FOUNDRY_IMAGE_BASE_URL = process.env.FOUNDRY_IMAGE_BASE_URL || "";
 const STATIC_API_KEY = process.env.AOAI_API_KEY || "";
-const PICLAW_PORT = process.env.PICLAW_WEB_PORT || process.env.PICLAW_PORT || "8080";
-const PICLAW_BASE = `http://localhost:${PICLAW_PORT}`;
-const INTERNAL_SECRET =
-  process.env.PICLAW_INTERNAL_SECRET ||
-  process.env.PICLAW_WEB_INTERNAL_SECRET ||
-  process.env.WEB_INTERNAL_SECRET ||
-  "";
 
 type ImageArgs = {
   prompt: string;
@@ -127,7 +120,7 @@ export function buildAzureImageGeneratePayload(model: string, args: ImageArgs, i
     model,
     prompt: args.prompt,
     size: snapToSupportedSize(args.size),
-    quality: args.quality || "high",
+    quality: args.quality || "medium",
     n: args.count || 1,
   };
   if (includeStyle && args.style) payload.style = args.style;
@@ -301,7 +294,8 @@ export function formatImageGenerationError(providerLabel: string, error: unknown
         console.error("[azure-openai-images] Failed to parse structured image error payload:", parseError);
       }
     }
-    const httpMatch = raw.match(/^(\d{3})\s+(.+)/s);
+    // Exclude Bun source-context lines (e.g. "303 |     }") which look like HTTP statuses but aren't.
+    const httpMatch = raw.match(/^(\d{3}) (?!\|)(.+)/s);
     if (httpMatch) {
       const [, status, body] = httpMatch;
       try {
@@ -323,57 +317,15 @@ export function formatImageGenerationError(providerLabel: string, error: unknown
   return `${prefix}: ${String(error).slice(0, 500)}`;
 }
 
-async function postPlaceholder(content: string, threadId?: number): Promise<number | string | null> {
-  try {
-    const body: Record<string, unknown> = { content };
-    if (threadId) body.thread_id = threadId;
-    const headers: Record<string, string> = { "Content-Type": "application/json" };
-    if (INTERNAL_SECRET) headers["x-piclaw-internal-secret"] = INTERNAL_SECRET;
-    const res = await fetch(`${PICLAW_BASE}/internal/post`, {
-      method: "POST",
-      headers,
-      body: JSON.stringify(body),
-    });
-    if (!res.ok) return null;
-    const data = (await res.json()) as { id?: number | string };
-    return data.id ?? null;
-  } catch (error) {
-    console.error("[azure-openai-images] Failed to post placeholder message:", error);
-    return null;
-  }
-}
-
-async function updatePost(id: number, content: string, threadId?: number): Promise<boolean> {
-  try {
-    const body: Record<string, unknown> = { content };
-    if (threadId) body.thread_id = threadId;
-    const headers: Record<string, string> = { "Content-Type": "application/json" };
-    if (INTERNAL_SECRET) headers["x-piclaw-internal-secret"] = INTERNAL_SECRET;
-    const res = await fetch(`${PICLAW_BASE}/post/${id}`, {
-      method: "PATCH",
-      headers,
-      body: JSON.stringify(body),
-    });
-    return res.ok;
-  } catch (error) {
-    console.error(`[azure-openai-images] Failed to update placeholder post ${id}:`, error);
-    return false;
-  }
-}
-
-async function deliverAzureImageResult(
+function deliverAzureImageResult(
   pi: AzureImageMessenger,
   customType: "image" | "flux",
-  placeholderId: number | string | null,
   content: string,
-): Promise<void> {
-  if (typeof placeholderId === "number" && Number.isFinite(placeholderId)) {
-    if (await updatePost(placeholderId, content)) return;
-  }
-  const posted = await postPlaceholder(content);
-  if (!posted) {
-    await pi.sendMessage({ customType, content, display: true } as any);
-  }
+): void {
+  // Use pi.sendMessage so the message is always delivered to the correct chat JID
+  // (including branch sessions), rather than the HTTP internal endpoint which defaults
+  // to the root chat and misses branch users.
+  pi.sendMessage({ customType, content, display: true } as any);
 }
 
 export async function executeAzureImageCommand(
@@ -395,19 +347,16 @@ export async function executeAzureImageCommand(
   const sizeNote = parsed.size && parsed.size !== snappedSize ? ` (${parsed.size} → ${snappedSize})` : "";
   const transparencyNote = parsed.transparent ? ", transparent background" : "";
   const statusText = `⏳ Generating image… (${AOAI_IMAGE_MODEL_ID}, ${snappedSize}${sizeNote}${transparencyNote})`;
-  const placeholderId = await postPlaceholder(statusText);
-  if (!placeholderId) {
-    await pi.sendMessage({ customType: "image", content: statusText, display: true } as any);
-  }
+  pi.sendMessage({ customType: "image", content: statusText, display: true } as any);
 
   void (async () => {
     try {
       const images = await generateImage(BASE_URL, AOAI_IMAGE_MODEL_ID, parsed, true);
       const files = saveImages("azure-image", parsed.prompt, images);
       const caption = `Azure image (${AOAI_IMAGE_MODEL_ID}, ${snappedSize}) — ${parsed.prompt}`;
-      await deliverAzureImageResult(pi, "image", placeholderId, formatGeneratedImageMessage(caption, files));
+      deliverAzureImageResult(pi, "image", formatGeneratedImageMessage(caption, files));
     } catch (error) {
-      await deliverAzureImageResult(pi, "image", placeholderId, formatImageGenerationError("Azure OpenAI", error));
+      deliverAzureImageResult(pi, "image", formatImageGenerationError("Azure OpenAI", error));
     }
   })();
 }
@@ -438,19 +387,16 @@ export async function executeAzureFluxCommand(
 
   const size = parseSize(parsed.size);
   const statusText = `⏳ Generating Foundry image… (${FOUNDRY_IMAGE_MODEL_ID}, ${size.width}×${size.height})`;
-  const placeholderId = await postPlaceholder(statusText);
-  if (!placeholderId) {
-    await pi.sendMessage({ customType: "flux", content: statusText, display: true } as any);
-  }
+  pi.sendMessage({ customType: "flux", content: statusText, display: true } as any);
 
   void (async () => {
     try {
       const images = await generateFoundryImage(FOUNDRY_IMAGE_MODEL_ID, parsed);
       const files = saveImages("foundry-image", parsed.prompt, images);
       const caption = `Foundry image (${FOUNDRY_IMAGE_MODEL_ID}, ${size.width}×${size.height}) — ${parsed.prompt}`;
-      await deliverAzureImageResult(pi, "flux", placeholderId, formatGeneratedImageMessage(caption, files));
+      deliverAzureImageResult(pi, "flux", formatGeneratedImageMessage(caption, files));
     } catch (error) {
-      await deliverAzureImageResult(pi, "flux", placeholderId, formatImageGenerationError("Azure Foundry", error));
+      deliverAzureImageResult(pi, "flux", formatImageGenerationError("Azure Foundry", error));
     }
   })();
 }
