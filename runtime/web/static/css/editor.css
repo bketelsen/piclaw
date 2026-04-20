@@ -458,6 +458,53 @@
     border-top: 1px solid var(--border-color);
 }
 
+/* ── External change conflict bar ── */
+.editor-conflict-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 6px 12px;
+    background: color-mix(in srgb, var(--warning-color, #f0b429) 14%, var(--bg-secondary, #16181c));
+    border-bottom: 1px solid color-mix(in srgb, var(--warning-color, #f0b429) 32%, var(--border-color));
+    font-size: 12px;
+    color: var(--text-primary);
+    flex-shrink: 0;
+}
+.editor-conflict-text {
+    font-weight: 600;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.editor-conflict-actions {
+    display: flex;
+    gap: 6px;
+    flex-shrink: 0;
+}
+.editor-conflict-btn {
+    padding: 3px 10px;
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    background: transparent;
+    color: var(--text-primary);
+    font-size: 11px;
+    cursor: pointer;
+    white-space: nowrap;
+}
+.editor-conflict-btn:hover {
+    background: var(--bg-hover);
+}
+.editor-conflict-dismiss {
+    border: none;
+    font-size: 14px;
+    padding: 3px 6px;
+    opacity: 0.6;
+}
+.editor-conflict-dismiss:hover {
+    opacity: 1;
+}
+
 /* ── Markdown Preview Panel ── */
 .md-preview-splitter {
     height: 4px;

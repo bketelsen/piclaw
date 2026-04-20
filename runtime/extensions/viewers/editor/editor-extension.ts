@@ -56,7 +56,7 @@ import {
     githubDark,
     MergeView,
 } from '#editor-vendor/codemirror';
-import { getWorkspaceBranch, getWorkspaceFile, updateWorkspaceFile } from '../../../web/src/api.js';
+import { getWorkspaceBranch, getWorkspaceFile, getWorkspaceFileStat, updateWorkspaceFile } from '../../../web/src/api.js';
 import type { WebPaneExtension, PaneContext, PaneInstance, PaneCapability, PaneHostAttachContext, PaneHostDetachContext } from '../../../web/src/panes/pane-types.js';
 import { frontmatterExtension } from './markdown/frontmatter.js';
 import { footnoteExtension } from './markdown/footnote.js';
@@ -248,6 +248,12 @@ export class StandaloneEditorInstance implements PaneInstance {
     private saveRequestCb: ((content: string) => void) | null = null;
     private closeCb: (() => void) | null = null;
     private viewStateChangeCb: ((state: { cursorLine: number; cursorCol: number; scrollTop: number }) => void) | null = null;
+
+    // External change detection
+    private mtimeCheckTimer: ReturnType<typeof setInterval> | null = null;
+    private conflictBarEl: HTMLElement | null = null;
+    private externalChangeDetected = false;
+    private static readonly MTIME_POLL_MS = 3000;
 
     constructor(container: HTMLElement, context: PaneContext) {
         this.container = container;
@@ -468,6 +474,8 @@ export class StandaloneEditorInstance implements PaneInstance {
 
             this.initialContent = value;
             this.currentMtime = result?.mtime || this.currentMtime;
+            this.externalChangeDetected = false;
+            this.startMtimePolling();
             if (this.isDiffMode()) {
                 const viewState = this.captureViewState();
                 this.renderEditorSurface(value, 'saved', viewState);
@@ -496,6 +504,7 @@ export class StandaloneEditorInstance implements PaneInstance {
         this.updateLivePreviewControlState();
         this.updateWhitespaceControlState();
         this.updateGutterWidth();
+        this.startMtimePolling();
     }
 
     private renderEditorSurface(content: string, diffMode: 'saved' | null, viewState: { cursorLine?: number; cursorCol?: number; scrollTop?: number } | null): void {
@@ -966,6 +975,109 @@ export class StandaloneEditorInstance implements PaneInstance {
         this._branchHint.hidden = false;
     }
 
+    // ── External change detection ───────────────────────────────
+
+    private startMtimePolling(): void {
+        this.stopMtimePolling();
+        if (!this.path) return;
+        this.mtimeCheckTimer = setInterval(() => this.checkMtimeChanged(), StandaloneEditorInstance.MTIME_POLL_MS);
+    }
+
+    private stopMtimePolling(): void {
+        if (this.mtimeCheckTimer) {
+            clearInterval(this.mtimeCheckTimer);
+            this.mtimeCheckTimer = null;
+        }
+    }
+
+    private async checkMtimeChanged(): Promise<void> {
+        if (this.disposed || !this.path || !this.currentMtime || this.saving || this.externalChangeDetected) return;
+        try {
+            const stat = await getWorkspaceFileStat(this.path);
+            if (this.disposed || !stat?.mtime || this.saving) return;
+            if (stat.mtime !== this.currentMtime) {
+                this.externalChangeDetected = true;
+                this.stopMtimePolling();
+                this.showConflictBar();
+            }
+        } catch { /* network error — skip this cycle */ }
+    }
+
+    private showConflictBar(): void {
+        if (this.conflictBarEl) return;
+        const bar = this.ownerDocument.createElement('div');
+        bar.className = 'editor-conflict-bar';
+        bar.innerHTML = `
+            <span class="editor-conflict-text">File changed on disk</span>
+            <div class="editor-conflict-actions">
+                <button class="editor-conflict-btn" data-action="reload" title="Discard editor content and reload from disk">Reload</button>
+                <button class="editor-conflict-btn" data-action="save-copy" title="Save current editor content with a new name">Save copy</button>
+                <button class="editor-conflict-btn" data-action="overwrite" title="Overwrite the disk version with editor content">Overwrite</button>
+                <button class="editor-conflict-btn editor-conflict-dismiss" data-action="dismiss" title="Dismiss this notification">×</button>
+            </div>
+        `;
+        bar.addEventListener('click', (e) => {
+            const btn = (e.target as HTMLElement).closest('[data-action]');
+            if (!btn) return;
+            const action = btn.getAttribute('data-action');
+            if (action === 'reload') this.handleConflictReload();
+            else if (action === 'save-copy') this.handleConflictSaveCopy();
+            else if (action === 'overwrite') this.handleConflictOverwrite();
+            else if (action === 'dismiss') this.dismissConflictBar();
+        });
+        this.conflictBarEl = bar;
+        this.paneEl.insertBefore(bar, this.bodyEl);
+    }
+
+    private dismissConflictBar(): void {
+        if (this.conflictBarEl) {
+            this.conflictBarEl.remove();
+            this.conflictBarEl = null;
+        }
+        this.externalChangeDetected = false;
+        this.startMtimePolling();
+    }
+
+    private async handleConflictReload(): Promise<void> {
+        this.dismissConflictBar();
+        this.updateStatusText('Reloading…');
+        try {
+            const data = await getWorkspaceFile(this.path, EDITOR_MAX_BYTES, 'edit');
+            if (this.disposed) return;
+            if (data?.error) { this.updateStatusText(`Reload failed: ${data.error}`); return; }
+            const viewState = this.captureViewState();
+            this.initialContent = data?.text || '';
+            this.currentMtime = data?.mtime || null;
+            this.renderEditorSurface(this.initialContent, this.diffMode, viewState);
+            this.setDirty(false);
+            this.updateStatusText('Reloaded from disk');
+        } catch (err: any) {
+            this.updateStatusText(`Reload failed: ${err?.message || 'Unknown error'}`);
+        }
+    }
+
+    private async handleConflictSaveCopy(): Promise<void> {
+        if (!this.view) return;
+        const content = this.view.state.doc.toString();
+        const ext = this.path.includes('.') ? this.path.slice(this.path.lastIndexOf('.')) : '';
+        const base = this.path.includes('.') ? this.path.slice(0, this.path.lastIndexOf('.')) : this.path;
+        const stamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+        const copyPath = `${base}.${stamp}${ext}`;
+        this.updateStatusText(`Saving copy to ${copyPath}…`);
+        try {
+            await updateWorkspaceFile(copyPath, content);
+            this.dismissConflictBar();
+            this.updateStatusText(`Copy saved as ${copyPath}`);
+        } catch (err: any) {
+            this.updateStatusText(`Save copy failed: ${err?.message || 'Unknown error'}`);
+        }
+    }
+
+    private async handleConflictOverwrite(): Promise<void> {
+        this.dismissConflictBar();
+        await this.handleSave();
+    }
+
     private updateStatusText(text: string): void {
         if (this._statusText) this._statusText.textContent = text;
     }
@@ -1013,6 +1125,7 @@ export class StandaloneEditorInstance implements PaneInstance {
     dispose(): void {
         if (this.disposed) return;
         this.disposed = true;
+        this.stopMtimePolling();
         this.unbindHostListeners();
         this.destroyEditorViews();
         this.container.innerHTML = '';

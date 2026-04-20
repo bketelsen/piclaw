@@ -11,6 +11,7 @@ import {
   handleWorkspaceFile,
   handleWorkspaceIndexStatus,
   handleWorkspaceRaw,
+  handleWorkspaceStat,
   handleWorkspaceMove,
   handleWorkspaceReindex,
   handleWorkspaceRename,
@@ -71,6 +72,10 @@ export async function handleWorkspaceRoutes(
 
   if (req.method === "GET" && pathname === "/workspace/file") {
     return channel.handleWorkspaceFile?.(req) ?? handleWorkspaceFile(req);
+  }
+
+  if (req.method === "GET" && pathname === "/workspace/stat") {
+    return handleWorkspaceStat(req);
   }
 
   if (req.method === "GET" && pathname === "/workspace/branch") {

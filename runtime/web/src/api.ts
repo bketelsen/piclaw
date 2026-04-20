@@ -633,6 +633,13 @@ export async function getWorkspaceFile(path, maxBytes = 20000, mode = null) {
 }
 
 /**
+ * Lightweight file stat — returns { path, mtime, size } without reading content.
+ */
+export async function getWorkspaceFileStat(path) {
+    return request(`/workspace/stat?path=${encodeURIComponent(path)}`);
+}
+
+/**
  * Update workspace file contents
  */
 export async function updateWorkspaceFile(path, content) {
