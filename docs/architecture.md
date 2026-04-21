@@ -327,6 +327,32 @@ Page load
 
 For the message‑level flow, see [runtime-flows.md](runtime-flows.md).
 
+## Remote interop
+
+Cross-instance communication is handled by `RemoteInteropService`
+(`src/remote/service.ts`), which routes all `/api/remote/*` endpoints.
+Peer identity uses Ed25519 key pairs derived at first run; every request
+is signed and verified against stored public keys.
+
+Key modules:
+
+| Module | Responsibility |
+|--------|---------------|
+| `remote/service.ts` | Request router, nonce cache, rate limiters |
+| `remote/service-pairing.ts` | Pair-request, pair-confirm, pair-callback handlers |
+| `remote/service-operations.ts` | Ping, proposal, execute, revoke, result-callback |
+| `remote/service-security.ts` | Callback proof verification (SSRF-safe) |
+| `remote/auth.ts` | Ed25519 signature build/verify |
+| `remote/policy.ts` | Profile-based tool ceiling filters |
+| `remote/ssrf.ts` | Callback URL validation (hostname, DNS, private-IP) |
+| `extensions/remote-pair.ts` | `/pair` slash command (accept/deny/block/revoke/list) |
+| `skills/remote-peer/` | Agent skill for sending prompts to paired peers |
+| `db/remote-interop.ts` | SQLite schema and queries for peers, requests, proposals |
+
+Pairing follows a five-step consent protocol (request → review → URL
+proof → accept/deny → confirm). See [cross-instance-ipc.md](cross-instance-ipc.md)
+for the full protocol and configuration reference.
+
 ## Additional documentation
 
 - [Web pane extensions](web-pane-extensions.md) — first-class pane host contract for editors/viewers/tools in tabs and dock

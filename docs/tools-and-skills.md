@@ -502,6 +502,7 @@ Each skill keeps its script alongside its `SKILL.md` for portability. Current se
 | `proxmox-management` | Manage Proxmox VM lifecycle, USB mapping passthrough, and backup-restore moves |
 | `proxmox-guest-compare-chart` | Compare two Proxmox guests using native `proxmox` data collection and render SVG/CSV outputs |
 | `portainer-container-compare-chart` | Compare two Portainer containers using native `portainer` data collection and render SVG/CSV outputs |
+| `remote-peer` | Send signed prompts to paired remote piclaw instances (see [cross-instance-ipc.md](cross-instance-ipc.md)) |
 
 `kanban-management` intentionally keeps its public name for now, but repo-local board paths in this project now live under `workitems/`. Visual/editor semantics such as `*.kanban.md` remain intentionally named.
 
