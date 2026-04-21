@@ -289,6 +289,8 @@ export function applySessionCorrelationHeaders(
   next["x-client-request-id"] = sessionId;
   if (options?.includeAzureClientRequestId) {
     next["x-ms-client-request-id"] = sessionId;
+  } else {
+    delete next["x-ms-client-request-id"];
   }
   return next;
 }

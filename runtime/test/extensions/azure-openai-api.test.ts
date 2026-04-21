@@ -118,6 +118,17 @@ test("applySessionCorrelationHeaders overwrites stale correlation headers consis
   });
 });
 
+test("applySessionCorrelationHeaders clears stale x-ms-client-request-id when Azure mirroring is disabled", () => {
+  expect(applySessionCorrelationHeaders({
+    existing: "value",
+    "x-ms-client-request-id": "old-azure-request",
+  }, "sess_no_azure")).toEqual({
+    existing: "value",
+    session_id: "sess_no_azure",
+    "x-client-request-id": "sess_no_azure",
+  });
+});
+
 test("buildBaseOptions preserves session/cache-affinity fields for downstream requests", () => {
   const signal = new AbortController().signal;
   const onPayload = () => {};
