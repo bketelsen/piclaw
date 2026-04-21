@@ -98,6 +98,11 @@ export async function handleProposal(req: Request, context: RemoteOperationHandl
   const peer = requirePeer(req);
   if (peer instanceof Response) return peer;
 
+  if (peer.profile === "read-only") {
+    logAudit(peer, "/api/remote/proposal", "denied", undefined, "read-only profile does not allow proposals");
+    return jsonResponse({ error: "Peer profile is read-only (ping/status only)." }, 403);
+  }
+
   const jsonError = requireJson(req);
   if (jsonError) return jsonResponse({ error: jsonError }, 415);
   const lengthCheck = checkContentLength(req, DEFAULT_MAX_PROMPT_BYTES);

@@ -610,6 +610,18 @@ describe("remote pair commands", () => {
     expect(stored?.profile).toBe("restricted");
   });
 
+  test("runSetPermissionsFlow accepts non-mutating profile", async () => {
+    const peerData = makePairedPeer({ profile: "restricted" });
+    upsertRemotePeer(peerData);
+
+    const pi = makeMockPi();
+    await runSetPermissionsFlow(peerData.instance_id, "non-mutating", pi);
+
+    const stored = getRemotePeer(peerData.instance_id);
+    expect(stored?.profile).toBe("non-mutating");
+    expect(pi.messages.some((m: string) => m.includes("non-mutating"))).toBe(true);
+  });
+
   test("runSetPermissionsFlow emits warning for full profile", async () => {
     const peerData = makePairedPeer();
     upsertRemotePeer(peerData);

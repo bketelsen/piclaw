@@ -348,7 +348,8 @@ Pairing grants identity trust, not blanket execution rights.
 
 | Profile | Allowed |
 |---|---|
-| `read-only` | all tools classified as read-only (no side-effects) |
+| `read-only` | ping/status only — no tool execution or proposals permitted |
+| `non-mutating` | all tools classified as read-only (no side-effects) |
 | `restricted` (default) | proposal channel with constrained tools (shell, file-write, keychain, and other mutating tools denied) |
 | `full` | full remote execution rights |
 | `custom` | explicit allowlist (internal only — not yet user-facing) |
@@ -509,7 +510,7 @@ These defaults are recommended for first implementation.
 | `/pair history [page]` | Show inbound mediated proposals with status and outcome (50 per page) |
 | `/pair approve <id>` | Approve and execute a pending proposal |
 | `/pair reject <id> [reason]` | Reject a proposal, optionally with reason |
-| `/pair permissions <id> <profile>` | Set capability profile (`read-only`, `restricted`, `full`) |
+| `/pair permissions <id> <profile>` | Set capability profile (`read-only`, `non-mutating`, `restricted`, `full`) |
 | `/pair mode <id> <mode>` | Set interaction mode (`mediated`, `short-circuit`) |
 | `/ask <id> <prompt>` | Send a prompt to a paired peer (signed HTTP request) |
 

@@ -65,7 +65,13 @@ export const RESTRICTED_TOOL_DENYLIST: ReadonlySet<string> = new Set([
 export function getToolCeilingFilter(profile: RemotePeerProfile): ((toolName: string) => boolean) | null {
   if (profile === "full") return null;
 
+  // read-only: ping/status only — no tool execution permitted.
   if (profile === "read-only") {
+    return () => false;
+  }
+
+  // non-mutating: all tools whose capability kind is "read-only" (no side-effects).
+  if (profile === "non-mutating") {
     return (name: string) => getToolCapability(name).kind === "read-only";
   }
 

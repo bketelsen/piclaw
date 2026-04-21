@@ -6,8 +6,20 @@ describe("getToolCeilingFilter", () => {
     expect(getToolCeilingFilter("full")).toBeNull();
   });
 
-  test("read-only profile allows tools with read-only capability", () => {
+  test("read-only profile blocks all tools (ping/status only)", () => {
     const filter = getToolCeilingFilter("read-only")!;
+    expect(filter).toBeTruthy();
+    // read-only = ping/status only; no tool execution at all
+    expect(filter("read")).toBe(false);
+    expect(filter("find")).toBe(false);
+    expect(filter("grep")).toBe(false);
+    expect(filter("bash")).toBe(false);
+    expect(filter("edit")).toBe(false);
+    expect(filter("list_tools")).toBe(false);
+  });
+
+  test("non-mutating profile allows tools with read-only capability", () => {
+    const filter = getToolCeilingFilter("non-mutating")!;
     expect(filter).toBeTruthy();
     // Known read-only tools from tool-capabilities registry
     expect(filter("read")).toBe(true);
@@ -17,8 +29,8 @@ describe("getToolCeilingFilter", () => {
     expect(filter("list_tools")).toBe(true);
   });
 
-  test("read-only profile blocks mutating tools", () => {
-    const filter = getToolCeilingFilter("read-only")!;
+  test("non-mutating profile blocks mutating tools", () => {
+    const filter = getToolCeilingFilter("non-mutating")!;
     expect(filter("bash")).toBe(false);
     expect(filter("edit")).toBe(false);
     expect(filter("write")).toBe(false);
