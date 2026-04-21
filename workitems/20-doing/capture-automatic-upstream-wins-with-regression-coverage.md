@@ -117,6 +117,14 @@ Likely beneficiaries:
 - [ ] Update history complete with evidence
 - [ ] Ticket front matter updated
 
+## Updates
+
+### 2026-04-21
+- Added focused regression coverage for the packaged `context-mode` integration in `runtime/test/extensions/context-mode.test.ts`.
+- Captured the large-bash-output storage/search path with a `fullOutputPath`-backed event, proving the extension stores the full file content and points the agent at `search_tool_output`.
+- Fixed a user-facing naming drift in `runtime/extensions/integrations/context-mode.ts` where the summary text still referenced the obsolete `tool_output_search` name instead of the actual `search_tool_output` tool.
+- This closes one concrete slice of the “large bash outputs still flow through stored-output compaction/search correctly” audit item.
+
 ## Links
 
 - Parent: `workitems/20-doing/adopt-pi-coding-agent-0.68.0-followups-and-web-progress-mapping.md`

@@ -3,7 +3,7 @@
  *
  * Intercepts large bash tool results, stores them on disk, and replaces
  * the inline output with a compact preview + search handle.  Also
- * registers the batch_exec and tool_output_search tools.
+ * registers the batch_exec and search_tool_output tools.
  *
  * Activated unconditionally (no env-var gate).
  */
@@ -84,7 +84,7 @@ export default function (pi: any) {
     const summaryText = [
       `Output stored as tool-output:${saved.id} (${saved.lineCount} lines, ${formatBytes(saved.sizeBytes)}).`,
       preview ? `Preview:\n${preview}` : null,
-      `Use tool_output_search with handle "${saved.id}" and a query to retrieve relevant snippets.`,
+      `Use search_tool_output with handle "${saved.id}" and a query to retrieve relevant snippets.`,
     ]
       .filter(Boolean)
       .join("\n\n");

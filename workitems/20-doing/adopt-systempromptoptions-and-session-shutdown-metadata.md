@@ -148,6 +148,18 @@ Adopt when shutdown cause affects:
 - [ ] Update history complete with evidence
 - [ ] Ticket front matter updated
 
+## Updates
+
+### 2026-04-21
+- `ssh-core` now uses `before_agent_start.systemPromptOptions.cwd` when rewriting the working-directory prompt line for SSH-backed sessions.
+- Added regression coverage in `runtime/test/extensions/ssh-core.test.ts` for both configured and chat-scoped SSH sessions where the session/worktree cwd differs from the launcher cwd.
+- `ssh-core`, `azure-openai`, and the Azure harness now all consume `session_shutdown.reason` / `targetSessionFile` for diagnostics and safer lifecycle handling.
+- Current classification outcome:
+  - `ssh-core` — adopted now
+  - `workspace-memory-bootstrap` — static hint only, no action
+  - `keychain-tools` — static hint only, no action
+  - most prompt-hint appenders — audit only unless they need cwd-aware prompt mutation
+
 ## Links
 
 - Parent: `workitems/20-doing/adopt-pi-coding-agent-0.68.0-followups-and-web-progress-mapping.md`
