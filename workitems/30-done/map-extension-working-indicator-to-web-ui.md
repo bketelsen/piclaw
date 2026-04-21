@@ -1,7 +1,7 @@
 ---
 id: map-extension-working-indicator-to-web-ui
 title: Map extension working indicator to the web UI
-status: doing
+status: done
 priority: high
 created: 2026-04-21
 updated: 2026-04-21
