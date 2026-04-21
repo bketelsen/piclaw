@@ -15,7 +15,7 @@ export function handleExportTimeline(req, ctx) {
     if (!isLoopbackHostname(url.hostname)) {
         return jsonResponse({ error: "Export endpoint is localhost-only" }, 403);
     }
-    const internalSecret = (getWebRuntimeConfig().internalSecret || "").trim();
+    const internalSecret = (ctx.internalSecret || getWebRuntimeConfig().internalSecret || "").trim();
     if (!internalSecret) {
         return jsonResponse({ error: "Internal export auth is not configured" }, 503);
     }
