@@ -10,6 +10,11 @@ describe("attachment preview kind", () => {
     expect(getAttachmentPreviewKind("application/octet-stream", "bundle.zip")).toBe("archive");
   });
 
+  test("classifies shell scripts and .sb files as text previews by filename", () => {
+    expect(getAttachmentPreviewKind("application/octet-stream", "script.sh")).toBe("text");
+    expect(getAttachmentPreviewKind("application/octet-stream", "workflow.sb")).toBe("text");
+  });
+
   test("returns the ZIP archive preview label", () => {
     expect(getAttachmentPreviewLabel("archive")).toBe("ZIP archive preview");
   });

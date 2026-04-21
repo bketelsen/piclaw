@@ -47,6 +47,9 @@ const EXTENSION_MEDIA_TYPES = {
     ".html": "text/html",
     ".xml": "text/xml",
     ".json": "application/json",
+    ".sh": "text/x-shellscript",
+    ".bash": "text/x-shellscript",
+    ".zsh": "text/x-shellscript",
     ".zip": "application/zip",
     ".gz": "application/gzip",
 };
@@ -54,6 +57,30 @@ const inferContentTypeFromPath = (filePath) => {
     const extension = extname(filePath).toLowerCase();
     return EXTENSION_MEDIA_TYPES[extension] || "application/octet-stream";
 };
+const TEXT_SNIFF_EXTENSIONS = new Set([".sb"]);
+function isProbablyTextData(data) {
+    if (!(data instanceof Uint8Array) || data.length === 0)
+        return true;
+    const sample = data.subarray(0, Math.min(data.length, 4096));
+    let suspicious = 0;
+    for (const byte of sample) {
+        if (byte === 0)
+            return false;
+        const isControl = byte < 32 && byte !== 9 && byte !== 10 && byte !== 13 && byte !== 12;
+        if (isControl)
+            suspicious += 1;
+    }
+    return suspicious / sample.length < 0.02;
+}
+function maybePromoteUnknownTextType(pathLike, contentType, data) {
+    const normalized = normalizeContentType(contentType);
+    const extension = extname(pathLike).toLowerCase();
+    if (normalized !== "application/octet-stream")
+        return normalized;
+    if (!TEXT_SNIFF_EXTENSIONS.has(extension))
+        return normalized;
+    return isProbablyTextData(data) ? "text/plain" : normalized;
+}
 /**
  * Service for validating and persisting uploaded media blobs.
  *
@@ -73,9 +100,10 @@ export class MediaService {
                 body: { error: `File too large (max ${MAX_MEDIA_UPLOAD_BYTES / 1024 / 1024} MB)` },
             };
         }
-        const contentType = normalizeContentType(file.type, inferContentTypeFromPath(file.name || "upload"));
+        const detectedContentType = normalizeContentType(file.type, inferContentTypeFromPath(file.name || "upload"));
         const arrayBuffer = await file.arrayBuffer();
         const data = new Uint8Array(arrayBuffer);
+        const contentType = maybePromoteUnknownTextType(file.name || "upload", detectedContentType, data);
         // Generate a thumbnail for image uploads
         let thumbnail = null;
         if (contentType.startsWith("image/") && !contentType.includes("svg")) {
@@ -114,7 +142,7 @@ export class MediaService {
                 body: { error: `File too large (max ${MAX_MEDIA_UPLOAD_BYTES / 1024 / 1024} MB)` },
             };
         }
-        const contentType = normalizeContentType(contentTypeOverride, inferContentTypeFromPath(filePath));
+        const detectedContentType = normalizeContentType(contentTypeOverride, inferContentTypeFromPath(filePath));
         let data;
         try {
             data = new Uint8Array(readFileSync(filePath));
@@ -122,6 +150,7 @@ export class MediaService {
         catch {
             return { status: 500, body: { error: `Unable to read media file: ${filePath}` } };
         }
+        const contentType = maybePromoteUnknownTextType(filenameOverride || filePath, detectedContentType, data);
         // Generate a thumbnail for image uploads
         let thumbnail = null;
         if (contentType.startsWith("image/") && !contentType.includes("svg")) {

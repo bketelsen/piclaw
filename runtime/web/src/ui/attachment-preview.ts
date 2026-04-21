@@ -79,6 +79,17 @@ function isHtmlFilename(filename: unknown): boolean {
   return !!name && (name.endsWith(".html") || name.endsWith(".htm"));
 }
 
+function isTextFilename(filename: unknown): boolean {
+  const name = normalize(filename);
+  if (!name) return false;
+  return (
+    name.endsWith(".sh")
+    || name.endsWith(".bash")
+    || name.endsWith(".zsh")
+    || name.endsWith(".sb")
+  );
+}
+
 export type AttachmentPreviewKind = "image" | "video" | "pdf" | "office" | "drawio" | "html" | "text" | "archive" | "unsupported";
 
 export function getAttachmentPreviewKind(contentType: unknown, filename?: unknown): AttachmentPreviewKind {
@@ -88,6 +99,7 @@ export function getAttachmentPreviewKind(contentType: unknown, filename?: unknow
   if (isOfficeFilename(filename) || OFFICE_PREVIEW_TYPES.has(normalized)) return "office";
   if (isArchiveFilename(filename) || ARCHIVE_PREVIEW_TYPES.has(normalized)) return "archive";
   if (isHtmlFilename(filename) || normalized === "text/html") return "html";
+  if (isTextFilename(filename)) return "text";
   if (!normalized) return "unsupported";
   if (normalized.startsWith("video/")) return "video";
   if (normalized.startsWith("image/")) return "image";

@@ -1,7 +1,7 @@
 // @ts-nocheck
 import { html, useEffect, useMemo, useRef, useState } from '../vendor/preact-htm.js';
 import { BodyPortal } from './body-portal.js';
-import { getMediaBlob, getMediaText, getMediaUrl } from '../api.js';
+import { getMediaBlob, getMediaUrl } from '../api.js';
 import { renderMarkdown, renderMermaidDiagrams } from '../markdown.js';
 import { formatFileSize, formatTimestamp } from '../utils/format.js';
 import { highlightCodeToHtml, normalizeCodeLanguageLabel } from '../utils/code-highlighting.js';
@@ -9,6 +9,35 @@ import { getAttachmentPreviewKind, getAttachmentPreviewLabel, isMarkdownAttachme
 import { formatCompressionRatio, getCompressionMethodLabel, parseZipPreview } from '../ui/zip-preview.js';
 
 export const HTML_ATTACHMENT_PREVIEW_SANDBOX = 'allow-scripts';
+
+function isProbablyTextBytes(bytes) {
+    if (!(bytes instanceof Uint8Array) || bytes.length === 0) return true;
+    let suspicious = 0;
+    const sample = bytes.subarray(0, Math.min(bytes.length, 4096));
+    for (const byte of sample) {
+        if (byte === 0) return false;
+        const isControl = byte < 32 && byte !== 9 && byte !== 10 && byte !== 13 && byte !== 12;
+        if (isControl) suspicious += 1;
+    }
+    return suspicious / sample.length < 0.02;
+}
+
+function shouldSniffTextAttachment(info, filename) {
+    const normalizedType = String(info?.content_type || '').trim().toLowerCase();
+    const normalizedName = String(filename || '').trim().toLowerCase();
+    if (normalizedType.startsWith('text/') || normalizedType === 'application/json' || normalizedType === 'application/xml') {
+        return false;
+    }
+    return normalizedType === 'application/octet-stream' || normalizedName.endsWith('.sb') || normalizedName.endsWith('.sh');
+}
+
+function decodeTextBytes(bytes) {
+    try {
+        return new TextDecoder('utf-8', { fatal: false }).decode(bytes);
+    } catch {
+        return new TextDecoder().decode(bytes);
+    }
+}
 
 function buildMetadata(info, languageLabel = null, archivePreview = null) {
     const size = info?.metadata?.size;
@@ -181,20 +210,24 @@ export function AttachmentPreviewModal({ mediaId, info, onClose }) {
             setTextContent('');
             setArchivePreview(null);
             try {
+                const blob = await getMediaBlob(mediaId);
+                const bytes = new Uint8Array(await blob.arrayBuffer());
+
                 if (previewKind === 'text' || previewKind === 'html') {
-                    const text = await getMediaText(mediaId);
+                    if (previewKind === 'text' && shouldSniffTextAttachment(info, filename) && !isProbablyTextBytes(bytes)) {
+                        throw new Error('Attachment does not appear to contain text content.');
+                    }
+                    const text = decodeTextBytes(bytes);
                     if (!cancelled) setTextContent(text);
                     return;
                 }
 
-                const blob = await getMediaBlob(mediaId);
-                const bytes = new Uint8Array(await blob.arrayBuffer());
                 const parsed = parseZipPreview(bytes);
                 if (!cancelled) setArchivePreview(parsed);
             } catch (loadError) {
                 if (!cancelled) {
                     const detail = loadError instanceof Error ? loadError.message : String(loadError || 'Unknown error');
-                    setError(previewKind === 'archive' ? `Failed to load ZIP preview. ${detail}` : 'Failed to load text preview.');
+                    setError(previewKind === 'archive' ? `Failed to load ZIP preview. ${detail}` : `Failed to load text preview. ${detail}`);
                 }
             } finally {
                 if (!cancelled) setLoading(false);

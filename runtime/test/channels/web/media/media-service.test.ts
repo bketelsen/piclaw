@@ -63,3 +63,31 @@ test("createFromPath stores general file attachments", async () => {
 
   unlinkSync(mediaPath);
 });
+
+test("createFromPath infers shell scripts as text/x-shellscript", async () => {
+  const mediaPath = join(process.env.PICLAW_DATA || "/tmp", `script-${Date.now()}.sh`);
+  writeFileSync(mediaPath, "#!/bin/sh\necho hello\n");
+
+  const service = new MediaService();
+  const res = await service.createFromPath(mediaPath);
+
+  expect(res.status).toBe(200);
+  const body = res.body as { contentType?: string };
+  expect(body.contentType).toBe("text/x-shellscript");
+
+  unlinkSync(mediaPath);
+});
+
+test("createFromPath promotes text-like .sb files to text/plain", async () => {
+  const mediaPath = join(process.env.PICLAW_DATA || "/tmp", `notes-${Date.now()}.sb`);
+  writeFileSync(mediaPath, "scratch buffer\nsecond line\n");
+
+  const service = new MediaService();
+  const res = await service.createFromPath(mediaPath);
+
+  expect(res.status).toBe(200);
+  const body = res.body as { contentType?: string };
+  expect(body.contentType).toBe("text/plain");
+
+  unlinkSync(mediaPath);
+});
