@@ -116,11 +116,15 @@ Initiator sends `POST /api/remote/pair-request` with:
 
 Receiver stores request as `pending_inbound` and prompts operator with:
 
-- full URL
-- source address
+- callback origin (protocol + host derived from `callback_url`)
+- source address (client IP, when available)
 - instance ID
 - full fingerprint
-- requested mode/permissions
+- display name (if provided)
+
+Mode and permissions are not set during pairing — they default to
+`mediated` / `restricted` and can be changed later via `/pair mode` and
+`/pair permissions`.
 
 ## Step C — URL Control Proof
 

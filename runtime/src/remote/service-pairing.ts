@@ -142,8 +142,15 @@ export async function handlePairRequest(req: Request, context: RemotePairingHand
 
   const label = displayName ? `**${displayName}**` : `\`${instanceId.slice(0, 12)}…\``;
   const fp = deriveFingerprint(instanceId);
+  const sourceIp = getClientKey(req);
+  const callbackOrigin = callbackUrl ? (() => { try { const u = new URL(callbackUrl); return `${u.protocol}//${u.host}`; } catch { return callbackUrl; } })() : "unknown";
   context.notify?.(
-    `Pair request from ${label} (\`${fp}\`).\nRequest ID: \`${requestId}\`\n\nRun \`/pair accept ${requestId}\` to accept, or \`/pair list\` to review.`
+    `Pair request from ${label} (\`${fp}\`).\n` +
+    `- **Request ID:** \`${requestId}\`\n` +
+    `- **Instance ID:** \`${instanceId}\`\n` +
+    `- **Origin:** \`${callbackOrigin}\`\n` +
+    (sourceIp ? `- **Source:** \`${sourceIp}\`\n` : "") +
+    `\nRun \`/pair accept ${requestId}\` to accept, or \`/pair list\` to review.`
   );
 
   const identity = loadOrCreateIdentity();
