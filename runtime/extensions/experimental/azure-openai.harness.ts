@@ -1519,10 +1519,34 @@ export default function (pi: ExtensionAPI) {
     },
   });
 
+  type AzureHarnessBootstrapUi = {
+    setWorkingIndicator?: (options?: { frames?: string[]; intervalMs?: number }) => void;
+    setWorkingMessage?: (message?: string) => void;
+    setStatus?: (key: string, value: string | undefined) => void;
+    notify?: (message: string, type?: "error" | "info" | "warning") => void;
+  };
+
+  const startAzureHarnessBootstrapUi = (ui?: AzureHarnessBootstrapUi) => {
+    if (!ui) return;
+    ui.setWorkingIndicator?.({ frames: ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"], intervalMs: 90 });
+    ui.setWorkingMessage?.("Azure harness: refreshing provider bootstrap…");
+  };
+
+  const finishAzureHarnessBootstrapUi = (ui?: AzureHarnessBootstrapUi) => {
+    if (!ui) return;
+    ui.setWorkingMessage?.(undefined);
+    ui.setWorkingIndicator?.({ frames: [] });
+  };
+
   let timer: ReturnType<typeof setTimeout> | null = null;
 
-  const scheduleNext = (expiresOnEpoch?: number) => {
+  const clearRefreshTimer = () => {
     if (timer) clearTimeout(timer);
+    timer = null;
+  };
+
+  const scheduleNext = (expiresOnEpoch?: number) => {
+    clearRefreshTimer();
     const now = Math.floor(Date.now() / 1000);
     const delaySeconds = expiresOnEpoch
       ? Math.max(60, expiresOnEpoch - now - SKEW_SECONDS)
@@ -1546,11 +1570,26 @@ export default function (pi: ExtensionAPI) {
     scheduleNext(cache.expiresOnEpoch);
   };
 
-  pi.on("session_start", async () => {
-    await refresh();
+  pi.on("session_start", async (_event, ctx) => {
+    const ui = ctx?.hasUI ? ctx.ui : undefined;
+    startAzureHarnessBootstrapUi(ui);
+    clearRefreshTimer();
+    try {
+      await refresh();
+      ui?.setStatus?.("azure-openai", "Azure harness providers ready");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      clearRefreshTimer();
+      ui?.setStatus?.("azure-openai", undefined);
+      ui?.notify?.(`Azure harness bootstrap failed: ${message}`, "error");
+      throw error;
+    } finally {
+      finishAzureHarnessBootstrapUi(ui);
+    }
   });
 
-  pi.on("session_shutdown", () => {
-    if (timer) clearTimeout(timer);
+  pi.on("session_shutdown", (event) => {
+    console.log(`[azure-openai-harness] session shutdown (${event?.reason ?? "unknown"})${event?.targetSessionFile ? ` → ${event.targetSessionFile}` : ""}`);
+    clearRefreshTimer();
   });
 }

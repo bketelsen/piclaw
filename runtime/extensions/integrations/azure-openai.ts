@@ -1653,30 +1653,27 @@ export default function (pi: ExtensionAPI) {
   let bootstrap: ReturnType<typeof startAzureProviderBootstrap> | null = null;
 
   pi.on("session_start", async (_event, ctx) => {
-    if (ctx.hasUI) startAzureBootstrapUi(ctx.ui);
+    const ui = ctx?.hasUI ? ctx.ui : undefined;
+    startAzureBootstrapUi(ui);
     try {
       bootstrap?.stop();
       bootstrap = createAzureProviderBootstrapImpl((name, config) => pi.registerProvider(name, config));
       await bootstrap.refresh();
-      if (ctx.hasUI && ctx.ui.setStatus) {
-        ctx.ui.setStatus("azure-openai", "Azure providers ready");
-      }
+      ui?.setStatus?.("azure-openai", "Azure providers ready");
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       bootstrap?.stop();
       bootstrap = null;
-      if (ctx.hasUI) {
-        ctx.ui.setStatus?.("azure-openai", undefined);
-        ctx.ui.notify?.(`Azure provider bootstrap failed: ${message}`, "error");
-      }
+      ui?.setStatus?.("azure-openai", undefined);
+      ui?.notify?.(`Azure provider bootstrap failed: ${message}`, "error");
       throw error;
     } finally {
-      if (ctx.hasUI) finishAzureBootstrapUi(ctx.ui);
+      finishAzureBootstrapUi(ui);
     }
   });
 
   pi.on("session_shutdown", (event) => {
-    console.log(`[azure-openai] session shutdown (${event.reason})${event.targetSessionFile ? ` → ${event.targetSessionFile}` : ""}`);
+    console.log(`[azure-openai] session shutdown (${event?.reason ?? "unknown"})${event?.targetSessionFile ? ` → ${event.targetSessionFile}` : ""}`);
     bootstrap?.stop();
     bootstrap = null;
   });

@@ -996,8 +996,8 @@ function formatSshEnabledMessage(connection: Pick<SshConnection, "sshTarget" | "
   return `ssh-core enabled: ${connection.sshTarget}:${connection.remoteCwd} (port ${connection.port})`;
 }
 
-function formatSshShutdownMessage(event: { reason?: string; targetSessionFile?: string }): string {
-  return `[ssh-core] session shutdown (${event.reason ?? "unknown"})${event.targetSessionFile ? ` → ${event.targetSessionFile}` : ""}`;
+function formatSshShutdownMessage(event?: { reason?: string; targetSessionFile?: string }): string {
+  return `[ssh-core] session shutdown (${event?.reason ?? "unknown"})${event?.targetSessionFile ? ` → ${event.targetSessionFile}` : ""}`;
 }
 
 function registerSshCoreExtension(pi: ExtensionAPI, resolveConfig: (pi: ExtensionAPI) => SshCoreResolvedConfig | null): void {
