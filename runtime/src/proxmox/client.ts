@@ -1,5 +1,5 @@
 import { getKeychainEntry, listKeychainEntries, resolveKeychainPlaceholders } from "../secure/keychain.js";
-import { buildInjectedExecCommand, redactKeychainSecretsInText } from "../secure/shell-secrets.js";
+import { buildInjectedExecCommand } from "../secure/shell-secrets.js";
 import { createLogger, debugSuppressedError } from "../utils/logger.js";
 
 const log = createLogger("proxmox.client");
@@ -624,15 +624,15 @@ export async function requestProxmoxApi(
     ]);
     if (result.exitCode !== 0) {
       const stderr = result.stderr.trim() || `curl failed with exit code ${result.exitCode}`;
-      throw new Error(await redactKeychainSecretsInText(stderr));
+      throw new Error(stderr);
     }
 
     const { bodyText, status } = splitStatusMarker(result.stdout);
     const body = parseResponseBody(bodyText);
 
     if (status >= 400) {
-      const redactedBody = await redactKeychainSecretsInText(typeof body === "string" ? body : JSON.stringify(body));
-      throw new Error(`Proxmox API ${method} ${path} failed with HTTP ${status}: ${redactedBody}`);
+      const errorBody = typeof body === "string" ? body : JSON.stringify(body);
+      throw new Error(`Proxmox API ${method} ${path} failed with HTTP ${status}: ${errorBody}`);
     }
 
     return {
@@ -1391,18 +1391,12 @@ export class ProxmoxClient {
       if (data.exited === true || data.exited === 1 || data.exited === "1") {
         const outData = decodeBase64Text(data["out-data"]);
         const errData = decodeBase64Text(data["err-data"]);
-        const redactedOutData = await redactKeychainSecretsInText(outData);
-        const redactedErrData = await redactKeychainSecretsInText(errData);
         return {
           pid,
           exitcode: typeof data.exitcode === "number" ? data.exitcode : null,
-          out_data: redactedOutData,
-          err_data: redactedErrData,
-          raw: {
-            ...data,
-            ...(redactedOutData !== outData ? { "out-data": "[REDACTED]" } : {}),
-            ...(redactedErrData !== errData ? { "err-data": "[REDACTED]" } : {}),
-          },
+          out_data: outData,
+          err_data: errData,
+          raw: data,
         };
       }
       await sleep(input.pollMs);

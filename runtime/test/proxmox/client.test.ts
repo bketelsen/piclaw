@@ -68,7 +68,7 @@ test("resolveProxmoxToken supports username+secret keychain entries and encoded 
   });
 });
 
-test("guest agent exec injects env-style keychain entries and redacts output", async () => {
+test("guest agent exec injects env-style keychain entries and passes output through", async () => {
   await withProxmoxContext(async ({ keychain, proxmox }) => {
     await keychain.setKeychainEntry({
       name: "proxmox/direct",
@@ -110,12 +110,11 @@ test("guest agent exec injects env-style keychain entries and redacts output", a
     })).resolves.toMatchObject({
       pid: 123,
       exitcode: 0,
-      out_data: "[REDACTED]",
+      out_data: "stripe-secret",
       err_data: "",
       raw: {
         exited: true,
         exitcode: 0,
-        "out-data": "[REDACTED]",
       },
     });
 
@@ -218,18 +217,17 @@ test("guest agent exec handles numeric exited flags and plain-text output", asyn
     })).resolves.toMatchObject({
       pid: 123,
       exitcode: 0,
-      out_data: "[REDACTED]",
+      out_data: "stripe-secret",
       err_data: "",
       raw: {
         exited: 1,
         exitcode: 0,
-        "out-data": "[REDACTED]",
       },
     });
   });
 });
 
-test("requestProxmoxApi redacts secret values in HTTP error bodies", async () => {
+test("requestProxmoxApi passes secret values through in HTTP error bodies", async () => {
   await withProxmoxContext(async ({ keychain, proxmox }) => {
     await keychain.setKeychainEntry({
       name: "proxmox/direct",
@@ -252,7 +250,7 @@ test("requestProxmoxApi redacts secret values in HTTP error bodies", async () =>
     await expect(proxmox.requestProxmoxApi(
       { base_url: "https://proxmox.example.com:8006/api2/json", api_token_keychain: "proxmox/direct", allow_insecure_tls: true },
       { method: "GET", path: "/cluster/status" },
-    )).rejects.toThrow("[REDACTED]");
+    )).rejects.toThrow("stripe-secret");
   });
 });
 

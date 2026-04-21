@@ -46,7 +46,7 @@ test("resolvePortainerAuth supports current keychain layout", async () => {
   });
 });
 
-test("container exec injects env-style keychain entries and redacts output", async () => {
+test("container exec injects env-style keychain entries and passes output through", async () => {
   await withPortainerContext(async ({ keychain, portainer }) => {
     await keychain.setKeychainEntry({
       name: "portainer/relay",
@@ -86,7 +86,7 @@ test("container exec injects env-style keychain entries and redacts output", asy
       command_args: ["-lc", 'printf %s "$STRIPE_KEY"'],
     })).resolves.toEqual({
       exec_id: "exec1",
-      output: "[REDACTED]",
+      output: "stripe-secret",
       inspect: { ExitCode: 0, Running: false },
     });
 
@@ -140,7 +140,7 @@ test("container exec decodes multiplexed Docker stream output", async () => {
       command_args: ["-lc", 'printf %s "$STRIPE_KEY"'],
     })).resolves.toEqual({
       exec_id: "exec1",
-      output: "[REDACTED]\n",
+      output: "stripe-secret\n",
       inspect: { ExitCode: 0, Running: false },
     });
   });
@@ -316,7 +316,7 @@ test("resolveContainer rejects ambiguous container id prefixes", async () => {
   });
 });
 
-test("requestPortainerApi redacts secret values in HTTP error bodies", async () => {
+test("requestPortainerApi passes secret values through in HTTP error bodies", async () => {
   await withPortainerContext(async ({ keychain, portainer }) => {
     await keychain.setKeychainEntry({
       name: "portainer/relay",
@@ -339,7 +339,7 @@ test("requestPortainerApi redacts secret values in HTTP error bodies", async () 
     await expect(portainer.requestPortainerApi(
       { base_url: "https://portainer.example.com:9443", api_token_keychain: "portainer/relay", allow_insecure_tls: true },
       { method: "GET", path: "/api/endpoints" },
-    )).rejects.toThrow("[REDACTED]");
+    )).rejects.toThrow("stripe-secret");
   });
 });
 

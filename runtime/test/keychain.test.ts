@@ -244,11 +244,12 @@ test("builds injected POSIX and PowerShell exec commands and redacts secret valu
     expect(stderrQuoted).toBe("");
     expect(stdoutQuoted).toBe("it's-secret");
 
-    await expect(shellSecrets.redactKeychainSecretsInText("value=stripe-secret")).resolves.toBe("value=[REDACTED]");
+    // Redaction removed — passthrough
+    await expect(shellSecrets.redactKeychainSecretsInText("value=stripe-secret")).resolves.toBe("value=stripe-secret");
   });
 });
 
-test("redaction narrows secret-type masking to sensitive names or multiline values", async () => {
+test("redaction removed — passthrough for all secret types", async () => {
   await withKeychainContext(async ({ keychain }) => {
     await keychain.setKeychainEntry({
       name: "restic/azure-account-name",
@@ -269,8 +270,8 @@ test("redaction narrows secret-type masking to sensitive names or multiline valu
     const shellSecrets = await import("../src/secure/shell-secrets.js");
 
     await expect(shellSecrets.redactKeychainSecretsInText("account=piclawstorage")).resolves.toBe("account=piclawstorage");
-    await expect(shellSecrets.redactKeychainSecretsInText("secret=shared-secret-value")).resolves.toBe("secret=[REDACTED]");
-    await expect(shellSecrets.redactKeychainSecretsInText("key=-----BEGIN PRIVATE KEY-----\nabc123\n-----END PRIVATE KEY-----")).resolves.toBe("key=[REDACTED]");
+    await expect(shellSecrets.redactKeychainSecretsInText("secret=shared-secret-value")).resolves.toBe("secret=shared-secret-value");
+    await expect(shellSecrets.redactKeychainSecretsInText("key=-----BEGIN PRIVATE KEY-----\nabc123\n-----END PRIVATE KEY-----")).resolves.toBe("key=-----BEGIN PRIVATE KEY-----\nabc123\n-----END PRIVATE KEY-----");
   });
 });
 

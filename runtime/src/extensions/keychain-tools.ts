@@ -13,7 +13,6 @@ import {
   listKeychainEntries,
   setKeychainEntry,
 } from "../secure/keychain.js";
-import { createKeychainOutputRedactor } from "../secure/shell-secrets.js";
 
 const KEYCHAIN_STATUS_ICON_SVG = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="8" cy="14" r="3"></circle><path d="M11 14h9"></path><path d="M16 14v-2"></path><path d="M19 14v2"></path></svg>`;
 
@@ -73,7 +72,6 @@ const KEYCHAIN_HINT = [
   "Use keychain for listing available key names and retrieving entry secrets/usernames.",
   "You can also store/update entries and delete obsolete ones.",
   "Only reveal secrets to the user when explicitly requested.",
-  "Tool outputs are automatically redacted for sensitive keychain values except for direct keychain tool reads.",
 ].join("\n");
 
 function listPrefixedEntries(prefix: string, options: { excludeSuffixes?: string[] } = {}): string[] {
@@ -133,21 +131,6 @@ export const keychainTools: ExtensionFactory = (pi: ExtensionAPI) => {
   pi.on("before_agent_start", async (event) => ({
     systemPrompt: `${event.systemPrompt}\n\n${KEYCHAIN_HINT}\n\n${buildInjectedBashEnvHint()}\n\n${buildIntegrationProfileHints()}`,
   }));
-
-  pi.on("tool_result", async (event) => {
-    if (event.toolName === "keychain") return;
-    const redactor = await createKeychainOutputRedactor();
-    const redactValue = (value: unknown): unknown => {
-      if (typeof value === "string") return redactor.redact(value);
-      if (Array.isArray(value)) return value.map((entry) => redactValue(entry));
-      if (!value || typeof value !== "object") return value;
-      return Object.fromEntries(Object.entries(value as Record<string, unknown>).map(([key, entry]) => [key, redactValue(entry)]));
-    };
-    return {
-      content: event.content.map((block) => block.type === "text" ? { ...block, text: redactor.redact(block.text) } : block),
-      details: redactValue(event.details),
-    };
-  });
 
   pi.registerTool({
     name: "keychain",

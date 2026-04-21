@@ -1,5 +1,5 @@
 import { getKeychainEntry, listKeychainEntries } from "../secure/keychain.js";
-import { buildInjectedExecCommand, redactKeychainSecretsInText } from "../secure/shell-secrets.js";
+import { buildInjectedExecCommand } from "../secure/shell-secrets.js";
 import { createLogger, debugSuppressedError } from "../utils/logger.js";
 const log = createLogger("portainer.client");
 const defaultRequestExecutor = async ({ url, method, headers, body, allowInsecureTls }) => {
@@ -402,8 +402,8 @@ export async function requestPortainerApi(config, request) {
     const rawBodyBytes = result.bodyBytes ?? new TextEncoder().encode(result.bodyText);
     const body = parseResponseBody(result.bodyText);
     if (result.status >= 400) {
-        const redactedBody = await redactKeychainSecretsInText(typeof body === "string" ? body : JSON.stringify(body));
-        throw new Error(`Portainer API ${request.method} ${path} failed with HTTP ${result.status}: ${redactedBody}`);
+        const errorBody = typeof body === "string" ? body : JSON.stringify(body);
+        throw new Error(`Portainer API ${request.method} ${path} failed with HTTP ${result.status}: ${errorBody}`);
     }
     return {
         status: result.status,
@@ -780,7 +780,7 @@ export class PortainerClient {
         const decodedOutput = decodeDockerMultiplexedBytes(startResponse.raw_body_bytes);
         return {
             exec_id: execId,
-            output: await redactKeychainSecretsInText(decodedOutput),
+            output: decodedOutput,
             inspect: inspectResponse.body,
         };
     }
