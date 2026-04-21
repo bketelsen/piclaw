@@ -897,6 +897,18 @@ function buildWorkflowSummary(workflow: string, result: ProxmoxWorkflowResponse)
   return `Proxmox workflow ${workflow}${vmPrefix}${nodeSuffix} completed${maybePoints}.`;
 }
 
+function startProxmoxUiProgress(ctx: { hasUI?: boolean; ui?: { setWorkingIndicator: (options?: { frames?: string[]; intervalMs?: number }) => void; setWorkingMessage: (message?: string) => void } }, message: string): void {
+  if (!ctx?.hasUI || !ctx.ui) return;
+  ctx.ui.setWorkingIndicator({ frames: ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"], intervalMs: 90 });
+  ctx.ui.setWorkingMessage(message);
+}
+
+function finishProxmoxUiProgress(ctx: { hasUI?: boolean; ui?: { setWorkingIndicator: (options?: { frames?: string[]; intervalMs?: number }) => void; setWorkingMessage: (message?: string) => void } }): void {
+  if (!ctx?.hasUI || !ctx.ui) return;
+  ctx.ui.setWorkingMessage(undefined);
+  ctx.ui.setWorkingIndicator({ frames: [] });
+}
+
 /** Registers the agent-only Proxmox API configuration/request tool. */
 export const proxmoxTool: ExtensionFactory = (pi: ExtensionAPI) => {
   pi.on("before_agent_start", async (event) => ({
@@ -909,7 +921,7 @@ export const proxmoxTool: ExtensionFactory = (pi: ExtensionAPI) => {
     description: "Get, set, or clear the session-scoped Proxmox API profile, perform ad-hoc API requests, or run common Proxmox workflows.",
     promptSnippet: "proxmox: inspect/update the current session Proxmox API profile, send ad-hoc API requests, or run common VM/task/metrics workflows.",
     parameters: ProxmoxToolSchema,
-    async execute(_toolCallId, params): Promise<ProxmoxToolResult> {
+    async execute(_toolCallId, params, _signal, _update, ctx): Promise<ProxmoxToolResult> {
       const chatJid = normalizeChatJid(params.chat_jid);
 
       if (params.action === "contract") {
@@ -1052,20 +1064,25 @@ export const proxmoxTool: ExtensionFactory = (pi: ExtensionAPI) => {
       }
 
       if (params.action === "discover") {
-        const discovery = await discoverProxmoxInstances();
-        return {
-          content: [{
-            type: "text",
-            text: discovery.default_candidate
-              ? `Discovered ${discovery.candidates.length} Proxmox candidate(s); default ${discovery.default_candidate.api_token_keychain}${discovery.default_candidate.base_url ? ` @ ${discovery.default_candidate.base_url}` : ""}.`
-              : "No Proxmox instances discovered from current keychain/env hints.",
-          }],
-          details: {
-            action: "discover",
-            chat_jid: chatJid,
-            ...discovery,
-          },
-        };
+        startProxmoxUiProgress(ctx, "Proxmox: discovering configured instances…");
+        try {
+          const discovery = await discoverProxmoxInstances();
+          return {
+            content: [{
+              type: "text",
+              text: discovery.default_candidate
+                ? `Discovered ${discovery.candidates.length} Proxmox candidate(s); default ${discovery.default_candidate.api_token_keychain}${discovery.default_candidate.base_url ? ` @ ${discovery.default_candidate.base_url}` : ""}.`
+                : "No Proxmox instances discovered from current keychain/env hints.",
+            }],
+            details: {
+              action: "discover",
+              chat_jid: chatJid,
+              ...discovery,
+            },
+          };
+        } finally {
+          finishProxmoxUiProgress(ctx);
+        }
       }
 
       if (params.action === "workflow") {
@@ -1077,7 +1094,9 @@ export const proxmoxTool: ExtensionFactory = (pi: ExtensionAPI) => {
         }
 
         const help = getProxmoxWorkflowHelp(params.workflow);
-        const workflowResult = await handlers.workflow(chatJid, {
+        startProxmoxUiProgress(ctx, `Proxmox: running workflow ${help.canonical_workflow}…`);
+        try {
+          const workflowResult = await handlers.workflow(chatJid, {
           workflow: help.runtime_workflow,
           ...(typeof params.vmid === "number" ? { vmid: params.vmid } : {}),
           ...(typeof params.node === "string" ? { node: params.node } : {}),
@@ -1144,21 +1163,24 @@ export const proxmoxTool: ExtensionFactory = (pi: ExtensionAPI) => {
           `proxmox:workflow:${help.canonical_workflow}`,
         );
 
-        return {
-          content: [{
-            type: "text",
-            text: presented.text,
-          }],
-          details: {
-            action: "workflow",
-            chat_jid: chatJid,
-            ok: true,
-            canonical_workflow: help.canonical_workflow,
-            runtime_workflow: help.runtime_workflow,
-            response: workflowResult,
-            ...(presented.stored_output ? { result_tool_output: presented.stored_output } : {}),
-          },
-        };
+          return {
+            content: [{
+              type: "text",
+              text: presented.text,
+            }],
+            details: {
+              action: "workflow",
+              chat_jid: chatJid,
+              ok: true,
+              canonical_workflow: help.canonical_workflow,
+              runtime_workflow: help.runtime_workflow,
+              response: workflowResult,
+              ...(presented.stored_output ? { result_tool_output: presented.stored_output } : {}),
+            },
+          };
+        } finally {
+          finishProxmoxUiProgress(ctx);
+        }
       }
 
       const outputPath = typeof params.output_path === "string" ? params.output_path.trim() : "";

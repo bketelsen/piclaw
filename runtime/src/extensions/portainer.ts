@@ -767,6 +767,18 @@ function buildWorkflowSummary(workflow: string, result: PortainerWorkflowRespons
   return `Portainer workflow ${workflow} completed${maybeArrayCount}.`;
 }
 
+function startPortainerUiProgress(ctx: { hasUI?: boolean; ui?: { setWorkingIndicator: (options?: { frames?: string[]; intervalMs?: number }) => void; setWorkingMessage: (message?: string) => void } }, message: string): void {
+  if (!ctx?.hasUI || !ctx.ui) return;
+  ctx.ui.setWorkingIndicator({ frames: ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"], intervalMs: 90 });
+  ctx.ui.setWorkingMessage(message);
+}
+
+function finishPortainerUiProgress(ctx: { hasUI?: boolean; ui?: { setWorkingIndicator: (options?: { frames?: string[]; intervalMs?: number }) => void; setWorkingMessage: (message?: string) => void } }): void {
+  if (!ctx?.hasUI || !ctx.ui) return;
+  ctx.ui.setWorkingMessage(undefined);
+  ctx.ui.setWorkingIndicator({ frames: [] });
+}
+
 export const portainerTool: ExtensionFactory = (pi: ExtensionAPI) => {
   pi.on("before_agent_start", async (event) => ({
     systemPrompt: `${event.systemPrompt}\n\n${PORTAINER_TOOL_HINT}`,
@@ -778,7 +790,7 @@ export const portainerTool: ExtensionFactory = (pi: ExtensionAPI) => {
     description: "Get, set, or clear the session-scoped Portainer API profile, perform ad-hoc API requests, or run common Portainer workflows.",
     promptSnippet: "portainer: inspect/update the current session Portainer API profile, send ad-hoc API requests, or run common endpoint/stack/container/image/volume workflows.",
     parameters: PortainerToolSchema,
-    async execute(_toolCallId, params): Promise<PortainerToolResult> {
+    async execute(_toolCallId, params, _signal, _update, ctx): Promise<PortainerToolResult> {
       const chatJid = normalizeChatJid(params.chat_jid);
 
       if (params.action === "contract") {
@@ -921,20 +933,25 @@ export const portainerTool: ExtensionFactory = (pi: ExtensionAPI) => {
       }
 
       if (params.action === "discover") {
-        const discovery = await discoverPortainerInstances();
-        return {
-          content: [{
-            type: "text",
-            text: discovery.default_candidate
-              ? `Discovered ${discovery.candidates.length} Portainer candidate(s); default ${discovery.default_candidate.api_token_keychain}${discovery.default_candidate.base_url ? ` @ ${discovery.default_candidate.base_url}` : ""}.`
-              : "No Portainer instances discovered from current keychain/env hints.",
-          }],
-          details: {
-            action: "discover",
-            chat_jid: chatJid,
-            ...discovery,
-          },
-        };
+        startPortainerUiProgress(ctx, "Portainer: discovering configured instances…");
+        try {
+          const discovery = await discoverPortainerInstances();
+          return {
+            content: [{
+              type: "text",
+              text: discovery.default_candidate
+                ? `Discovered ${discovery.candidates.length} Portainer candidate(s); default ${discovery.default_candidate.api_token_keychain}${discovery.default_candidate.base_url ? ` @ ${discovery.default_candidate.base_url}` : ""}.`
+                : "No Portainer instances discovered from current keychain/env hints.",
+            }],
+            details: {
+              action: "discover",
+              chat_jid: chatJid,
+              ...discovery,
+            },
+          };
+        } finally {
+          finishPortainerUiProgress(ctx);
+        }
       }
 
       if (params.action === "workflow") {
@@ -946,7 +963,9 @@ export const portainerTool: ExtensionFactory = (pi: ExtensionAPI) => {
         }
 
         const help = getPortainerWorkflowHelp(params.workflow);
-        const workflowResult = await handlers.workflow(chatJid, {
+        startPortainerUiProgress(ctx, `Portainer: running workflow ${help.canonical_workflow}…`);
+        try {
+          const workflowResult = await handlers.workflow(chatJid, {
           workflow: help.runtime_workflow,
           ...(typeof params.endpoint_id === "number" ? { endpoint_id: params.endpoint_id } : {}),
           ...(typeof params.stack_id === "number" ? { stack_id: params.stack_id } : {}),
@@ -982,18 +1001,21 @@ export const portainerTool: ExtensionFactory = (pi: ExtensionAPI) => {
           `portainer:workflow:${help.canonical_workflow}`,
         );
 
-        return {
-          content: [{ type: "text", text: presented.text }],
-          details: {
-            action: "workflow",
-            chat_jid: chatJid,
-            ok: true,
-            canonical_workflow: help.canonical_workflow,
-            runtime_workflow: help.runtime_workflow,
-            response: workflowResult,
-            ...(presented.stored_output ? { result_tool_output: presented.stored_output } : {}),
-          },
-        };
+          return {
+            content: [{ type: "text", text: presented.text }],
+            details: {
+              action: "workflow",
+              chat_jid: chatJid,
+              ok: true,
+              canonical_workflow: help.canonical_workflow,
+              runtime_workflow: help.runtime_workflow,
+              response: workflowResult,
+              ...(presented.stored_output ? { result_tool_output: presented.stored_output } : {}),
+            },
+          };
+        } finally {
+          finishPortainerUiProgress(ctx);
+        }
       }
 
       const outputPath = typeof params.output_path === "string" ? params.output_path.trim() : "";
