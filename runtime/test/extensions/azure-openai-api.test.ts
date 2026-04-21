@@ -6,6 +6,8 @@ import {
   applySessionCorrelationHeaders,
   buildBaseOptions,
   processResponsesStream,
+  resolveCacheRetention,
+  resolveCacheSessionId,
   resolvePiAiResponsesSharedModulePath,
 } from "../../src/extensions/azure-openai-api.js";
 
@@ -157,6 +159,30 @@ test("buildBaseOptions preserves session/cache-affinity fields for downstream re
     maxRetryDelayMs: 15000,
     metadata,
   });
+});
+
+test("resolveCacheRetention defaults to short and honors PI_CACHE_RETENTION=long", () => {
+  const previous = process.env.PI_CACHE_RETENTION;
+  try {
+    delete process.env.PI_CACHE_RETENTION;
+    expect(resolveCacheRetention(undefined)).toBe("short");
+
+    process.env.PI_CACHE_RETENTION = "long";
+    expect(resolveCacheRetention(undefined)).toBe("long");
+    expect(resolveCacheRetention("none")).toBe("none");
+  } finally {
+    if (previous === undefined) {
+      delete process.env.PI_CACHE_RETENTION;
+    } else {
+      process.env.PI_CACHE_RETENTION = previous;
+    }
+  }
+});
+
+test("resolveCacheSessionId suppresses session affinity when cache retention is none", () => {
+  expect(resolveCacheSessionId("sess_cache", "none")).toBeUndefined();
+  expect(resolveCacheSessionId("sess_cache", "short")).toBe("sess_cache");
+  expect(resolveCacheSessionId(undefined, "short")).toBeUndefined();
 });
 
 

@@ -141,7 +141,9 @@ Upstream 0.68.0 includes session/caching/header behavior fixes and new lifecycle
   - stale correlation-header overwrite behavior
   - stale `x-ms-client-request-id` cleanup when Azure mirroring is disabled
   - `buildBaseOptions()` preservation of `sessionId`, `cacheRetention`, headers, retry delay, and metadata
+  - cache-retention resolution plus `cacheRetention: "none"` suppression of session-affinity reuse
 - Tightened `applySessionCorrelationHeaders()` so a stale `x-ms-client-request-id` cannot leak forward when a request only wants `session_id`/`x-client-request-id` correlation.
+- Aligned the custom Azure Responses paths (`azure-openai.ts` and the harness copy) with upstream cache-retention semantics by suppressing `session_id` / `x-client-request-id` mirroring and `prompt_cache_key` when cache retention resolves to `none`.
 - Added explicit image-command UX coverage in `runtime/test/extensions/azure-openai-image-output.test.ts`, proving `/image` and `/flux` emit an immediate status message before final success/failure delivery.
 - Current audit conclusion for image progress/status: the existing placeholder/status-message flow is sufficient for now; no extra web-only working-indicator surface is required beyond the already posted image/flux status messages.
 - Remaining Azure audit scope is now primarily request/session/cache simplification rather than lifecycle/status adoption.

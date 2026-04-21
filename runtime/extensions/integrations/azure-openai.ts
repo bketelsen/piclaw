@@ -34,6 +34,7 @@ import {
   convertResponsesMessages,
   convertResponsesTools,
   processResponsesStream,
+  resolveCacheSessionId,
 } from "../../src/extensions/azure-openai-api.js";
 import { estimateAzureRequestTokens } from "../../src/utils/azure-tool-call-limit.js";
 import { streamSimpleOpenAICompletions } from "@mariozechner/pi-ai";
@@ -1003,6 +1004,7 @@ function streamAzureOpenAIResponses(model: any, context: any, options: any) {
     let streamErrorDetail = "";
 
     try {
+      const cacheSessionId = resolveCacheSessionId(options?.sessionId, options?.cacheRetention);
       const headers = { ...model.headers };
       if (options?.headers) {
         Object.assign(headers, options.headers);
@@ -1013,7 +1015,7 @@ function streamAzureOpenAIResponses(model: any, context: any, options: any) {
           delete headers[key];
         }
       }
-      Object.assign(headers, applySessionCorrelationHeaders(headers, options?.sessionId));
+      Object.assign(headers, applySessionCorrelationHeaders(headers, cacheSessionId));
 
       // Pull any stored phase metadata from prior assistant messages, then apply it to the
       // reconstructed ResponseInput so gpt-5.3-codex sees the same phases on replay.
@@ -1091,7 +1093,7 @@ function streamAzureOpenAIResponses(model: any, context: any, options: any) {
         // Phase replay summary is included only when AOAI_LOG_PHASES=1; omit otherwise.
         phaseReplay: phaseReplaySummary,
         storedPhaseCount: phaseById.size,
-        promptCacheKey: options?.sessionId ?? null,
+        promptCacheKey: cacheSessionId ?? null,
         requestHeaders: {
           session_id: headers.session_id ?? null,
           x_client_request_id: headers["x-client-request-id"] ?? null,
@@ -1133,7 +1135,7 @@ function streamAzureOpenAIResponses(model: any, context: any, options: any) {
 
       // Only include OpenAI-specific params for models that support them
       if (reasoningEnabled) {
-        params.prompt_cache_key = options?.sessionId;
+        params.prompt_cache_key = cacheSessionId;
         params.text = getAzureResponsesTextConfig(options?.textVerbosity);
       }
 

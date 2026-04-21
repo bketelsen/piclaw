@@ -197,6 +197,18 @@ export function buildBaseOptions(model, options, apiKey) {
         metadata: options?.metadata,
     };
 }
+export function resolveCacheRetention(cacheRetention) {
+    if (cacheRetention) {
+        return cacheRetention;
+    }
+    if (typeof process !== "undefined" && process.env.PI_CACHE_RETENTION === "long") {
+        return "long";
+    }
+    return "short";
+}
+export function resolveCacheSessionId(sessionId, cacheRetention) {
+    return resolveCacheRetention(cacheRetention) === "none" ? undefined : sessionId;
+}
 export function applySessionCorrelationHeaders(headers, sessionId, options) {
     const next = { ...(headers || {}) };
     if (!sessionId)
@@ -205,6 +217,9 @@ export function applySessionCorrelationHeaders(headers, sessionId, options) {
     next["x-client-request-id"] = sessionId;
     if (options?.includeAzureClientRequestId) {
         next["x-ms-client-request-id"] = sessionId;
+    }
+    else {
+        delete next["x-ms-client-request-id"];
     }
     return next;
 }

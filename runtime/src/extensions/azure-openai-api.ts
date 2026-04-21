@@ -278,6 +278,23 @@ export function buildBaseOptions(
   };
 }
 
+export function resolveCacheRetention(cacheRetention: string | number | undefined): string | number {
+  if (cacheRetention) {
+    return cacheRetention;
+  }
+  if (typeof process !== "undefined" && process.env.PI_CACHE_RETENTION === "long") {
+    return "long";
+  }
+  return "short";
+}
+
+export function resolveCacheSessionId(
+  sessionId: string | undefined,
+  cacheRetention: string | number | undefined,
+): string | undefined {
+  return resolveCacheRetention(cacheRetention) === "none" ? undefined : sessionId;
+}
+
 export function applySessionCorrelationHeaders(
   headers: Record<string, string> | undefined,
   sessionId: string | undefined,

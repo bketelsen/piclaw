@@ -25,6 +25,7 @@ import {
   convertResponsesMessages,
   convertResponsesTools,
   processResponsesStream,
+  resolveCacheSessionId,
 } from "../../src/extensions/azure-openai-api.js";
 import { streamSimpleOpenAICompletions } from "@mariozechner/pi-ai";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
@@ -1002,6 +1003,7 @@ function streamAzureOpenAIResponses(model: any, context: any, options: any) {
     let streamErrorDetail = "";
 
     try {
+      const cacheSessionId = resolveCacheSessionId(options?.sessionId, options?.cacheRetention);
       const headers = { ...model.headers };
       if (options?.headers) {
         Object.assign(headers, options.headers);
@@ -1012,7 +1014,7 @@ function streamAzureOpenAIResponses(model: any, context: any, options: any) {
           delete headers[key];
         }
       }
-      Object.assign(headers, applySessionCorrelationHeaders(headers, options?.sessionId, {
+      Object.assign(headers, applySessionCorrelationHeaders(headers, cacheSessionId, {
         includeAzureClientRequestId: ENABLE_EXPERIMENTAL_AZURE_CLIENT_REQUEST_ID,
       }));
 
@@ -1059,7 +1061,7 @@ function streamAzureOpenAIResponses(model: any, context: any, options: any) {
         // Phase replay summary is included only when AOAI_LOG_PHASES=1; omit otherwise.
         phaseReplay: phaseReplaySummary,
         storedPhaseCount: phaseById.size,
-        promptCacheKey: options?.sessionId ?? null,
+        promptCacheKey: cacheSessionId ?? null,
         requestHeaders: {
           session_id: headers.session_id ?? null,
           x_client_request_id: headers["x-client-request-id"] ?? null,
@@ -1097,7 +1099,7 @@ function streamAzureOpenAIResponses(model: any, context: any, options: any) {
 
       // Only include OpenAI-specific params for models that support them
       if (reasoningEnabled) {
-        params.prompt_cache_key = options?.sessionId;
+        params.prompt_cache_key = cacheSessionId;
         params.text = { format: { type: "text" }, verbosity: "medium" };
       }
 
