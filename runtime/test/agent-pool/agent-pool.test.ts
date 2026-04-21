@@ -538,7 +538,7 @@ test("agent pool applies the pressure pool cap immediately after acquiring a sec
   await pool.shutdown();
 });
 
-test("agent pool enables the default pressure trim path before RSS reaches the old 512MB threshold", async () => {
+test("agent pool enables the default pressure trim path at the 512MB threshold", async () => {
   const ws = getTestWorkspace();
   restoreEnv = setEnv({
     PICLAW_WORKSPACE: ws.workspace,
@@ -551,7 +551,7 @@ test("agent pool enables the default pressure trim path before RSS reaches the o
   });
 
   const originalMemoryUsageRss = process.memoryUsage.rss;
-  (process.memoryUsage as typeof process.memoryUsage & { rss: () => number }).rss = () => 400 * 1024 * 1024;
+  (process.memoryUsage as typeof process.memoryUsage & { rss: () => number }).rss = () => 520 * 1024 * 1024;
 
   try {
     const { AgentPool } = await importFresh<typeof import("../src/agent-pool.js")>("../src/agent-pool.js");

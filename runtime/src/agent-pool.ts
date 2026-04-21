@@ -111,8 +111,13 @@ const DEFAULT_MAIN_IDLE_TTL = 3 * 60 * 1000; // 3 minutes
 const DEFAULT_SIDE_IDLE_TTL = 60 * 1000; // 1 minute
 const DEFAULT_CLEANUP_INTERVAL = 30 * 1000; // check every 30 seconds
 const DEFAULT_MAIN_SESSION_POOL_MAX_SIZE = 2;
-const DEFAULT_MEMORY_PRESSURE_RSS_BYTES = 384 * 1024 * 1024;
-const DEFAULT_MEMORY_PRESSURE_MAIN_IDLE_TTL = 30 * 1000;
+// 512 MB: observed normal multi-session RSS peaks at 388–428 MB so 384 MB
+// triggered pressure during ordinary work. 512 MB gives headroom above those
+// peaks while still protecting against genuine memory stress.
+const DEFAULT_MEMORY_PRESSURE_RSS_BYTES = 512 * 1024 * 1024;
+// 60 s under genuine pressure: 30 s was too short — sessions were killed and
+// immediately recreated, causing high churn with no net memory benefit.
+const DEFAULT_MEMORY_PRESSURE_MAIN_IDLE_TTL = 60 * 1000;
 const DEFAULT_MEMORY_PRESSURE_MAIN_SESSION_POOL_MAX_SIZE = 1;
 
 function parsePositiveMs(value: string | undefined, fallback: number): number {
