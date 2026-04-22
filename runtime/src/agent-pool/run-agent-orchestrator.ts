@@ -468,13 +468,15 @@ async function runPromptAttempt(
   let sawCompactionIntent = false;
   let sawAssistantToolCallMessage = false;
   let onlyReadOnlyToolActivity = true;
+  let hadToolFailure = false;
+  let failedToolName: string | null = null;
   let assistantToolUseMessageCount = 0;
   let toolUseBudgetExceeded = false;
   const sessionEntryBaseline = snapshotSessionEntryCount(session);
   const configuredToolUseBudget = Number.parseInt(process.env.PICLAW_TURN_MAX_TOOL_USE_MESSAGES || "", 10);
   const toolUseMessageBudget = Number.isFinite(configuredToolUseBudget) && configuredToolUseBudget > 0
     ? configuredToolUseBudget
-    : 24;
+    : 64;
 
   const originalOnTurnComplete = runOptions.onTurnComplete;
   const onTurnComplete = originalOnTurnComplete
@@ -509,6 +511,13 @@ async function runPromptAttempt(
       const toolName = (event as { toolName?: unknown }).toolName;
       if (!isRetrySafeToolName(toolName)) {
         onlyReadOnlyToolActivity = false;
+      }
+      // Track failed tool executions so recovery can make smarter decisions.
+      if (event.type === "tool_execution_end" && (event as { isError?: unknown }).isError) {
+        hadToolFailure = true;
+        if (!failedToolName && typeof toolName === "string") {
+          failedToolName = toolName;
+        }
       }
     }
     if (event.type === "message_end") {
@@ -595,7 +604,10 @@ async function runPromptAttempt(
       status: "error",
       result: null,
       error: `Tool-use budget exceeded before finalization (${assistantToolUseMessageCount}/${toolUseMessageBudget} tool steps).`,
-    };
+      toolBudgetExceeded: true,
+      toolStepsUsed: assistantToolUseMessageCount,
+      toolStepsBudget: toolUseMessageBudget,
+    } as any;
   } else if (promptThrownError) {
     output = { status: "error", result: null, error: promptThrownError };
   } else {
