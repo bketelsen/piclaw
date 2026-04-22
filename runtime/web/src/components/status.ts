@@ -4,7 +4,7 @@ import { addToWhitelist, getWorkspaceBranch, respondToAgentRequest } from '../ap
 import { renderThinkingMarkdown } from '../markdown.js';
 import { getTurnColor } from '../ui/agent-utils.js';
 import { buildTurnDotClass, resolveRunningStatusIndicator, shouldShowRunningStatusDot } from '../ui/status-dot.js';
-import { getStatusElapsedLabel, getStatusRetryCountdownLabel, isCompactionStatus, resolveStatusPanelTitle } from '../ui/status-duration.js';
+import { getStatusElapsedLabel, getStatusRetryCountdownLabel, isCompactionStatus, parseStatusLastEventAt, resolveStatusPanelTitle } from '../ui/status-duration.js';
 import { extractToolContextPath } from '../ui/tool-git-context.js';
 import { useConnectionStatusPresentation } from '../ui/connection-status.js';
 
@@ -21,6 +21,13 @@ const GIT_BRANCH_ICON_SVG = html`
         <circle cx="18" cy="6" r="3"></circle>
         <circle cx="6" cy="18" r="3"></circle>
         <path d="M18 9a9 9 0 0 1-9 9"></path>
+    </svg>
+`;
+
+const CLOCK_ICON_SVG = html`
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
+        <circle cx="12" cy="12" r="9"></circle>
+        <path d="M12 7v5l3 2"></path>
     </svg>
 `;
 
@@ -74,6 +81,18 @@ export function formatAgentStatusGitLabel(repoPath, branch) {
     return [repoName, normalizedBranch].filter(Boolean).join(' • ');
 }
 
+export function resolveStatusActivityAgeLabel(status, nowMs = Date.now()) {
+    if (!status || typeof status !== 'object') return null;
+    const type = typeof status.type === 'string' ? status.type : '';
+    const isLastActivity = Boolean(status.last_activity || status.lastActivity);
+    const isToolStatus = type === 'tool_call' || type === 'tool_status' || Boolean(status.tool_name || status.tool_args);
+    if (!isLastActivity && !isToolStatus) return null;
+    const lastEventAtMs = parseStatusLastEventAt(status);
+    if (lastEventAtMs === null) return null;
+    const ageLabel = formatElapsed(new Date(lastEventAtMs).toISOString(), nowMs);
+    return ageLabel ? `${ageLabel} ago` : null;
+}
+
 export function resolveAgentStatusContent(status, options = {}) {
     const isLastActivity = options?.isLastActivity ?? Boolean(status?.last_activity || status?.lastActivity);
     const title = status?.title;
@@ -91,15 +110,16 @@ export function resolveAgentStatusContent(status, options = {}) {
         content = title || statusText || 'Working...';
     }
     if (!isLastActivity) return content;
-    return content && content !== 'Working...'
-        ? `Recent activity: ${content}`
-        : 'Last activity just now';
+    if (content && content !== 'Working...') {
+        return `Recent activity: ${content}`;
+    }
+    return 'Last activity';
 }
 
 /** Preact component: agent status bar with draft/thought/plan panels. */
-function formatElapsed(isoString) {
+function formatElapsed(isoString, nowMs = Date.now()) {
     if (!isoString) return null;
-    const ms = Date.now() - new Date(isoString).getTime();
+    const ms = nowMs - new Date(isoString).getTime();
     if (!Number.isFinite(ms) || ms < 0) return null;
     const totalSec = Math.floor(ms / 1000);
     const h = Math.floor(totalSec / 3600);
@@ -231,6 +251,7 @@ export function AgentStatus({ status, draft, plan, thought, pendingRequest, inte
     }, [escapeCollapseKey, onPanelToggle]);
 
     const statusIsCompaction = isCompactionStatus(status);
+    const isLastActivity = Boolean(status?.last_activity || status?.lastActivity);
     const toolContextPath = useMemo(
         () => extractToolContextPath(status?.tool_name, status?.tool_args),
         [status?.tool_name, status?.tool_args],
@@ -249,6 +270,13 @@ export function AgentStatus({ status, draft, plan, thought, pendingRequest, inte
         const timer = setInterval(() => setNowMs(Date.now()), 1000);
         return () => clearInterval(timer);
     }, [status?.retry_at, status?.retryAt]);
+
+    useEffect(() => {
+        if (!isLastActivity) return;
+        setNowMs(Date.now());
+        const timer = setInterval(() => setNowMs(Date.now()), 1000);
+        return () => clearInterval(timer);
+    }, [isLastActivity]);
 
     useEffect(() => {
         const isToolStatus = status?.type === 'tool_call' || status?.type === 'tool_status';
@@ -284,7 +312,6 @@ export function AgentStatus({ status, draft, plan, thought, pendingRequest, inte
     const turnColor = getTurnColor(activeTurn);
     const dotClass = buildTurnDotClass({ steerQueued });
     const panelTitle = (label) => label;
-    const isLastActivity = Boolean(status?.last_activity || status?.lastActivity);
     const showRunningStatusDot = shouldShowRunningStatusDot(status, { isLastActivity });
     const runningIndicatorMode = resolveRunningStatusIndicator(status, { isLastActivity });
     const pendingIndicatorMode = resolveRunningStatusIndicator(null, { pendingRequest: true });
@@ -300,6 +327,7 @@ export function AgentStatus({ status, draft, plan, thought, pendingRequest, inte
     const statusIntentColor = resolveIntentColor(status?.kind || (statusIsCompaction ? 'warning' : 'info'));
 
     const content = resolveAgentStatusContent(status, { isLastActivity });
+    const statusActivityAgeLabel = resolveStatusActivityAgeLabel(status, nowMs);
 
     const toolRepoRepoPath = toolRepoContext?.repoPath || '';
     const toolRepoBranch = toolRepoContext?.branch || '';
@@ -748,14 +776,14 @@ export function AgentStatus({ status, draft, plan, thought, pendingRequest, inte
                 panelKey: 'draft',
             })}
             ${showCorePanels && status && status?.type !== 'intent' && html`
-                <div class=${`agent-status${isLastActivity ? ' agent-status-last-activity' : ''}${status?.type === 'error' ? ' agent-status-error' : ''}${toolRepoLabel || statusHints.length > 0 ? ' agent-status-multiline' : ''}`} aria-live="polite" style=${turnColor ? `--turn-color: ${turnColor};` : ''}>
+                <div class=${`agent-status${isLastActivity ? ' agent-status-last-activity' : ''}${status?.type === 'error' ? ' agent-status-error' : ''}${toolRepoLabel || statusHints.length > 0 || statusActivityAgeLabel ? ' agent-status-multiline' : ''}`} aria-live="polite" style=${turnColor ? `--turn-color: ${turnColor};` : ''}>
                     ${turnColor && showRunningStatusDot && html`<span class=${dotClass} aria-hidden="true"></span>`}
                     ${status?.type === 'error'
                         ? html`<span class="agent-status-error-icon" aria-hidden="true">⚠</span>`
                         : (runningIndicatorMode === 'spinner' && html`<div class="agent-status-spinner"></div>`)}
                     <div class="agent-status-copy">
                         <span class="agent-status-text">${content}</span>
-                        ${(toolRepoLabel || orderedStatusHints.length > 0) && html`
+                        ${(toolRepoLabel || orderedStatusHints.length > 0 || statusActivityAgeLabel) && html`
                             <span class="agent-status-meta-row">
                                 ${leadingStatusHints.map((hint) => html`
                                     <span key=${hint.key} class="agent-status-hint-row" title=${hint.title || hint.label}>
@@ -779,6 +807,13 @@ export function AgentStatus({ status, draft, plan, thought, pendingRequest, inte
                                         <span class="agent-status-hint-label">${hint.label}</span>
                                     </span>
                                 `)}
+                                ${statusActivityAgeLabel && html`
+                                    ${(toolRepoLabel || orderedStatusHints.length > 0) && html`<span class="agent-status-meta-separator" aria-hidden="true">•</span>`}
+                                    <span class="agent-status-hint-row agent-status-activity-row" title=${`${isLastActivity ? 'Recent activity' : 'Last event'} ${statusActivityAgeLabel}`}>
+                                        <span class="agent-status-hint-icon">${CLOCK_ICON_SVG}</span>
+                                        <span class="agent-status-hint-label">${statusActivityAgeLabel}</span>
+                                    </span>
+                                `}
                             </span>
                         `}
                     </div>

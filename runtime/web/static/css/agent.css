@@ -223,12 +223,17 @@
     min-width: 0;
 }
 
-.agent-status-git-separator {
+.agent-status-git-separator,
+.agent-status-meta-separator {
     display: inline-block;
     margin: 0 4px;
     line-height: 1;
     vertical-align: middle;
     opacity: 0.95;
+}
+
+.agent-status-activity-row {
+    max-width: none;
 }
 
 .agent-status-error {
