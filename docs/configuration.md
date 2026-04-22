@@ -357,22 +357,24 @@ Set via environment variables (see above) or in `.piclaw/config.json`:
 
 PiClaw ships the `pi-mcp-adapter` extension for token-efficient MCP access.
 
-Preferred project-local config:
+Preferred shared project config:
 
 ```text
-/workspace/.pi/mcp.json
+/workspace/.mcp.json
 ```
 
-Starter example seeded on first startup:
+Starter examples seeded on first startup:
 
 ```text
+/workspace/.mcp.json.example
 /workspace/.pi/mcp.json.example
 ```
 
-Global Pi-home config also works:
+Pi-specific override layers also work:
 
 ```text
 ~/.pi/agent/mcp.json
+/workspace/.pi/mcp.json
 ```
 
 In the container image that Pi home is typically bind-mounted under:
@@ -392,7 +394,7 @@ The same `/config/.pi/agent/` path also holds Pi-managed provider auth/model met
 Notes:
 
 - prefer the project-local file when MCP servers are part of the current workspace
-- config is merged from Pi-home config, optional imported tool configs, then project-local `.pi/mcp.json` overrides
+- config now prefers shared MCP files first (`~/.config/mcp/mcp.json`, then project `.mcp.json`), with Pi-owned config layers used for Pi-specific imports/overrides and project-local `.pi/mcp.json` as the final override
 - start a new chat/session or restart PiClaw after changing MCP config
 - the adapter exposes the `mcp` tool plus `/mcp`, `/mcp status`, `/mcp tools`, `/mcp reconnect [server]`, and `/mcp-auth` commands
 - `/mcp` opens the MCP management panel in the web UI and falls back to text status elsewhere

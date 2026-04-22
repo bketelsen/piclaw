@@ -23,7 +23,7 @@
         "js-yaml": "^4.1.1",
         "katex": "0.16.45",
         "marked": "18.0.0",
-        "pi-mcp-adapter": "2.4.0",
+        "pi-mcp-adapter": "^2.4.1",
         "pptxviewjs": "^1.1.9",
         "preact": "10.29.1",
         "qrcode-terminal": "0.12.0",
@@ -1157,7 +1157,7 @@
 
     "pend": ["pend@1.2.0", "", {}, "sha512-F3asv42UuXchdzt+xXqfW1OGlVBe+mxa2mqI0pg5yAHZPvFmY3Y6drSf/GQ1A86WgWEN9Kzh/WrgKa6iGcHXLg=="],
 
-    "pi-mcp-adapter": ["pi-mcp-adapter@2.4.0", "", { "dependencies": { "@modelcontextprotocol/ext-apps": "^1.2.2", "@modelcontextprotocol/sdk": "^1.25.1", "@sinclair/typebox": "^0.32.0", "open": "^10.2.0", "zod": "^3.25.0 || ^4.0.0" }, "bin": { "pi-mcp-adapter": "cli.js" } }, "sha512-j13w+i5RQFkHh06U8FXRNtCxNaS7V7OV+EhcVw0NZYu+XvbXL6QO2ZDHnhpfuLbSr31BEbSVqtRb6d9c8ZOvag=="],
+    "pi-mcp-adapter": ["pi-mcp-adapter@2.4.1", "", { "dependencies": { "@modelcontextprotocol/ext-apps": "^1.2.2", "@modelcontextprotocol/sdk": "^1.25.1", "@sinclair/typebox": "^0.32.0", "open": "^10.2.0", "zod": "^3.25.0 || ^4.0.0" }, "bin": { "pi-mcp-adapter": "cli.js" } }, "sha512-veU0e3bOLudGqaVkETlKOSi0Cg8qFg0nG0Zmd4y6flbgERWruFX9McP5rc3NrBcxx4+NR1kY18YxjApVeC8erw=="],
 
     "picocolors": ["picocolors@1.1.1", "", {}, "sha512-xceH2snhtb5M9liqDsmEw56le376mTZkEX/jEb/RxNFyegNul7eNslCXP9FDj/Lcu0X8KEyMceP2ntpaHrDEVA=="],
 

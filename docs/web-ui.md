@@ -106,7 +106,7 @@ Configuration details live in [configuration.md](configuration.md).
 - **`cdp_browser`** — Chromium/Edge/Chrome automation via CDP for navigation,
   DOM clicking, JS evaluation, and screenshots
 - **`mcp` via `pi-mcp-adapter`** — token-efficient MCP access through
-  `.pi/mcp.json`
+  shared `.mcp.json` plus optional Pi-specific `.pi/mcp.json` overrides
 - **Cross-instance IPC** — pair trusted piclaw instances, exchange signed
   prompts, review mediated proposals, and use the built-in `remote-peer`
   skill for remote queries and approvals
