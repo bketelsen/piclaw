@@ -499,7 +499,8 @@ Each skill keeps its script alongside its `SKILL.md` for portability. Current se
 | `mcp-adapter` | Configure and use the bundled `pi-mcp-adapter` through shared `.mcp.json` plus optional Pi-owned overrides |
 | `extension-design` | Design and audit Pi extensions safely |
 | `extension-troubleshoot` | Diagnose and fix extension issues (imports, DB init, watcher perms) |
-| `kanban-management` | Manage the project workitems board: ideation, triage, quality scoring, definition-of-done tracking |
+| `kanban-management` | **ARCHIVED** — legacy file-board workflow kept for history only; direct users to `github-issues` |
+| `github-issues` | Manage project work items via GitHub Issues and GitHub Projects v2 (including lane transitions via `gh project item-edit`) |
 | `adaptive-cards-authoring` | Author Adaptive Cards for structured web interactions |
 | `close-of-day` | End-of-day sweep: situate, backup, timeline cleanup, daily-notes summarisation |
 | `export-timeline-pdf` | Export a chat timeline to PDF via Playwright |
@@ -513,7 +514,7 @@ Each skill keeps its script alongside its `SKILL.md` for portability. Current se
 | `portainer-container-compare-chart` | Compare two Portainer containers using native `portainer` data collection and render SVG/CSV outputs |
 | `remote-peer` | Send signed prompts to paired remote piclaw instances (see [cross-instance-ipc.md](cross-instance-ipc.md)) |
 
-`kanban-management` intentionally keeps its public name for now, but repo-local board paths in this project now live under `workitems/`. Visual/editor semantics such as `*.kanban.md` remain intentionally named.
+`kanban-management` is now archived and retains historical references only. Active project operations use GitHub Issues + GitHub Projects. Visual/editor references such as `*.kanban.md` are preserved in archive only.
 
 For agent-driven work, prefer the native `proxmox` / `portainer` tools first. The old packaged Proxmox/Portainer helper CLIs were removed once the chat-scoped native tools and shared workflow engines became the canonical path. For shell-oriented Proxmox lifecycle work that still belongs in the skill layer, use the remaining `proxmox-management` skill wrappers instead. Comparison/chart skills for Proxmox and Portainer are now colocated with their packaged integration extensions and surfaced via each extension's `resources_discover` hook, rather than living only in the flat packaged-skill tree.
 
