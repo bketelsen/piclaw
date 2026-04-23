@@ -39,7 +39,7 @@ PI_AGENT_VERSION ?= $(shell jq -r '.dependencies["@mariozechner/pi-coding-agent"
 WEB_BUILD_TEST_TIMEOUT_MS ?= 20000
 
 .PHONY: help up down enter build build-piclaw build-web build-ts vendor update-mermaid-vendor pack \
-        local-install restart lint test test-coverage ci-fast publish-smoke \
+        local-install restart lint test test-coverage ci-fast ci-integration publish-smoke \
         dual-tag tag-ghcr sync-version bump-minor bump-patch push
 
 help: ## Show this help
@@ -178,6 +178,9 @@ test-coverage: ## Run piclaw tests with coverage
 
 ci-fast: ## Run the canonical fast CI contract used by GitHub Actions
 	bun run ci:fast
+
+ci-integration: ## Run the full integration gate (lint + all tests + static analysis + build + Playwright)
+	bun run ci:integration
 
 publish-smoke: ## Smoke-test a published piclaw image (requires IMAGE_REF, PLATFORM, EXPECTED_BUN_VERSION, EXPECTED_RESTIC_VERSION)
 	@: "$${IMAGE_REF:?set IMAGE_REF}" "$${PLATFORM:?set PLATFORM}" "$${EXPECTED_BUN_VERSION:?set EXPECTED_BUN_VERSION}" "$${EXPECTED_RESTIC_VERSION:?set EXPECTED_RESTIC_VERSION}"
