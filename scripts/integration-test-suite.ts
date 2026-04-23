@@ -102,6 +102,13 @@ await runStage("test:full", ["bun", "test", "--max-concurrency=1"], {
   env: { PICLAW_DB_IN_MEMORY: "1" },
 });
 
+// ── Stage 2b: Feature regression tests ────────────────────────────────
+
+await runStage("test:features", ["bun", "test", "--max-concurrency=1", "test/features/feature-regression.test.ts"], {
+  cwd: resolve(ROOT, "runtime"),
+  env: { PICLAW_DB_IN_MEMORY: "1", PICLAW_RUN_FEATURE_TESTS: "1" },
+});
+
 // ── Stage 3: Static analysis (advisory — pre-existing debt may exist) ──
 
 const staticChecks = [
