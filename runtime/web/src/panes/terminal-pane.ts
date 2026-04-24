@@ -7,7 +7,7 @@
  */
 
 import type { WebPaneExtension, PaneContext, PaneInstance, PaneCapability } from './pane-types.js';
-import { consumePanePopoutTransferToken } from './editor-popout-transfer.js';
+import { consumePanePopoutTransferToken } from './pane-popout-transfer.js';
 import {
     clearContainerContentBestEffort,
     detachTerminalHostListenersBestEffort,

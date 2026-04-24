@@ -1,4 +1,4 @@
-import { buildAdaptiveCardSubmissionFallbackText } from '../ui/adaptive-card-submission.js';
+import { buildAdaptiveCardSubmissionFallbackText } from '../ui/content-block-cards.js';
 
 function cleanString(value: unknown): string {
   return typeof value === 'string' ? value.trim() : '';

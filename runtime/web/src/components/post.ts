@@ -1,13 +1,16 @@
 // @ts-nocheck
 import { html, useEffect, useMemo, useRef, useState } from '../vendor/preact-htm.js';
-import { getMediaInfo, getMediaUrl, getThumbnailUrl, submitAdaptiveCardAction } from '../api.js';
+import { getMediaInfo, getMediaUrl, getThumbnailUrl } from '../api.js';
 import { renderMarkdown, renderMermaidDiagrams, sanitizeUrl } from '../markdown.js';
 import { formatCount, formatFileSize, formatTime, formatTimestamp } from '../utils/format.js';
 import { buildPostMarkdownCopyPayload } from '../utils/post-copy-markdown.js';
 import { DEFAULT_AGENT_NAME, getAvatarInfo } from '../ui/agent-utils.js';
 import { getAttachmentPreviewKind } from '../ui/attachment-preview.js';
-import { extractCardBlocks, renderAdaptiveCard } from '../ui/adaptive-card-renderer.js';
-import { buildAdaptiveCardSubmissionFallbackText, describeAdaptiveCardSubmission, extractAdaptiveCardSubmissionBlocks } from '../ui/adaptive-card-submission.js';
+import {
+    buildAdaptiveCardSubmissionFallbackText,
+    extractAdaptiveCardBlocks,
+    extractAdaptiveCardSubmissionBlocks,
+} from '../ui/content-block-cards.js';
 import { buildGeneratedWidgetPayload, canRenderGeneratedWidget } from '../ui/generated-widget.js';
 import { ImageModal } from './image-modal.js';
 import { FilePill } from './file-pill.js';
@@ -799,7 +802,7 @@ export function Post({ post, onClick, onHashtagClick, onMessageRef, onScrollToMe
     const { content: cleanedWithMsgRefs, messageRefs } = extractMessageRefs(cleanedContent);
     const { content: cleanedWithAttachments, attachments } = extractAttachmentRefs(cleanedWithMsgRefs);
     displayContent = cleanedWithAttachments;
-    const directCardBlocks = extractCardBlocks(blocks);
+    const cardBlocks = extractAdaptiveCardBlocks(blocks);
     const submissionBlocks = extractAdaptiveCardSubmissionBlocks(blocks);
     const recoveryMarkerBlocks = extractRecoveryMarkerBlocks(blocks);
     const recoveryMarker = recoveryMarkerBlocks[0] || null;
@@ -807,8 +810,8 @@ export function Post({ post, onClick, onHashtagClick, onMessageRef, onScrollToMe
     const timeoutMarker = timeoutMarkerBlocks[0] || null;
     const outcomeMarkerBlocks = extractOutcomeMarkerBlocks(blocks);
     const outcomeMarker = outcomeMarkerBlocks[0] || null;
-    const singleCardFallback = directCardBlocks.length === 1 && typeof directCardBlocks[0]?.fallback_text === 'string'
-        ? directCardBlocks[0].fallback_text.trim()
+    const singleCardFallback = cardBlocks.length === 1 && typeof cardBlocks[0]?.fallback_text === 'string'
+        ? cardBlocks[0].fallback_text.trim()
         : '';
     const singleSubmissionFallback = submissionBlocks.length === 1
         ? buildAdaptiveCardSubmissionFallbackText(submissionBlocks[0]).trim()
@@ -952,18 +955,13 @@ export function Post({ post, onClick, onHashtagClick, onMessageRef, onScrollToMe
             label: entry.name || `attachment-${idx + 1}`,
         }));
 
-    // Extract adaptive card blocks from content_blocks
-    const cardBlocks = useMemo(() => extractCardBlocks(blocks), [blocks]);
-    const cardSubmissionBlocks = useMemo(() => extractAdaptiveCardSubmissionBlocks(blocks), [blocks]);
-
-    // Stable identity key for card blocks so the render effect only fires when
-    // a card's identity or lifecycle state actually changes — not on every
-    // parent re-render caused by unrelated SSE events.  This prevents the
-    // card DOM (and all user input state) from being torn down and rebuilt
-    // while the user is filling in a form.
-    const cardBlocksKey = useMemo(() => {
-        return cardBlocks.map((b) => `${b.card_id}:${b.state}`).join('|');
-    }, [cardBlocks]);
+    const renderedCardFallbacks = useMemo(() => {
+        const currentContent = typeof displayContent === 'string' ? displayContent.trim() : '';
+        return [
+            ...cardBlocks.map((block) => (typeof block?.fallback_text === 'string' ? block.fallback_text.trim() : '')).filter(Boolean),
+            ...submissionBlocks.map((block) => buildAdaptiveCardSubmissionFallbackText(block).trim()).filter(Boolean),
+        ].filter((text, index, items) => text !== currentContent && items.indexOf(text) === index);
+    }, [cardBlocks, displayContent, submissionBlocks]);
 
     // Render mermaid diagrams and enhance code blocks after content is mounted
     useEffect(() => {
@@ -975,51 +973,6 @@ export function Post({ post, onClick, onHashtagClick, onMessageRef, onScrollToMe
     useEffect(() => () => {
         if (copyResetTimerRef.current) clearTimeout(copyResetTimerRef.current);
     }, []);
-
-    // Render adaptive cards into their containers.
-    // The effect depends on cardBlocksKey (card_id + state) rather than the
-    // full cardBlocks array, so unrelated parent re-renders won't destroy
-    // the card DOM and reset user inputs.
-    const cardContainerRef = useRef(null);
-    useEffect(() => {
-        if (!cardContainerRef.current || cardBlocks.length === 0) return;
-        const container = cardContainerRef.current;
-        container.innerHTML = '';
-        for (const block of cardBlocks) {
-            const cardEl = document.createElement('div');
-            container.appendChild(cardEl);
-            renderAdaptiveCard(cardEl, block, {
-                onAction: async (action) => {
-                    if (action.type === 'Action.OpenUrl') {
-                        const safeUrl = sanitizeUrl(action.url || '');
-                        if (!safeUrl) throw new Error('Invalid URL');
-                        window.open(safeUrl, '_blank', 'noopener,noreferrer');
-                        return;
-                    }
-
-                    if (action.type === 'Action.Submit') {
-                        await submitAdaptiveCardAction({
-                            post_id: post.id,
-                            thread_id: data.thread_id || post.id,
-                            chat_jid: post.chat_jid || null,
-                            card_id: block.card_id,
-                            action: {
-                                type: action.type,
-                                title: action.title || '',
-                                data: action.data,
-                            },
-                        });
-                        return;
-                    }
-
-                    console.warn('[post] unsupported adaptive card action:', action.type, action);
-                },
-            }).catch((err) => {
-                console.error('[post] adaptive card render error:', err);
-                cardEl.textContent = block.fallback_text || 'Card failed to render.';
-            });
-        }
-    }, [cardBlocksKey, post.id]);
 
     return html`
         <div id=${`post-${post.id}`} class="post ${isAgent ? 'agent-post' : ''} ${isThreadReply ? 'thread-reply' : ''} ${isThreadPrev ? 'thread-prev' : ''} ${isThreadNext ? 'thread-next' : ''} ${isRemoving ? 'removing' : ''}" onClick=${onClick}>
@@ -1172,40 +1125,11 @@ export function Post({ post, onClick, onHashtagClick, onMessageRef, onScrollToMe
                         }}
                     />
                 `}
-                ${cardBlocks.length > 0 && html`
-                    <div ref=${cardContainerRef} class="post-adaptive-cards" />
-                `}
-                ${cardSubmissionBlocks.length > 0 && html`
-                    <div class="post-adaptive-card-submissions">
-                        ${cardSubmissionBlocks.map((block, idx) => {
-                            const meta = describeAdaptiveCardSubmission(block);
-                            const submissionKey = `${block.card_id}-${idx}`;
-                            return html`
-                                <div key=${submissionKey} class="adaptive-card-submission-receipt">
-                                    <div class="adaptive-card-submission-header">
-                                        <span class="adaptive-card-submission-icon" aria-hidden="true">✓</span>
-                                        <div class="adaptive-card-submission-title-wrap">
-                                            <span class="adaptive-card-submission-title">Submitted</span>
-                                            <span class="adaptive-card-submission-title-action">${meta.title}</span>
-                                        </div>
-                                    </div>
-                                    ${meta.fields.length > 0 && html`
-                                        <div class="adaptive-card-submission-fields">
-                                            ${meta.fields.map((field) => html`
-                                                <span class="adaptive-card-submission-field" title=${`${field.key}: ${field.value}`}>
-                                                    <span class="adaptive-card-submission-field-key">${field.key}</span>
-                                                    <span class="adaptive-card-submission-field-sep">:</span>
-                                                    <span class="adaptive-card-submission-field-value">${field.value}</span>
-                                                </span>
-                                            `)}
-                                        </div>
-                                    `}
-                                    <div class="adaptive-card-submission-meta">
-                                        Submitted ${formatTimestamp(meta.submittedAt)}
-                                    </div>
-                                </div>
-                            `;
-                        })}
+                ${renderedCardFallbacks.length > 0 && html`
+                    <div class="post-adaptive-card-fallbacks">
+                        ${renderedCardFallbacks.map((text, idx) => html`
+                            <div key=${`card-fallback-${idx}`} class="post-adaptive-card-fallback">${text}</div>
+                        `)}
                     </div>
                 `}
                 ${generatedWidgets.length > 0 && html`
@@ -1252,6 +1176,13 @@ export function Post({ post, onClick, onHashtagClick, onMessageRef, onScrollToMe
                     <div class="file-attachments">
                         ${filteredFileIds.map(id => html`
                             <${FileAttachment} key=${id} mediaId=${id} onPreview=${handleAttachmentPreview} />
+                        `)}
+                    </div>
+                `}
+                ${renderedCardFallbacks.length > 0 && html`
+                    <div class="post-adaptive-card-fallbacks">
+                        ${renderedCardFallbacks.map((text, idx) => html`
+                            <div key=${`card-fallback-${idx}`} class="post-adaptive-card-fallback">${text}</div>
                         `)}
                     </div>
                 `}

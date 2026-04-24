@@ -4,7 +4,7 @@ import {
   consumePanePopoutTransferToken,
   createEditorPopoutTransferPayload,
   type EditorPopoutTransferState,
-} from '../panes/editor-popout-transfer.js';
+} from '../panes/pane-popout-transfer.js';
 import {
   createPaneDetachTransferParams,
   generatePaneDetachId,

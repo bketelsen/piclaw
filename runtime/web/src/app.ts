@@ -1,7 +1,7 @@
 // @ts-nocheck
 // Main authenticated web UI entry point.
 import { html, render, useState, useEffect, useMemo, useCallback } from './vendor/preact-htm.js';
-import { paneRegistry, TERMINAL_TAB_PATH, VNC_TAB_PREFIX, tabStore } from './panes/index.js';
+import { paneRegistry, TERMINAL_TAB_PATH, tabStore } from './panes/index.js';
 import { getLocalStorageBoolean, getLocalStorageNumber, setLocalStorageItem } from './utils/storage.js';
 import { dedupePosts } from './ui/timeline-utils.js';
 import { useAgentState } from './ui/use-agent-state.js';
@@ -65,6 +65,7 @@ import {
 } from './ui/oobe-state.js';
 
 const CURRENT_APP_ASSET_VERSION = getCurrentAppAssetVersion();
+const VNC_TAB_PREFIX = 'piclaw://vnc';
 
 initializeAppShellRuntime();
 

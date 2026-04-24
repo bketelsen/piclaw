@@ -6,9 +6,6 @@ import { FloatingWidgetPane } from '../components/floating-widget-pane.js';
 import { AttachmentPreviewModal } from '../components/attachment-preview-modal.js';
 import { AgentRequestModal, AgentStatus } from '../components/status.js';
 import { Timeline } from '../components/timeline.js';
-import { WorkspaceExplorer } from '../components/workspace-explorer.js';
-import { TabStrip } from '../components/tab-strip.js';
-import { MarkdownPreview } from '../components/markdown-preview.js';
 import { SystemMetersHud } from '../components/system-meters-hud.js';
 
 export interface MainShellRenderOptions {
@@ -113,44 +110,17 @@ export function renderMainShell(options: MainShellRenderOptions): any {
     setRenameBranchNameDraft,
     renameBranchDraftState,
     isRenamingBranch,
-    addFileRef,
-    openEditor,
-    openTerminalTab,
-    openVncTab,
     hasDockPanes,
     toggleDock,
     dockVisible,
-    handleSplitterMouseDown,
-    handleSplitterTouchStart,
-    showEditorPaneContainer,
-    tabStripTabs,
-    tabStripActiveId,
-    handleTabActivate,
-    handleTabClose,
-    handleTabCloseOthers,
-    handleTabCloseAll,
-    handleTabTogglePin,
-    handleTabTogglePreview,
-    handleTabToggleDiff,
-    handleTabEditSource,
     handleReattachPane,
-    previewTabs,
-    diffTabs,
-    tabPaneOverrides,
-    toggleZenMode,
     handlePopOutPane,
     isWebAppMode,
-    editorContainerRef,
-    editorInstanceRef,
-    detachedTabs,
-    activeDetachedTab,
     detachedDockPane,
     handleDockSplitterMouseDown,
     handleDockSplitterTouchStart,
     TERMINAL_TAB_PATH,
     dockContainerRef,
-    handleEditorSplitterMouseDown,
-    handleEditorSplitterTouchStart,
     searchQuery,
     isIOSDevice,
     currentBranchRecord,
@@ -231,7 +201,6 @@ export function renderMainShell(options: MainShellRenderOptions): any {
     setMessageRefsFromCompose,
     handleCreateSessionFromCompose,
     handleRestoreBranch,
-    attachActiveEditorFile,
     followupQueueCount,
     handleBtwIntercept,
     handleMessageResponse,
@@ -253,7 +222,6 @@ export function renderMainShell(options: MainShellRenderOptions): any {
     applyModelState,
     setPendingRequest,
     pendingRequestRef,
-    toggleWorkspace,
   } = options;
 
   const handleComposeFocus = () => {
@@ -313,77 +281,8 @@ export function renderMainShell(options: MainShellRenderOptions): any {
           </form>
         </div>
       `}
-      ${!chatOnlyMode && html`
-        <${WorkspaceExplorer}
-          onFileSelect=${addFileRef}
-          visible=${workspaceOpen}
-          active=${workspaceOpen || editorOpen}
-          onOpenEditor=${openEditor}
-          onOpenTerminalTab=${openTerminalTab}
-          onOpenVncTab=${openVncTab}
-          onToggleTerminal=${hasDockPanes ? toggleDock : undefined}
-          terminalVisible=${Boolean(hasDockPanes && dockVisible)}
-        />
-        <button
-          class=${`workspace-toggle-tab${workspaceOpen ? ' open' : ' closed'}`}
-          onClick=${toggleWorkspace}
-          title=${workspaceOpen ? 'Hide workspace' : 'Show workspace'}
-          aria-label=${workspaceOpen ? 'Hide workspace' : 'Show workspace'}
-        >
-          <svg class="workspace-toggle-tab-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <polyline points="6 3 11 8 6 13" />
-          </svg>
-        </button>
-        <div class="workspace-splitter" onMouseDown=${handleSplitterMouseDown} onTouchStart=${handleSplitterTouchStart}></div>
-      `}
-      ${showEditorPaneContainer && html`
-        <div class="editor-pane-container">
-          ${zenMode && html`<div class="zen-hover-zone"></div>`}
-          ${editorOpen && html`
-            <${TabStrip}
-              tabs=${tabStripTabs}
-              activeId=${tabStripActiveId}
-              onActivate=${handleTabActivate}
-              onClose=${handleTabClose}
-              onCloseOthers=${handleTabCloseOthers}
-              onCloseAll=${handleTabCloseAll}
-              onTogglePin=${handleTabTogglePin}
-              onTogglePreview=${handleTabTogglePreview}
-              onToggleDiff=${handleTabToggleDiff}
-              onEditSource=${handleTabEditSource}
-              previewTabs=${previewTabs}
-              diffTabs=${diffTabs}
-              paneOverrides=${tabPaneOverrides}
-              detachedTabs=${detachedTabs}
-              onReattachTab=${handleReattachPane}
-              onToggleDock=${hasDockPanes ? toggleDock : undefined}
-              dockVisible=${hasDockPanes && dockVisible}
-              onToggleZen=${toggleZenMode}
-              zenMode=${zenMode}
-              onPopOutTab=${isWebAppMode ? undefined : handlePopOutPane}
-            />
-          `}
-          ${editorOpen && activeDetachedTab && html`
-            <div class="editor-pane-host editor-pane-detached-host">
-              <div class="editor-empty-state">
-                <div class="editor-empty-state-title">${activeDetachedTab.label || activeDetachedTab.panePath || 'Detached pane'}</div>
-                <div class="editor-empty-state-body">This pane is detached into another window.</div>
-                <div class="editor-empty-state-actions">
-                  <button class="editor-empty-state-button" onClick=${() => handleReattachPane(activeDetachedTab.panePath)}>Reattach here</button>
-                </div>
-              </div>
-            </div>
-          `}
-          ${editorOpen && !activeDetachedTab && html`<div class="editor-pane-host" ref=${editorContainerRef}></div>`}
-          ${editorOpen && !activeDetachedTab && tabStripActiveId && previewTabs.has(tabStripActiveId) && html`
-            <${MarkdownPreview}
-              getContent=${() => editorInstanceRef.current?.getContent?.()}
-              path=${tabStripActiveId}
-              onClose=${() => handleTabTogglePreview(tabStripActiveId)}
-            />
-          `}
-          ${hasDockPanes && dockVisible && html`<div class="dock-splitter" onMouseDown=${handleDockSplitterMouseDown} onTouchStart=${handleDockSplitterTouchStart}></div>`}
-          ${hasDockPanes && html`<div class=${`dock-panel${dockVisible ? '' : ' hidden'}${editorOpen ? '' : ' standalone'}`}>
+      ${hasDockPanes && dockVisible && html`<div class="dock-splitter" onMouseDown=${handleDockSplitterMouseDown} onTouchStart=${handleDockSplitterTouchStart}></div>`}
+      ${hasDockPanes && html`<div class=${`dock-panel${dockVisible ? '' : ' hidden'} standalone`}>
             <div class="dock-panel-header">
               <span class="dock-panel-title">Terminal</span>
               <div class="dock-panel-actions">
@@ -427,9 +326,6 @@ export function renderMainShell(options: MainShellRenderOptions): any {
               `
               : html`<div class="dock-panel-body" ref=${dockContainerRef}></div>`}
           </div>`}
-        </div>
-        <div class="editor-splitter" onMouseDown=${handleEditorSplitterMouseDown} onTouchStart=${handleEditorSplitterTouchStart}></div>
-      `}
       <div class="container">
         ${searchQuery && isIOSDevice() && html`<div class="search-results-spacer"></div>`}
         ${(currentHashtag || searchQuery) && html`
@@ -544,8 +440,8 @@ export function renderMainShell(options: MainShellRenderOptions): any {
           onCreateSession=${handleCreateSessionFromCompose}
           onDeleteSession=${handlePruneCurrentBranch}
           onRestoreSession=${handleRestoreBranch}
-          activeEditorPath=${chatOnlyMode ? null : tabStripActiveId}
-          onAttachEditorFile=${chatOnlyMode ? undefined : attachActiveEditorFile}
+          activeEditorPath=${null}
+          onAttachEditorFile=${undefined}
           onOpenFilePill=${openFileFromPill}
           followupQueueCount=${followupQueueCount}
           followupQueueItems=${followupQueueItems}

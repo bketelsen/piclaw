@@ -1,4 +1,4 @@
-import { consumePanePopoutTransferToken } from './editor-popout-transfer.js';
+import { consumePanePopoutTransferToken } from './pane-popout-transfer.js';
 
 const PANE_HOST_TRANSFER_PREFIX = 'piclaw:pane-host-transfer:';
 const PANE_HOST_TRANSFER_TTL_MS = 5 * 60 * 1000;

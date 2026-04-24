@@ -1,5 +1,5 @@
 import { useCallback, useEffect } from '../vendor/preact-htm.js';
-import { createEditorPopoutTransferPayload } from '../panes/editor-popout-transfer.js';
+import { createEditorPopoutTransferPayload } from '../panes/pane-popout-transfer.js';
 import { createPaneHostTransferPayload } from '../panes/pane-host-transfer.js';
 import { registerPaneLiveTransfer } from '../panes/pane-live-transfer.js';
 import { tabStore } from '../panes/index.js';

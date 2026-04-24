@@ -1,22 +1,8 @@
 import * as api from '../api.js';
 import {
   paneRegistry,
-  editorPaneExtension,
-  preloadEditorBundle,
   terminalPaneExtension,
   terminalTabPaneExtension,
-  vncPaneExtension,
-  workspacePreviewPaneExtension,
-  workspaceMarkdownPreviewPaneExtension,
-  officeViewerPaneExtension,
-  csvViewerPaneExtension,
-  pdfViewerPaneExtension,
-  imageViewerPaneExtension,
-  htmlViewerPaneExtension,
-  videoViewerPaneExtension,
-  drawioPaneExtension,
-  mindmapPaneExtension,
-  kanbanPaneExtension,
 } from '../panes/index.js';
 import { resolveOptionalApi } from './optional-api.js';
 
@@ -55,20 +41,6 @@ export function installBrowserNoiseFilters(runtimeWindow: (Window & typeof globa
 }
 
 export function registerAppPaneExtensions(): void {
-  paneRegistry.register(editorPaneExtension);
-  paneRegistry.register(workspacePreviewPaneExtension);
-  paneRegistry.register(workspaceMarkdownPreviewPaneExtension);
-  paneRegistry.register(officeViewerPaneExtension);
-  paneRegistry.register(csvViewerPaneExtension);
-  paneRegistry.register(pdfViewerPaneExtension);
-  paneRegistry.register(imageViewerPaneExtension);
-  paneRegistry.register(htmlViewerPaneExtension);
-  paneRegistry.register(videoViewerPaneExtension);
-  paneRegistry.register(drawioPaneExtension);
-  paneRegistry.register(mindmapPaneExtension);
-  paneRegistry.register(kanbanPaneExtension);
-  paneRegistry.register(vncPaneExtension);
-  preloadEditorBundle();
   paneRegistry.register(terminalPaneExtension);
   paneRegistry.register(terminalTabPaneExtension);
 }
