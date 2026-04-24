@@ -15,15 +15,15 @@
  *   - sqlIntrospect: introspect_sql for read-only DB introspection.
  *   - scheduledTasks: /tasks and /scheduled commands for task listing.
  *   - workspaceSearch: search_workspace tool for FTS over workspace files.
- *   - dreamMaintenance: /dream memory-consolidation slash command.
- *   - sendAdaptiveCard: send_adaptive_card for agent-owned Adaptive Card posting.
- *   - sendDashboardWidget: send_dashboard_widget for posting the built-in live dashboard widget.
- *   - openWorkspaceFile: open_workspace_file for browser-side editor tab/popout launches.
+ *   - workspaceMemoryBootstrap: initializes workspace memory primitives.
+ *   - uiThemeExtension: theme and appearance controls for the chat UI.
+ *   - smartCompaction: smart context compaction helpers.
  *   - envTools: env for persistent workspace-scoped environment variables.
+ *   - exitProcess: exit for terminating the current agent process.
  *
- * Note: bun_run, keychain, ssh, proxmox, and portainer now live as packaged
- * runtime extensions under runtime/extensions/integrations/* and are loaded via
- * the additionalExtensionPaths wiring in agent-pool/session.ts.
+ * Note: packaged runtime extensions are now limited to the always-loaded
+ * context-mode integration and the bun_run integration under
+ * runtime/extensions/integrations/*, wired via agent-pool/session.ts.
  *
  * Consumers:
  *   - agent-pool/session.ts passes builtinExtensionFactories to the resource loader.
@@ -40,17 +40,10 @@ import { sqlIntrospect } from "./sql-introspect.js";
 import { scheduledTasks } from "./scheduled-tasks.js";
 import { workspaceSearch } from "./workspace-search.js";
 import { workspaceMemoryBootstrap } from "./workspace-memory-bootstrap.js";
-import { dreamMaintenance } from "./dream-maintenance.js";
 import { uiThemeExtension } from "./ui-theme.js";
 import { smartCompaction } from "./smart-compaction.js";
-import { sendAdaptiveCard } from "./send-adaptive-card.js";
-import { sendDashboardWidget } from "./send-dashboard-widget.js";
-import { openWorkspaceFile } from "./open-workspace-file.js";
 import { envTools } from "./env-tools.js";
 import { exitProcess } from "./exit-process.js";
-import { autoresearchSupervisor } from "./autoresearch-supervisor.js";
-import { imageProcessing } from "./image-processing.js";
-import { remotePair } from "./remote-pair.js";
 
 /** Build the built-in extension factory list used for session creation. */
 export function createBuiltinExtensionFactories(options?: {
@@ -67,17 +60,10 @@ export function createBuiltinExtensionFactories(options?: {
     scheduledTasks,
     workspaceSearch,
     workspaceMemoryBootstrap,
-    dreamMaintenance,
     uiThemeExtension,
     smartCompaction,
-    sendAdaptiveCard,
-    sendDashboardWidget,
-    openWorkspaceFile,
     envTools,
     exitProcess,
-    autoresearchSupervisor,
-    imageProcessing,
-    remotePair,
   ];
 }
 

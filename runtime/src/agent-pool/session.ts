@@ -107,26 +107,11 @@ type OptionalBundledExtension = {
 };
 
 const OPTIONAL_EXTENSIONS: OptionalBundledExtension[] = [
-  { path: resolve(EXTENSIONS_DIR, "integrations", "azure-openai-session", "index.ts"), envGate: "AOAI_BASE_URL" },
   { path: resolve(EXTENSIONS_DIR, "integrations", "context-mode.ts") },
   { path: resolve(EXTENSIONS_DIR, "integrations", "bun-runner", "index.ts") },
-  { path: resolve(EXTENSIONS_DIR, "integrations", "keychain", "index.ts") },
-  { path: resolve(EXTENSIONS_DIR, "integrations", "ssh", "index.ts") },
-  { path: resolve(EXTENSIONS_DIR, "integrations", "proxmox", "index.ts") },
-  { path: resolve(EXTENSIONS_DIR, "integrations", "portainer", "index.ts") },
-  { path: resolve(EXTENSIONS_DIR, "integrations", "mcp-status-hints", "index.ts") },
-  { path: resolve(EXTENSIONS_DIR, "browser", "cdp-browser-tool", "index.ts") },
-  { path: resolve(EXTENSIONS_DIR, "platform", "windows", "powershell", "index.ts"), platforms: ["win32"] },
-  { path: resolve(EXTENSIONS_DIR, "platform", "windows", "win-ui", "index.ts"), platforms: ["win32"] },
-  { path: resolve(EXTENSIONS_DIR, "viewers", "office-viewer-tool", "index.ts"), channels: ["web"] },
-  { path: resolve(EXTENSIONS_DIR, "integrations", "office-tools-tool", "index.ts") },
-  { path: resolve(EXTENSIONS_DIR, "viewers", "drawio-editor-tool", "index.ts"), channels: ["web"] },
-  { path: resolve(EXTENSIONS_DIR, "experimental", "m365", "index.ts"), envGate: "PICLAW_ENABLE_M365_EXPERIMENTAL" },
 ];
 
-const PACKAGED_EXTENSION_ENTRIES = [
-  { packageName: "pi-mcp-adapter", entry: "index.ts" },
-] as const;
+const PACKAGED_EXTENSION_ENTRIES = [] as const;
 
 function getBundledExtensionEnvSignature(chatJid?: string): string {
   const channel = chatJid ? detectChannel(chatJid) ?? "" : "";

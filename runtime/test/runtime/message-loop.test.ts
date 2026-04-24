@@ -154,3 +154,57 @@ test("processMessages persists lastAgentTimestamp after a successful agent run",
     expect(outbound).toEqual(["done"]);
   });
 });
+
+test("processMessages marks control commands as processed without sending outbound control replies", async () => {
+  await withTempWorkspaceEnv("piclaw-message-loop-", { PICLAW_KEYCHAIN_KEY: "test-key" }, async () => {
+    const db = await importFresh<typeof import("../../src/db.js")>("../src/db.js");
+    const loop = await importFresh<typeof import("../../src/runtime/message-loop.js")>("../src/runtime/message-loop.js");
+    db.initDatabase();
+
+    const chatJid = `web:${Date.now()}`;
+    const messageId = `msg-control-${Date.now()}`;
+    db.storeMessage({
+      id: messageId,
+      chat_jid: chatJid,
+      sender: "user",
+      sender_name: "User",
+      content: "@Pi /model gpt-5-mini",
+      timestamp: "2026-04-17T02:00:00.000Z",
+      is_from_me: false,
+      is_bot_message: false,
+    });
+
+    const processed: string[] = [];
+    const outbound: string[] = [];
+    const state = {
+      lastAgentTimestamp: {} as Record<string, string>,
+      wasCommandProcessed: () => false,
+      markCommandProcessed: (_chatJid: string, id: string) => {
+        processed.push(id);
+      },
+      saveTimestamps: () => {},
+    };
+
+    const ok = await loop.processMessages(chatJid, {
+      state: state as any,
+      assistantName: "Pi",
+      triggerPattern: /@Pi/i,
+      whatsapp: {
+        sendMessage: async (_jid: string, text: string) => {
+          outbound.push(text);
+        },
+        setTyping: async () => {},
+      } as any,
+      agentPool: {
+        applyControlCommand: async () => ({
+          status: "success",
+          message: "model set",
+        }),
+      } as any,
+    });
+
+    expect(ok).toBe(true);
+    expect(processed).toEqual([messageId]);
+    expect(outbound).toEqual([]);
+  });
+});

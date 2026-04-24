@@ -9,12 +9,12 @@
  */
 
 import type { AgentSession } from "@mariozechner/pi-coding-agent";
+import { randomUUID } from "crypto";
 import type { AgentControlCommand, AgentControlResult } from "../agent-control-types.js";
 import { getRemoteInteropConfig } from "../../core/config.js";
 import { getRemotePeer, getRemotePeerByDisplayName, getRemotePeerByFingerprint } from "../../db/remote-interop.js";
 import { loadOrCreateIdentity, deriveFingerprint } from "../../remote/identity.js";
-import { buildSignedRequestHeaders } from "../../extensions/remote-pair.js";
-import { randomUUID } from "crypto";
+import { buildSignedRequestHeaders } from "../../remote/auth.js";
 
 type AskCommand = Extract<AgentControlCommand, { type: "ask" }>;
 

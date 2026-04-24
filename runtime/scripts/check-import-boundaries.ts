@@ -5,9 +5,12 @@ import { join, relative } from "path";
 
 const ENTRY_EXTENSIONS_DIR = "extensions";
 const SRC_EXTENSIONS_DIR = "src/extensions";
+const ALLOWED_DIST_IMPORTERS = new Set(["src/azure-openai-api.ts"]);
 
-const ALLOWED_ENTRY_SRC_IMPORT_PREFIX = "../src/extensions/";
-const ALLOWED_DIST_IMPORTERS = new Set(["src/extensions/azure-openai-api.ts"]);
+const ALLOWED_ENTRY_SRC_IMPORT_PREFIXES = [
+  "../src/extensions/",
+  "../src/azure-openai-api.js",
+] as const;
 
 function walkFiles(baseDir: string, suffix: string): string[] {
   if (!existsSync(baseDir)) return [];
@@ -48,7 +51,12 @@ export function extractModuleSpecifiers(content: string): string[] {
 export function findImportBoundaryViolations(projectDir: string): string[] {
   const violations: string[] = [];
   const entryFiles = walkFiles(join(projectDir, ENTRY_EXTENSIONS_DIR), ".ts");
-  const srcBridgeFiles = walkFiles(join(projectDir, SRC_EXTENSIONS_DIR), ".ts");
+  const srcBridgeFiles = [
+    ...walkFiles(join(projectDir, SRC_EXTENSIONS_DIR), ".ts"),
+    ...Array.from(ALLOWED_DIST_IMPORTERS)
+      .map((relativePath) => join(projectDir, relativePath))
+      .filter((path) => existsSync(path)),
+  ];
 
   for (const file of entryFiles) {
     const rel = relative(projectDir, file);
@@ -61,12 +69,14 @@ export function findImportBoundaryViolations(projectDir: string): string[] {
       if (specifier.startsWith("@mariozechner/pi-ai/dist/")) {
         violations.push(`${rel}: disallowed direct pi-ai dist import (${specifier})`);
       }
-      if (specifier.startsWith("../src/") && !specifier.startsWith(ALLOWED_ENTRY_SRC_IMPORT_PREFIX)) {
+      if (
+        specifier.startsWith("../src/")
+        && !ALLOWED_ENTRY_SRC_IMPORT_PREFIXES.some((prefix) => specifier.startsWith(prefix))
+      ) {
         violations.push(`${rel}: disallowed direct src import (${specifier})`);
       }
     }
   }
-
   for (const file of srcBridgeFiles) {
     const rel = relative(projectDir, file);
     if (ALLOWED_DIST_IMPORTERS.has(rel)) continue;

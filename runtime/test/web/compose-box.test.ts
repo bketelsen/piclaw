@@ -86,6 +86,11 @@ test('slash autocomplete includes all canonical control commands', () => {
   expect(missing).toEqual([]);
 });
 
+test('slash autocomplete no longer exposes /ask', () => {
+  expect(CONTROL_COMMAND_DEFINITIONS.some((item) => item.name === '/ask')).toBe(false);
+  expect(SLASH_COMMANDS.some((item) => item.name === '/ask')).toBe(false);
+});
+
 test('slash autocomplete exposes the local /meters HUD command with a description', () => {
   const meters = SLASH_COMMANDS.find((item) => item.name === '/meters');
   expect(meters).toBeTruthy();

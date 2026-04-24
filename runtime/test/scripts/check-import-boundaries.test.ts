@@ -44,11 +44,11 @@ describe("check-import-boundaries", () => {
     const dir = mkdtempSync(join(tmpdir(), "import-boundaries-"));
     try {
       mkdirSync(join(dir, "extensions"), { recursive: true });
-      mkdirSync(join(dir, "src", "extensions"), { recursive: true });
+      mkdirSync(join(dir, "src"), { recursive: true });
 
-      writeFileSync(join(dir, "extensions", "ok.ts"), "import x from '../src/extensions/azure-openai-api.js';\n");
+      writeFileSync(join(dir, "extensions", "ok.ts"), "import x from '../src/azure-openai-api.js';\n");
       writeFileSync(
-        join(dir, "src", "extensions", "azure-openai-api.ts"),
+        join(dir, "src", "azure-openai-api.ts"),
         "import x from '@mariozechner/pi-ai/dist/providers/openai-responses-shared.js';\n"
       );
 

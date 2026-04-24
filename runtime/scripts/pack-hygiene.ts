@@ -3,15 +3,10 @@
 const BLOCKED_PREFIXES = ["coverage/", "test/", "dist/", "runtime/generated/"];
 const BLOCKED_EXACT = new Set(["coverage/lcov.info", "runtime/generated/coverage/lcov.info"]);
 export const REQUIRED_PACK_ENTRIES = [
-  "runtime/extensions/viewers/drawio-editor/index.ts",
-  "runtime/extensions/viewers/drawio-editor/vendor/index.html",
-  "runtime/extensions/viewers/drawio-editor/vendor/js/app.min.js",
-  "runtime/extensions/viewers/drawio-editor/vendor/drawio.meta.json",
   "runtime/src/dream.ts",
   "runtime/src/agent-memory/daily-notes.ts",
   "runtime/src/agent-memory/dream-prompt.ts",
   "runtime/src/agent-memory/refresh.ts",
-  "runtime/src/extensions/dream-maintenance.ts",
   "runtime/src/extensions/workspace-memory-bootstrap.ts",
   "runtime/docs/dream-memory.md",
   "skel/AGENTS.md",

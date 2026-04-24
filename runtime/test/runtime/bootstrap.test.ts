@@ -4,11 +4,9 @@ import {
   createDefaultRuntimeBootstrapDeps,
   type RuntimeBootstrapAgentPool,
   type RuntimeBootstrapDeps,
-  type RuntimeBootstrapPushover,
   type RuntimeBootstrapQueue,
   type RuntimeBootstrapState,
   type RuntimeBootstrapWeb,
-  type RuntimeBootstrapWhatsApp,
   type RuntimeBootstrapDefaultCoreServices,
 } from "../../src/runtime/bootstrap.js";
 import type { RuntimeSenders } from "../../src/runtime/wiring.js";
@@ -28,23 +26,8 @@ describe("runtime bootstrap", () => {
       resumePendingChats: () => {},
     } as RuntimeBootstrapWeb;
 
-    const pushover = {
-      stop: async () => {},
-      sendMessage: async () => {},
-    } as RuntimeBootstrapPushover;
-
-    const whatsapp = {
-      connect: async () => {
-        events.push("connect-whatsapp");
-      },
-      disconnect: async () => {},
-      sendMessage: async () => {},
-      getMessagesSince: async () => [],
-    } as RuntimeBootstrapWhatsApp;
-
     const senders = {
       sendMessage: async () => {},
-      sendNudge: async () => {},
     } as RuntimeSenders;
 
     let capturedShutdownDeps: { stopIpcWatcher: () => void; stopSchedulerLoop: () => void } | null = null;
@@ -60,14 +43,6 @@ describe("runtime bootstrap", () => {
       startWebChannel: async () => {
         events.push("start-web");
         return web;
-      },
-      startOptionalPushoverChannel: async () => {
-        events.push("start-pushover");
-        return pushover;
-      },
-      createWhatsAppChannel: () => {
-        events.push("create-whatsapp");
-        return whatsapp;
       },
       createShutdownHandler: (shutdownDeps) => {
         events.push("create-shutdown");
@@ -107,13 +82,10 @@ describe("runtime bootstrap", () => {
       "register-providers",
       "log-banner",
       "start-web",
-      "start-pushover",
-      "create-whatsapp",
       "create-shutdown",
       "register-shutdown-signals",
       "create-senders",
       "start-workers",
-      "connect-whatsapp",
       "start-runtime-loop",
     ]);
   });

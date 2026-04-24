@@ -12,7 +12,7 @@
  * - surfaces Azure-specific retry/throttle behavior in a user-friendly way
  *
  * Keep this file focused on Azure-specific behavior. Generic Responses helpers
- * belong in runtime/src/extensions/azure-openai-api.ts and generic trimming
+ * belong in runtime/src/azure-openai-api.ts and generic trimming
  * utilities belong in runtime/src/utils/azure-tool-call-limit.ts.
  */
 
@@ -35,7 +35,7 @@ import {
   convertResponsesTools,
   processResponsesStream,
   resolveCacheSessionId,
-} from "../../src/extensions/azure-openai-api.js";
+} from "../../src/azure-openai-api.js";
 import { estimateAzureRequestTokens } from "../../src/utils/azure-tool-call-limit.js";
 import { streamSimpleOpenAICompletions } from "@mariozechner/pi-ai";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";

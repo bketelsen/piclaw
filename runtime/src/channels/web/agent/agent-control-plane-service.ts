@@ -115,9 +115,8 @@ export class WebAgentControlPlaneService {
     const url = new URL(req.url);
     const chatJid = this.resolveChatJid(url.searchParams.get("chat_jid"));
     try {
-      const getAutoresearchWidgetPayload = this.options.getAutoresearchWidgetPayload
-        ?? (await import("../../../extensions/autoresearch-supervisor.js")).getAutoresearchWidgetPayload;
-      return this.options.json(getAutoresearchWidgetPayload(chatJid));
+      const getAutoresearchWidgetPayload = this.options.getAutoresearchWidgetPayload;
+      return this.options.json(getAutoresearchWidgetPayload ? getAutoresearchWidgetPayload(chatJid) : null);
     } catch (error) {
       log.warn("Failed to read autoresearch status", {
         operation: "handle_autoresearch_status",
@@ -134,8 +133,10 @@ export class WebAgentControlPlaneService {
     const payload = parsed.payload as { chat_jid?: string; generate_report?: boolean };
     const chatJid = this.resolveChatJid(payload.chat_jid);
     try {
-      const stopAutoresearchFromWeb = this.options.stopAutoresearchFromWeb
-        ?? (await import("../../../extensions/autoresearch-supervisor.js")).stopAutoresearchFromWeb;
+      const stopAutoresearchFromWeb = this.options.stopAutoresearchFromWeb;
+      if (!stopAutoresearchFromWeb) {
+        return this.options.json({ error: "Autoresearch is not available in this runtime." }, 404);
+      }
       const result = await stopAutoresearchFromWeb({
         chat_jid: chatJid,
         generate_report: payload.generate_report !== false,
@@ -158,10 +159,9 @@ export class WebAgentControlPlaneService {
     const payload = parsed.payload as { chat_jid?: string };
     const chatJid = this.resolveChatJid(payload.chat_jid);
     try {
-      const dismissAutoresearchWidget = this.options.dismissAutoresearchWidget
-        ?? (await import("../../../extensions/autoresearch-supervisor.js")).dismissAutoresearchWidget;
+      const dismissAutoresearchWidget = this.options.dismissAutoresearchWidget;
       return this.options.json({
-        status: dismissAutoresearchWidget(chatJid) ? "ok" : "noop",
+        status: dismissAutoresearchWidget?.(chatJid) ? "ok" : "noop",
         chat_jid: chatJid,
       });
     } catch (error) {

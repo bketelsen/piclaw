@@ -7,7 +7,7 @@ import type { AgentPool } from "../agent-pool.js";
 import { formatRecoverySummary } from "../agent-pool/automatic-recovery.js";
 import { getRemotePeer, getRemoteRequestById, storeRemoteRequest, storeResultCallback, updateRemoteRequestDecision, updateRemotePeer, type RemotePeerRecord } from "../db/remote-interop.js";
 import type { RemoteInteropConfig } from "../core/config.js";
-import { verifySignedRequest } from "./auth.js";
+import { buildSignedRequestHeaders, verifySignedRequest } from "./auth.js";
 import type { RemoteNonceCache } from "./nonce-cache.js";
 import {
   DEFAULT_MAX_PROMPT_BYTES,
@@ -29,7 +29,6 @@ import {
 } from "./http-utils.js";
 import { logAudit } from "./service-security.js";
 import { loadOrCreateIdentity } from "./identity.js";
-import { buildSignedRequestHeaders } from "../extensions/remote-pair.js";
 import { RemoteExecuteConcurrency } from "./execute-concurrency.js";
 import { getToolCeilingFilter } from "./policy.js";
 import { createLogger } from "../utils/logger.js";

@@ -28,8 +28,8 @@ import {
  * This is the canonical source-of-truth list.  If a built-in extension
  * adds or removes a tool, this list must be updated — that is the point.
  *
- * Tools provided by packaged/optional extensions (keychain, ssh, proxmox,
- * portainer, bun_run, cdp_browser, office viewers, etc.) are NOT listed
+ * Tools provided by packaged/optional extensions (bun_run, context-mode batch
+ * helpers, and SDK-native tools) are NOT listed
  * here because they are loaded via additionalExtensionPaths and are
  * gated by platform/channel/env.  This test covers only the always-on
  * built-in extension factory catalog from extensions/index.ts.
@@ -59,22 +59,10 @@ const EXPECTED_BUILTIN_TOOL_NAMES = [
   // workspace-search
   "search_workspace",
   "refresh_workspace_index",
-  // send-adaptive-card
-  "send_adaptive_card",
-  // send-dashboard-widget
-  "send_dashboard_widget",
-  // open-workspace-file
-  "open_workspace_file",
   // env-tools
   "env",
   // exit-process
   "exit_process",
-  // autoresearch-supervisor
-  "start_autoresearch",
-  "stop_autoresearch",
-  "autoresearch_status",
-  // image-processing
-  "image_process",
 ];
 
 /**
@@ -198,13 +186,9 @@ describe("built-in extension tool catalog regression", () => {
     // and are NOT expected to be registered by built-in factories.
     const OPTIONAL_PACKAGED_TOOLS = new Set([
       "read", "bash", "powershell", "edit", "write", // core SDK tools, not extensions
-      "keychain", "ssh", "proxmox", "portainer",     // packaged integrations
-      "bun_run", "exec_batch", "search_tool_output", // packaged integrations
-      "cdp_browser",                                  // packaged browser extension
-      "open_drawio_editor", "open_office_viewer",     // packaged viewer extensions
-      "office_read", "office_write",                  // packaged office tools
-      "schedule_task",                                // registered by task scheduler, not extension factory
-    ]);
+       "bun_run", "exec_batch", "search_tool_output", // packaged integrations
+       "schedule_task",                                // registered by task scheduler, not extension factory
+     ]);
 
     const toolsetToolNames = TOOLSETS.flatMap((ts) => ts.toolNames);
     const builtinToolsetTools = toolsetToolNames.filter(

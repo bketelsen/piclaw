@@ -6,8 +6,10 @@
  * public key.
  */
 
+import { randomUUID } from "crypto";
 import type { RemotePeerRecord } from "../db/remote-interop.js";
-import { buildCanonicalRequest, hashBody, parseTimestamp, verifyRequestSignature } from "./signature.js";
+import type { InteropIdentity } from "./identity.js";
+import { buildCanonicalRequest, hashBody, parseTimestamp, signRequest, verifyRequestSignature } from "./signature.js";
 import { RemoteNonceCache } from "./nonce-cache.js";
 import { DEFAULT_TIMESTAMP_SKEW_MS } from "./limits.js";
 
@@ -15,6 +17,39 @@ import { DEFAULT_TIMESTAMP_SKEW_MS } from "./limits.js";
 export type SignatureCheckResult =
   | { ok: true; canonical: string }
   | { ok: false; error: string };
+
+/** Build signed headers for an authenticated outbound remote request. */
+export function buildSignedRequestHeaders(
+  identity: InteropIdentity,
+  path: string,
+  bodyBytes: Uint8Array,
+  trustEpoch: number = 1
+): Record<string, string> {
+  const timestamp = new Date().toISOString();
+  const nonce = randomUUID();
+  const epochStr = String(trustEpoch);
+  const canonical = buildCanonicalRequest({
+    method: "POST",
+    pathWithQuery: path,
+    contentType: "application/json",
+    bodyHash: hashBody(bodyBytes),
+    timestamp,
+    nonce,
+    instanceId: identity.instance_id,
+    sigVersion: "v1",
+    trustEpoch: epochStr,
+  });
+  const signature = signRequest(identity, canonical);
+  return {
+    "Content-Type": "application/json",
+    "X-Instance-Id": identity.instance_id,
+    "X-Timestamp": timestamp,
+    "X-Nonce": nonce,
+    "X-Sig-Version": "v1",
+    "X-Signature": signature,
+    "X-Trust-Epoch": epochStr,
+  };
+}
 
 /** Validate and verify all signature inputs for a remote interop request. */
 export function verifySignedRequest(

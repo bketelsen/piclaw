@@ -323,4 +323,21 @@ describe("web channel http surface service", () => {
 
     expect(getWebChannelHttpSurfaceService(carrier as any)).toBe(existing);
   });
+
+  test("does not expose removed remote or VNC helper methods", () => {
+    const service = createWebChannelHttpSurfaceService({
+      serverLifecycleGateway: { handleFetch: async () => response("fetch") },
+      requestRouter: { handle: async () => response("request") },
+      endpointFacade: {} as never,
+      controlPlaneService: {} as never,
+      terminalVncHttpService: {} as never,
+      sessionBroadcast: {} as never,
+      remoteInterop: {} as never,
+      responses: {} as never,
+    } as any);
+
+    expect("handleRemote" in (service as object)).toBe(false);
+    expect("handleVncSession" in (service as object)).toBe(false);
+    expect("handleVncHandoff" in (service as object)).toBe(false);
+  });
 });

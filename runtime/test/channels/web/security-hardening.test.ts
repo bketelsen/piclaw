@@ -703,6 +703,19 @@ describe("CSRF origin checks", () => {
     expect(res.status).toBe(200);
   });
 
+  test("does not reserve /api/remote paths anymore", async () => {
+    const router = new RequestRouterService({
+      ...new StubChannel(),
+      handleRemote: async () => new Response(JSON.stringify({ ok: true }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
+    } as any);
+
+    const res = await router.handle(new Request("http://example.com/api/remote/ping", { method: "GET" }));
+    expect(res.status).toBe(404);
+  });
+
   test("blocks mismatched Origin port", async () => {
     const router = new RequestRouterService(new StubChannel() as any);
     const req = new Request("https://example.com/post", {

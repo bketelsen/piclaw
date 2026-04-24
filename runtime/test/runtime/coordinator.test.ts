@@ -7,7 +7,6 @@ describe("runtime coordinator", () => {
     const queue = {} as unknown as MessageLoopDeps["queue"];
     const state = {} as unknown as MessageLoopDeps["state"];
     const agentPool = {} as unknown as MessageProcessingDeps["agentPool"];
-    const whatsapp = {} as unknown as MessageProcessingDeps["whatsapp"];
 
     let capturedLoopDeps: MessageLoopDeps | null = null;
     let capturedChatJid: string | null = null;
@@ -27,7 +26,6 @@ describe("runtime coordinator", () => {
       queue,
       state,
       agentPool,
-      whatsapp,
       assistantName: "Pi",
       triggerPattern: /@Pi/i,
       pollIntervalMs: 1234,
@@ -50,7 +48,6 @@ describe("runtime coordinator", () => {
     if (!capturedMessageDeps) throw new Error("Expected message deps to be captured");
 
     expect(capturedMessageDeps.agentPool).toBe(agentPool);
-    expect(capturedMessageDeps.whatsapp).toBe(whatsapp);
     expect(capturedMessageDeps.state).toBe(state);
     expect(capturedMessageDeps.assistantName).toBe("Pi");
     expect(capturedMessageDeps.triggerPattern).toBeInstanceOf(RegExp);

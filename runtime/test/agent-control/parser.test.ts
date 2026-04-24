@@ -126,6 +126,10 @@ describe("parseControlCommand", () => {
     expect(parseControlCommand("/labels")).toEqual({ type: "labels", raw: "/labels" });
   });
 
+  test("/ask is no longer recognized", () => {
+    expect(parseControlCommand("/ask peer-1 hello")).toBeNull();
+  });
+
   // /shell and /bash
   test("/shell with command", () => {
     const cmd = parseControlCommand("/shell ls -la");

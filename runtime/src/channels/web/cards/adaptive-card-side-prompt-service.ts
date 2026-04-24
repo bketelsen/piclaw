@@ -398,32 +398,13 @@ export class WebAdaptiveCardSidePromptService {
       );
 
       const selectedModel = typeof rawSubmissionData.model === "string" ? rawSubmissionData.model.trim() : "";
-      const sandboxToggle = rawSubmissionData.sandbox;
-      const useSandbox = sandboxToggle === "true" || sandboxToggle === true;
       if (!selectedModel) {
         await this.options.sendMessage(chatJid, "No model selected.", { threadId });
         return this.options.json({ status: "ok", card_updated: true, source_post_id: sourcePostId, card_id: normalized.cardId }, 200);
       }
 
       try {
-        const { consumePendingLaunch, startAutoresearchFromCard } = await import("../../../extensions/autoresearch-supervisor.js");
-        const pending = consumePendingLaunch();
-        if (!pending) {
-          await this.options.sendMessage(chatJid, "No pending experiment launch found. Use start_autoresearch to set one up.", { threadId });
-          return this.options.json({ status: "ok", card_updated: true, source_post_id: sourcePostId, card_id: normalized.cardId }, 200);
-        }
-
-        await this.options.sendMessage(chatJid, `Launching with model **${selectedModel}**…`, { threadId });
-        const result = await startAutoresearchFromCard({
-          project_dir: pending.project_dir,
-          prompt: pending.prompt,
-          model: selectedModel,
-          sandbox: useSandbox,
-          max_iterations: pending.max_iterations,
-          variables: pending.variables,
-          chat_jid: pending.chat_jid || chatJid,
-        });
-        await this.options.sendMessage(chatJid, result, { threadId });
+        await this.options.sendMessage(chatJid, "Autoresearch is not available in this runtime.", { threadId });
       } catch (error) {
         const msg = error instanceof Error ? error.message : String(error);
         log.warn("Failed to launch autoresearch experiment from adaptive card", {
