@@ -1,16 +1,15 @@
 # Makefile – Top-level build/dev targets for the piclaw project.
 #
 # Targets:
-#   vendor         – Bundle vendored mermaid (minified ESM).
+#   dev            – Run piclaw in watch mode.
+#   vendor         – Bundle vendored assets needed by the runtime web app.
 #   build-web      – Build web bundles into static/dist/ (+ sourcemaps).
 #   build-ts       – Type-check TypeScript (tsc --noEmit). No generated/dist/ output.
-#   build-piclaw   – Full build: build-web (vendor + bundles) + build-ts.
-#   pack           – Pack piclaw into a .tgz (depends on build-piclaw).
-#   local-install  – Pack and install globally (no restart).
+#   build          – Full piclaw build (web + typecheck).
+#   pack           – Pack piclaw into a .tgz (depends on build).
+#   install        – Pack and install globally (no restart).
 #   lint/test      – Run ESLint and bun test suite.
 #   ci-fast        – Run the canonical fast CI guardrails + web build.
-#   publish-smoke  – Smoke-test a published piclaw image via env-provided args.
-#   up/down/enter  – Docker Compose lifecycle helpers.
 #   sync-version   – Sync package.json version to VERSION file.
 #   bump-*         – Version bump helpers.
 #   push           – Push commits and current tag to origin.
@@ -20,16 +19,9 @@
 #     - app.bundle.js   (authenticated web UI)
 #     - login.bundle.js (login page behavior)
 #
-#   Vendor libs remain separate pre-built assets where useful (e.g. codemirror,
-#   marked, katex, mermaid). request-router-service.ts auth-gates app.bundle.js
+#   Vendor libs remain separate pre-built assets where useful (e.g. marked,
+#   katex, mermaid). request-router-service.ts auth-gates app.bundle.js
 #   and only allows login.bundle.js pre-auth.
-
-IMAGE ?= pibox
-TAG ?= latest
-FULL_IMAGE := $(IMAGE):$(TAG)
-REGISTRY ?= ghcr.io
-GHCR_OWNER ?= $(shell whoami)
-GHCR_IMAGE := $(REGISTRY)/$(GHCR_OWNER)/$(IMAGE):$(TAG)
 
 BUN_BIN_REAL ?= $(shell readlink -f $(shell command -v bun 2>/dev/null) 2>/dev/null)
 BUN_ROOT ?= $(or $(BUN_INSTALL),$(patsubst %/bin/bun,%,$(BUN_BIN_REAL)),/usr/local/lib/bun)
@@ -38,36 +30,23 @@ GLOBAL_LOCK := $(BUN_ROOT)/install/global/bun.lock
 PI_AGENT_VERSION ?= $(shell jq -r '.dependencies["@mariozechner/pi-coding-agent"] // "0.58.3"' package.json)
 WEB_BUILD_TEST_TIMEOUT_MS ?= 20000
 
-.PHONY: help up down enter build build-piclaw build-web build-ts vendor update-mermaid-vendor pack \
-        local-install restart lint test test-coverage ci-fast ci-integration publish-smoke \
-        dual-tag tag-ghcr sync-version bump-minor bump-patch push
+.PHONY: help dev build build-piclaw build-web build-ts typecheck vendor update-mermaid-vendor pack \
+        install local-install restart lint test test-coverage ci-fast ci-integration \
+        sync-version bump-minor bump-patch push
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-16s\033[0m %s\n", $$1, $$2}'
 
-# ── Docker ────────────────────────────────────────────────────────────
-
-up: ## Start the container in detached mode
-	docker compose up -d
-
-down: ## Stop and remove the container
-	docker compose down
-
-enter: ## Enter the running container as agent
-	docker exec -u agent -it pibox bash
-
-build: ## Build Docker image
-	docker build -t $(FULL_IMAGE) .
-
 # ── Build pipeline ───────────────────────────────────────────────────
+
+dev: ## Run piclaw in watch mode
+	bun run dev
 
 vendor: ## Build the checked-in vendored bundles + metadata
 	cd runtime && bun run build:vendor
 	@ls -lh \
 		runtime/web/static/js/vendor/beautiful-mermaid.js \
 		runtime/web/static/js/vendor/beautiful-mermaid.meta.json \
-		runtime/extensions/viewers/editor/vendor/codemirror.js \
-		runtime/extensions/viewers/editor/vendor/codemirror.meta.json \
 		runtime/web/static/js/vendor/preact-htm.js \
 		runtime/web/static/js/vendor/preact-htm.meta.json \
 		runtime/web/static/js/marked.min.js \
@@ -82,18 +61,13 @@ vendor: ## Build the checked-in vendored bundles + metadata
 		runtime/web/static/fonts/vendor/firacode-nerd-font.meta.json \
 		runtime/web/static/js/vendor/ghostty-web.js \
 		runtime/web/static/js/vendor/ghostty-vt.wasm \
-		runtime/web/static/js/vendor/ghostty-web.meta.json \
-		runtime/extensions/viewers/office-viewer/vendor/docx-preview.min.js \
-		runtime/extensions/viewers/office-viewer/vendor/xlsx.full.min.js \
-		runtime/extensions/viewers/office-viewer/vendor/PptxViewJS.min.js \
-		runtime/extensions/viewers/office-viewer/vendor/jszip.min.js \
-		runtime/extensions/viewers/office-viewer/vendor/inter-latin.woff2 \
-		runtime/extensions/viewers/office-viewer/vendor/inter-latin-ext.woff2 \
-		runtime/extensions/viewers/office-viewer/vendor/office-viewer-libs.meta.json
+		runtime/web/static/js/vendor/ghostty-web.meta.json
 
 update-mermaid-vendor: ## Rebuild or upgrade vendored mermaid (use MERMAID_VERSION=1.2.3 to upgrade)
 	cd runtime && bun run update:vendor:mermaid $(if $(MERMAID_VERSION),--version $(MERMAID_VERSION),)
 	@ls -lh runtime/web/static/js/vendor/beautiful-mermaid.js runtime/web/static/js/vendor/beautiful-mermaid.meta.json
+
+build: build-piclaw ## Build piclaw
 
 build-web: ## Build web JS/CSS bundles (+ sourcemaps) into static/dist/ (includes vendor bundle)
 	cd runtime && bun run build:web
@@ -102,8 +76,6 @@ build-web: ## Build web JS/CSS bundles (+ sourcemaps) into static/dist/ (include
 		runtime/web/static/dist/app.bundle.js \
 		runtime/web/static/dist/app.bundle.js.map \
 		runtime/web/static/dist/app.bundle.css \
-		runtime/web/static/dist/editor.bundle.js \
-		runtime/web/static/dist/editor.bundle.js.map \
 		runtime/web/static/dist/login.bundle.js \
 		runtime/web/static/dist/login.bundle.js.map \
 		runtime/web/static/dist/login.bundle.css
@@ -115,6 +87,8 @@ build-ts: ## Type-check TypeScript / validate emit (generated/dist is cleaned up
 # artifacts only need runtime/web/static/dist/ bundles plus packaged sources.
 
 build-piclaw: build-web build-ts ## Full build: vendor + web + ts
+
+typecheck: build-ts ## Type-check TypeScript
 
 # ── Pack & install ───────────────────────────────────────────────────
 
@@ -165,6 +139,8 @@ local-install: pack ## Pack and install piclaw globally (no restart)
 	printf '%s\n' "[local-install] Install complete (no restart)"; \
 	printf '%s\n' "[local-install] Done (v$${VERSION})"
 
+install: local-install ## Pack and install piclaw globally
+
 # ── Quality ──────────────────────────────────────────────────────────
 
 lint: ## Lint piclaw sources
@@ -181,10 +157,6 @@ ci-fast: ## Run the canonical fast CI contract used by GitHub Actions
 
 ci-integration: ## Run the full integration gate (lint + all tests + static analysis + build + Playwright)
 	bun run ci:integration
-
-publish-smoke: ## Smoke-test a published piclaw image (requires IMAGE_REF, PLATFORM, EXPECTED_BUN_VERSION, EXPECTED_RESTIC_VERSION)
-	@: "$${IMAGE_REF:?set IMAGE_REF}" "$${PLATFORM:?set PLATFORM}" "$${EXPECTED_BUN_VERSION:?set EXPECTED_BUN_VERSION}" "$${EXPECTED_RESTIC_VERSION:?set EXPECTED_RESTIC_VERSION}"
-	bun run ci:publish-smoke
 
 # ── Versioning ───────────────────────────────────────────────────────
 
@@ -225,8 +197,6 @@ bump-patch: ## Bump patch version, build, commit, and tag
 	git tag "v$$NEW"; \
 	echo "Bumped version: $$OLD -> $$NEW (tagged v$$NEW)"
 
-# ── Release ──────────────────────────────────────────────────────────
-
 push: ## Push commits and current tag to origin
 	@TAG=$$(git describe --tags --exact-match 2>/dev/null); \
 	git push origin main; \
@@ -236,8 +206,3 @@ push: ## Push commits and current tag to origin
 	else \
 		echo "No tag on current commit"; \
 	fi
-
-dual-tag: build ## Tag image as ghcr.io/<user>/<image>:<tag>
-	docker tag $(FULL_IMAGE) $(GHCR_IMAGE)
-
-tag-ghcr: dual-tag ## Convenience alias for dual-tag
