@@ -10,8 +10,6 @@
  *   - WORKSPACE_DIR / STORE_DIR / DATA_DIR → db/, ipc.ts, task-scheduler.ts
  *   - WEB_* → channels/web.ts (HTTP/TLS server setup, auth)
  *   - ASSISTANT_NAME / ASSISTANT_AVATAR → agent-pool.ts, channels/formatting.ts
- *   - WHATSAPP_PHONE → channels/whatsapp.ts
- *   - PUSHOVER_* → channels/pushover.ts
  *   - AGENT_TIMEOUT / BACKGROUND_AGENT_TIMEOUT → agent-pool.ts, runtime.ts
  *   - TRIGGER_PATTERN → router.ts (decides whether to process a message)
  *   - TOOL_OUTPUT_* → db/tool-outputs.ts (retention / cleanup scheduling)
@@ -67,13 +65,6 @@ const envConfig = readEnvFile([
   "AGENT_TIMEOUT",
   "PICLAW_BACKGROUND_AGENT_TIMEOUT",
   "AGENT_TIMEOUT_BACKGROUND",
-  "PICLAW_WHATSAPP_PHONE",
-  "WHATSAPP_PHONE",
-  "PUSHOVER_APP_TOKEN",
-  "PUSHOVER_USER_KEY",
-  "PUSHOVER_DEVICE",
-  "PUSHOVER_PRIORITY",
-  "PUSHOVER_SOUND",
   "PICLAW_WEB_TLS_CERT",
   "PICLAW_WEB_TLS_KEY",
   "PICLAW_WEB_TOTP_SECRET",
@@ -160,10 +151,6 @@ export const PICLAW_CONFIG_PATH = resolve(WORKSPACE_DIR, ".piclaw", "config.json
 const piclawConfig = readJsonConfig(PICLAW_CONFIG_PATH);
 
 // Sub-objects inside the config file for namespaced settings.
-const pushoverConfig =
-  piclawConfig.pushover && typeof piclawConfig.pushover === "object"
-    ? (piclawConfig.pushover as Record<string, unknown>)
-    : piclawConfig;
 const assistantConfig =
   piclawConfig.assistant && typeof piclawConfig.assistant === "object"
     ? (piclawConfig.assistant as Record<string, unknown>)
@@ -182,12 +169,6 @@ const toolsConfig =
     : piclawConfig;
 
 // Extract individual settings from the JSON config, trying multiple key aliases.
-const configAppToken = pickString(pushoverConfig, ["appToken", "app_token", "PUSHOVER_APP_TOKEN"]);
-const configUserKey = pickString(pushoverConfig, ["userKey", "user_key", "PUSHOVER_USER_KEY"]);
-const configDevice = pickString(pushoverConfig, ["device", "PUSHOVER_DEVICE"]);
-const configSound = pickString(pushoverConfig, ["sound", "PUSHOVER_SOUND"]);
-const configPriority = pickNumber(pushoverConfig, ["priority", "PUSHOVER_PRIORITY"]);
-const configWhatsappPhone = pickString(piclawConfig, ["whatsappPhone", "whatsapp_phone", "WHATSAPP_PHONE"]);
 const configAssistantName = pickString(assistantConfig, [
   "assistantName",
   "assistant_name",
@@ -858,59 +839,4 @@ export const TOOL_OUTPUT_CONFIG = Object.freeze<ToolOutputConfig>({
 /** Return the grouped tool-output settings for startup wiring and tests. */
 export function getToolOutputConfig(): Readonly<ToolOutputConfig> {
   return TOOL_OUTPUT_CONFIG;
-}
-
-// ---------------------------------------------------------------------------
-// WhatsApp channel settings.
-// ---------------------------------------------------------------------------
-
-/** Typed WhatsApp channel settings grouped for startup/channel wiring. */
-export interface WhatsAppConfig {
-  phoneNumber: string;
-}
-
-/** Grouped WhatsApp channel settings. */
-export const WHATSAPP_CONFIG = Object.freeze<WhatsAppConfig>({
-  phoneNumber:
-    process.env.WHATSAPP_PHONE ||
-    envConfig.WHATSAPP_PHONE ||
-    process.env.PICLAW_WHATSAPP_PHONE ||
-    envConfig.PICLAW_WHATSAPP_PHONE ||
-    configWhatsappPhone ||
-    "",
-});
-
-/** Return the grouped WhatsApp settings for startup and channel wiring. */
-export function getWhatsAppConfig(): Readonly<WhatsAppConfig> {
-  return WHATSAPP_CONFIG;
-}
-
-// ---------------------------------------------------------------------------
-// Pushover notification channel settings.
-// ---------------------------------------------------------------------------
-
-/** Typed Pushover channel settings grouped for runtime startup wiring. */
-export interface PushoverConfig {
-  appToken: string;
-  userKey: string;
-  device: string;
-  priority: number;
-  sound: string;
-}
-
-/** Grouped Pushover channel settings. */
-export const PUSHOVER_CONFIG = Object.freeze<PushoverConfig>({
-  appToken: process.env.PUSHOVER_APP_TOKEN || envConfig.PUSHOVER_APP_TOKEN || configAppToken || "",
-  userKey: process.env.PUSHOVER_USER_KEY || envConfig.PUSHOVER_USER_KEY || configUserKey || "",
-  device: process.env.PUSHOVER_DEVICE || envConfig.PUSHOVER_DEVICE || configDevice || "",
-  priority: parseInt(
-    process.env.PUSHOVER_PRIORITY || envConfig.PUSHOVER_PRIORITY || (configPriority !== undefined ? String(configPriority) : "0"),
-    10
-  ),
-  sound: process.env.PUSHOVER_SOUND || envConfig.PUSHOVER_SOUND || configSound || "",
-});
-
-/** Return the grouped Pushover settings for startup wiring and tests. */
-export function getPushoverConfig(): Readonly<PushoverConfig> {
-  return PUSHOVER_CONFIG;
 }

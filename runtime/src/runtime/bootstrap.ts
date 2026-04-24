@@ -18,20 +18,16 @@ import { registerOptionalProviders } from "./provider-bootstrap.js";
 import { createShutdownHandler, type ShutdownDeps } from "./shutdown.js";
 import { registerShutdownHandler } from "./shutdown-registry.js";
 import {
-  createWhatsAppChannel,
   initializeRuntimeEnvironment,
   queueStartupResumePendingIpc,
-  startOptionalPushoverChannel,
   startWebChannel,
 } from "./startup.js";
 import {
   createRuntimeSenders,
   startRuntimeWorkers,
   type RuntimeModelResolver,
-  type RuntimePushoverWorkerChannel,
   type RuntimeSenders,
   type RuntimeWebWorkerChannel,
-  type RuntimeWhatsAppWorkerChannel,
 } from "./wiring.js";
 
 const log = createLogger("runtime.bootstrap");
@@ -55,16 +51,6 @@ export type RuntimeBootstrapState = StartRuntimeLoopDeps["state"];
 /** Web channel contract required by runtime bootstrap orchestration. */
 export type RuntimeBootstrapWeb = RuntimeWebWorkerChannel & ShutdownDeps["web"];
 
-/** WhatsApp channel contract required by runtime bootstrap orchestration. */
-export type RuntimeBootstrapWhatsApp =
-  & StartRuntimeLoopDeps["whatsapp"]
-  & RuntimeWhatsAppWorkerChannel
-  & ShutdownDeps["whatsapp"]
-  & { connect: () => Promise<unknown> };
-
-/** Optional pushover channel contract required by runtime bootstrap orchestration. */
-export type RuntimeBootstrapPushover = RuntimePushoverWorkerChannel & NonNullable<ShutdownDeps["pushover"]>;
-
 /** Runtime core services contract consumed by bootstrap orchestration. */
 export interface RuntimeBootstrapCoreServices {
   queue: RuntimeBootstrapQueue;
@@ -76,7 +62,7 @@ export interface RuntimeBootstrapCoreServices {
 export interface RuntimeBootstrapDefaultCoreServices extends RuntimeBootstrapCoreServices {
   queue: Parameters<typeof startWebChannel>[0];
   agentPool: Parameters<typeof startWebChannel>[1];
-  state: Parameters<typeof createWhatsAppChannel>[0];
+  state: Parameters<typeof initializeRuntimeEnvironment>[0];
 }
 
 /** Dependency injection contract for the runtime bootstrap sequence. */
@@ -89,17 +75,13 @@ export interface RuntimeBootstrapDeps {
   initializeRuntimeEnvironment(state: RuntimeBootstrapState): void;
   registerOptionalProviders(agentPool: RuntimeBootstrapAgentPool): void | Promise<void>;
   startWebChannel(queue: RuntimeBootstrapQueue, agentPool: RuntimeBootstrapAgentPool): Promise<RuntimeBootstrapWeb>;
-  startOptionalPushoverChannel(): Promise<RuntimeBootstrapPushover | null>;
-  createWhatsAppChannel(state: RuntimeBootstrapState): RuntimeBootstrapWhatsApp;
   createShutdownHandler(deps: ShutdownDeps): (signal: string) => Promise<void>;
   registerRuntimeShutdownSignals(
     registrar: RuntimeSignalRegistrar,
     shutdown: (signal: string) => Promise<void>
   ): void;
   createRuntimeSenders(
-    web: RuntimeBootstrapWeb,
-    whatsapp: RuntimeBootstrapWhatsApp,
-    pushover: RuntimeBootstrapPushover | null
+    web: RuntimeBootstrapWeb
   ): RuntimeSenders;
   startRuntimeWorkers(
     queue: RuntimeBootstrapQueue,
@@ -127,8 +109,6 @@ export function createDefaultRuntimeBootstrapDeps(core: RuntimeBootstrapDefaultC
     initializeRuntimeEnvironment: () => initializeRuntimeEnvironment(core.state),
     registerOptionalProviders: () => registerOptionalProviders(core.agentPool),
     startWebChannel: () => startWebChannel(core.queue, core.agentPool),
-    startOptionalPushoverChannel: () => startOptionalPushoverChannel(),
-    createWhatsAppChannel: () => createWhatsAppChannel(core.state),
     createShutdownHandler,
     registerRuntimeShutdownSignals,
     createRuntimeSenders,
@@ -152,31 +132,24 @@ export async function bootstrapRuntime(deps: RuntimeBootstrapDeps): Promise<void
   deps.log("=== Piclaw - Pi Coding Agent Assistant ===");
 
   const web = await deps.startWebChannel(queue, agentPool);
-  const pushover = await deps.startOptionalPushoverChannel();
-  const whatsapp = deps.createWhatsAppChannel(state);
 
   const shutdown = deps.createShutdownHandler({
     queue,
     agentPool,
-    whatsapp,
     web,
-    pushover,
     stopIpcWatcher: deps.stopIpcWatcher,
     stopSchedulerLoop: deps.stopSchedulerLoop,
   });
   registerShutdownHandler(shutdown);
   deps.registerRuntimeShutdownSignals(deps.signalRegistrar, shutdown);
 
-  const senders = deps.createRuntimeSenders(web, whatsapp, pushover);
+  const senders = deps.createRuntimeSenders(web);
   deps.startRuntimeWorkers(queue, agentPool, web, senders);
-
-  await whatsapp.connect();
 
   await deps.startRuntimeLoop({
     queue,
     state,
     agentPool,
-    whatsapp,
     assistantName: deps.assistantName,
     triggerPattern: deps.triggerPattern,
     pollIntervalMs: deps.pollIntervalMs,

@@ -6,18 +6,14 @@ import { copyFileSync, cpSync, existsSync, mkdirSync, readdirSync, rmSync, statS
 import { dirname, join, resolve } from "path";
 import type { AgentPool } from "../agent-pool.js";
 import { WebChannel } from "../channels/web.js";
-import { PushoverChannel } from "../channels/pushover.js";
-import { WhatsAppChannel } from "../channels/whatsapp.js";
 import { setMessagesPostFn } from "../extensions/messages-crud.js";
 import {
   DATA_DIR,
   STORE_DIR,
   WORKSPACE_DIR,
-  getPushoverConfig,
   getToolOutputConfig,
-  getWhatsAppConfig,
 } from "../core/config.js";
-import { getDb, initDatabase, storeChatMetadata, storeMessage } from "../db.js";
+import { getDb, initDatabase } from "../db.js";
 import type { AgentQueue } from "../queue.js";
 import { startToolOutputCleanup } from "../tool-output.js";
 import { createUuid } from "../utils/ids.js";
@@ -26,7 +22,6 @@ import { patchConsoleTimestamps } from "./console-timestamps.js";
 import type { RuntimeState } from "./state.js";
 import { launchWorkspaceIndexProcess } from "../workspace-index-process.js";
 import { SystemMetricsSampler } from "../channels/web/agent/system-metrics.js";
-import { registerLazyViewerRoutes } from "../channels/web/http/lazy-viewer-routes.js";
 
 const log = createLogger("runtime.startup");
 const WORKSPACE_SKEL_DIR = resolve(import.meta.dir, "../../../skel");
@@ -242,7 +237,6 @@ export function captureStartupMemorySnapshot(
 export async function startWebChannel(queue: AgentQueue, agentPool: AgentPool): Promise<WebChannel> {
   const web = new WebChannel({ queue, agentPool });
   await web.start();
-  registerLazyViewerRoutes();
   captureStartupMemorySnapshot(agentPool, { label: "post-web-start" });
   queueStartupSessionWarmup(agentPool, resolveStartupSessionWarmupOptions());
   web.recoverInflightRuns();
@@ -290,69 +284,4 @@ export function queueStartupResumePendingIpc(): void {
       err: error,
     });
   }
-}
-
-/** Start optional Pushover channel if configured. */
-export async function startOptionalPushoverChannel(): Promise<PushoverChannel | null> {
-  const pushoverConfig = getPushoverConfig();
-  if (!pushoverConfig.appToken || !pushoverConfig.userKey) {
-    return null;
-  }
-
-  const pushover = new PushoverChannel({
-    appToken: pushoverConfig.appToken,
-    userKey: pushoverConfig.userKey,
-    device: pushoverConfig.device || undefined,
-    priority: pushoverConfig.priority,
-    sound: pushoverConfig.sound || undefined,
-  });
-  await pushover.start();
-  return pushover;
-}
-
-/** Build WhatsApp channel with runtime callbacks and pairing IPC integration. */
-export function createWhatsAppChannel(state: RuntimeState): WhatsAppChannel {
-  const whatsAppConfig = getWhatsAppConfig();
-  if (!whatsAppConfig.phoneNumber) {
-    // Return a no-op stub when WhatsApp is not configured.
-    // The runtime expects a whatsapp object with connect/disconnect/sendMessage/setTyping.
-    return {
-      connect: async () => {},
-      disconnect: async () => {},
-      sendMessage: async () => {},
-      setTyping: async () => {},
-      isConnected: () => false,
-    } as unknown as WhatsAppChannel;
-  }
-
-  return new WhatsAppChannel({
-    chatJids: () => state.chatJids,
-    phoneNumber: whatsAppConfig.phoneNumber || undefined,
-    onPairingCode: (code) => {
-      try {
-        const ipcDir = join(DATA_DIR, "ipc", "messages");
-        mkdirSync(ipcDir, { recursive: true });
-        const payload = {
-          type: "message",
-          chatJid: "web:default",
-          text: code,
-        };
-        const filePath = join(ipcDir, `${createUuid("pairing")}.json`);
-        writeFileSync(filePath, JSON.stringify(payload));
-      } catch (error) {
-        log.error("Failed to write pairing code IPC message", {
-          operation: "pairing_code_ipc",
-          err: error,
-        });
-      }
-    },
-    onMessage: (chatJid, msg) => {
-      if (!state.chatJids.has(chatJid) && msg.is_from_me) {
-        state.chatJids.add(chatJid);
-        state.saveChats();
-      }
-      storeMessage(msg);
-    },
-    onChatMetadata: (chatJid, timestamp) => storeChatMetadata(chatJid, timestamp),
-  });
 }

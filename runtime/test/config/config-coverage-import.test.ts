@@ -34,11 +34,6 @@ test("plain import covers config module init branches with isolated argv and env
       PICLAW_TOOL_OUTPUT_CLEANUP_INTERVAL_MS: "60000",
       PICLAW_AGENT_TIMEOUT: "120000",
       PICLAW_BACKGROUND_AGENT_TIMEOUT: "45000",
-      PUSHOVER_APP_TOKEN: "push-app",
-      PUSHOVER_USER_KEY: "push-user",
-      PUSHOVER_DEVICE: "push-device",
-      PUSHOVER_PRIORITY: "1",
-      PUSHOVER_SOUND: "magic",
       TZ: "UTC",
     },
     async (ws) => {
@@ -55,7 +50,6 @@ test("plain import covers config module init branches with isolated argv and env
         debugCardSubmissions: "off",
         sessionMaxSizeMb: "64",
         sessionAutoRotate: "true",
-        whatsappPhone: "+15557650000",
       });
 
       const stderrChunks: string[] = [];
@@ -146,16 +140,6 @@ test("plain import covers config module init branches with isolated argv and env
           additionalDefaultTools: [],
         });
         expect(cfg.getToolActivationConfig()).toBe(cfg.TOOL_ACTIVATION_CONFIG);
-        expect(cfg.PUSHOVER_CONFIG).toEqual({
-          appToken: "push-app",
-          userKey: "push-user",
-          device: "push-device",
-          priority: 1,
-          sound: "magic",
-        });
-        expect(cfg.getPushoverConfig()).toBe(cfg.PUSHOVER_CONFIG);
-        expect(cfg.WHATSAPP_CONFIG).toEqual({ phoneNumber: "+15557650000" });
-        expect(cfg.getWhatsAppConfig()).toBe(cfg.WHATSAPP_CONFIG);
 
         const configPath = join(ws.workspace, ".piclaw", "config.json");
         cfg.setAssistantName("  Pi (Coverage) Bot  ");

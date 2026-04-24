@@ -69,27 +69,17 @@ test("loads config-file aliases for pushover and identity fields", () => {
         avatar: "/user.png",
         avatar_background: "#123456",
       },
-      whatsappPhone: "+15551234567",
     });
 
     const snapshot = loadConfigInSubprocess(ws, [
-      "PUSHOVER_CONFIG",
       "IDENTITY_CONFIG",
       "ASSISTANT_NAME",
       "ASSISTANT_AVATAR",
       "USER_NAME",
       "USER_AVATAR",
       "USER_AVATAR_BACKGROUND",
-      "WHATSAPP_CONFIG",
     ]);
 
-    expect(snapshot.PUSHOVER_CONFIG).toEqual({
-      appToken: "app-token",
-      userKey: "user-key",
-      device: "device-1",
-      priority: 2,
-      sound: "ping",
-    });
     expect(snapshot.IDENTITY_CONFIG).toEqual({
       assistantName: "Config Bot",
       assistantAvatar: "/assistant.png",
@@ -102,7 +92,6 @@ test("loads config-file aliases for pushover and identity fields", () => {
     expect(snapshot.USER_NAME).toBe("Casey");
     expect(snapshot.USER_AVATAR).toBe("/user.png");
     expect(snapshot.USER_AVATAR_BACKGROUND).toBe("#123456");
-    expect(snapshot.WHATSAPP_CONFIG).toEqual({ phoneNumber: "+15551234567" });
   } finally {
     ws.cleanup();
   }
@@ -176,17 +165,13 @@ test("CLI workspace flag overrides env workspace and relocates derived state pat
   const cliWs = createTempWorkspace("piclaw-config-cli-");
 
   try {
-    writeWorkspaceConfig(cliWs.workspace, {
-      whatsappPhone: "+15550001111",
-    });
-
     const snapshot = loadConfigInSubprocess(
       {
         workspace: envWs.workspace,
         store: envWs.store,
         data: envWs.data,
       },
-      ["WORKSPACE_DIR", "STORE_DIR", "DATA_DIR", "PICLAW_CONFIG_PATH", "WHATSAPP_CONFIG"],
+      ["WORKSPACE_DIR", "STORE_DIR", "DATA_DIR", "PICLAW_CONFIG_PATH"],
       {
         args: ["--workspace", cliWs.workspace],
       },
@@ -196,7 +181,6 @@ test("CLI workspace flag overrides env workspace and relocates derived state pat
     expect(snapshot.STORE_DIR).toBe(resolve(cliWs.workspace, ".piclaw", "store"));
     expect(snapshot.DATA_DIR).toBe(resolve(cliWs.workspace, ".piclaw", "data"));
     expect(snapshot.PICLAW_CONFIG_PATH).toBe(resolve(cliWs.workspace, ".piclaw", "config.json"));
-    expect(snapshot.WHATSAPP_CONFIG).toEqual({ phoneNumber: "+15550001111" });
   } finally {
     envWs.cleanup();
     cliWs.cleanup();
@@ -359,53 +343,6 @@ test("workspace search config getter groups configured FTS roots from env or con
   );
 });
 
-test("pushover config getter groups aliased config file settings", async () => {
-  await withTempWorkspaceEnv(
-    "piclaw-config-",
-    {},
-    async (ws) => {
-      writeWorkspaceConfig(ws.workspace, {
-        pushover: {
-          appToken: "app-token-2",
-          user_key: "user-key-2",
-          device: "device-2",
-          priority: 1,
-          sound: "magic",
-        },
-      });
-
-      const cfg = await importFresh<typeof import("../../src/core/config.js")>("../src/core/config.js");
-
-      expect(cfg.getPushoverConfig()).toBe(cfg.PUSHOVER_CONFIG);
-      expect(Object.isFrozen(cfg.PUSHOVER_CONFIG)).toBe(true);
-      expect(cfg.PUSHOVER_CONFIG).toEqual({
-        appToken: "app-token-2",
-        userKey: "user-key-2",
-        device: "device-2",
-        priority: 1,
-        sound: "magic",
-      });
-    },
-  );
-});
-
-test("whatsapp config getter groups the configured phone number", async () => {
-  await withTempWorkspaceEnv(
-    "piclaw-config-",
-    {},
-    async (ws) => {
-      writeWorkspaceConfig(ws.workspace, {
-        whatsappPhone: "+15557654321",
-      });
-
-      const cfg = await importFresh<typeof import("../../src/core/config.js")>("../src/core/config.js");
-
-      expect(cfg.getWhatsAppConfig()).toBe(cfg.WHATSAPP_CONFIG);
-      expect(Object.isFrozen(cfg.WHATSAPP_CONFIG)).toBe(true);
-      expect(cfg.WHATSAPP_CONFIG).toEqual({ phoneNumber: "+15557654321" });
-    },
-  );
-});
 
 test("session storage config getter groups size and auto-rotate settings", async () => {
   await withTempWorkspaceEnv(

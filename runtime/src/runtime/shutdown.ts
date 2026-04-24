@@ -10,9 +10,7 @@ const log = createLogger("runtime.shutdown");
 export type ShutdownDeps = {
   queue: { shutdown: (timeoutMs?: number) => Promise<unknown> };
   agentPool: { shutdown: () => Promise<unknown> };
-  whatsapp: { disconnect: () => Promise<unknown> };
   web: { stop: () => Promise<unknown> };
-  pushover?: { stop: () => Promise<unknown> } | null;
   stopIpcWatcher: () => Promise<void>;
   stopSchedulerLoop: () => void;
 };
@@ -60,9 +58,7 @@ export function createShutdownHandler(deps: ShutdownDeps): (signal: string) => P
     deps.stopSchedulerLoop();
     await withTimeout(deps.queue.shutdown(5000), 7000, "queue shutdown");
     await withTimeout(deps.agentPool.shutdown(), 8000, "agent pool shutdown");
-    await withTimeout(deps.whatsapp.disconnect(), 8000, "whatsapp disconnect");
     await withTimeout(deps.web.stop(), 4000, "web stop");
-    await withTimeout(deps.pushover?.stop() ?? Promise.resolve(), 4000, "pushover stop");
 
     clearTimeout(forceExit);
     process.exit(0);

@@ -39,10 +39,8 @@ test("processMessages leaves lastAgentTimestamp unchanged when runAgent throws",
       state: state as any,
       assistantName: "Pi",
       triggerPattern: /@Pi/i,
-      whatsapp: {
-        sendMessage: async () => {},
-        setTyping: async () => {},
-      } as any,
+      sendMessage: async () => {},
+      setTyping: async () => {},
       agentPool: {
         runAgent: async () => {
           throw new Error("agent crashed");
@@ -80,12 +78,10 @@ test("processMessages persists lastAgentTimestamp after a recovered successful a
       state: state as any,
       assistantName: "Pi",
       triggerPattern: /@Pi/i,
-      whatsapp: {
-        sendMessage: async (_jid: string, text: string) => {
-          outbound.push(text);
-        },
-        setTyping: async () => {},
-      } as any,
+      sendMessage: async (_jid: string, text: string) => {
+        outbound.push(text);
+      },
+      setTyping: async () => {},
       agentPool: {
         runAgent: async () => ({
           status: "success",
@@ -134,12 +130,10 @@ test("processMessages persists lastAgentTimestamp after a successful agent run",
       state: state as any,
       assistantName: "Pi",
       triggerPattern: /@Pi/i,
-      whatsapp: {
-        sendMessage: async (_jid: string, text: string) => {
-          outbound.push(text);
-        },
-        setTyping: async () => {},
-      } as any,
+      sendMessage: async (_jid: string, text: string) => {
+        outbound.push(text);
+      },
+      setTyping: async () => {},
       agentPool: {
         runAgent: async () => ({
           status: "success",
@@ -189,12 +183,10 @@ test("processMessages marks control commands as processed without sending outbou
       state: state as any,
       assistantName: "Pi",
       triggerPattern: /@Pi/i,
-      whatsapp: {
-        sendMessage: async (_jid: string, text: string) => {
-          outbound.push(text);
-        },
-        setTyping: async () => {},
-      } as any,
+      sendMessage: async (_jid: string, text: string) => {
+        outbound.push(text);
+      },
+      setTyping: async () => {},
       agentPool: {
         applyControlCommand: async () => ({
           status: "success",
