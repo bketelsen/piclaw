@@ -168,25 +168,11 @@ describe("web channel http surface service", () => {
           calls.push(`terminal-handoff:${req.method}`);
           return response("terminal-handoff");
         },
-        handleVncSession: (req: Request) => {
-          calls.push(`vnc:${req.method}`);
-          return response("vnc");
-        },
-        handleVncHandoff: async (req: Request) => {
-          calls.push(`handoff:${req.method}`);
-          return response("handoff");
-        },
       },
       sessionBroadcast: {
         handleSse: (req: Request) => {
           calls.push(`sse:${req.method}`);
           return response("sse");
-        },
-      },
-      remoteInterop: {
-        handleRequest: async (req: Request) => {
-          calls.push(`remote:${req.method}`);
-          return response("remote");
         },
       },
       responses: {
@@ -234,8 +220,6 @@ describe("web channel http surface service", () => {
     expect(await service.handleSse(getReq).text()).toBe("sse");
     expect(await service.handleTerminalSession(getReq).text()).toBe("terminal");
     expect(await (await service.handleTerminalHandoff(postReq)).text()).toBe("terminal-handoff");
-    expect(await service.handleVncSession(getReq).text()).toBe("vnc");
-    expect(await (await service.handleVncHandoff(postReq)).text()).toBe("handoff");
     expect(await (await service.handlePost(postReq, true)).text()).toBe("post");
     expect(await service.handleAgentStatus(getReq).text()).toBe("status");
     expect(await (await service.handleAgentContext(getReq)).text()).toBe("context");
@@ -253,7 +237,6 @@ describe("web channel http surface service", () => {
     expect(await (await service.handleAgentBranchPrune(postReq)).text()).toBe("branch-prune");
     expect(await (await service.handleAgentBranchRestore(postReq)).text()).toBe("branch-restore");
     expect(await (await service.handleAgentRespond(postReq)).text()).toBe("respond");
-    expect(await (await service.handleRemote(getReq)).text()).toBe("remote");
     expect(await (await service.serveStatic("index.html")).text()).toBe("static");
     expect(await (await service.serveDocsStatic("guide.md")).text()).toBe("docs");
     expect(service.json({ ok: true }, 209)).toBe(jsonResponse);
@@ -279,8 +262,6 @@ describe("web channel http surface service", () => {
       "sse:GET",
       "terminal:GET",
       "terminal-handoff:POST",
-      "vnc:GET",
-      "handoff:POST",
       "post:POST:1",
       "status:GET",
       "context:GET",
@@ -298,7 +279,6 @@ describe("web channel http surface service", () => {
       "branch-prune:POST",
       "branch-restore:POST",
       "respond:POST",
-      "remote:GET",
       "static:index.html",
       "docs:guide.md",
       "json:209",
@@ -317,7 +297,6 @@ describe("web channel http surface service", () => {
       serverLifecycleGateway: {} as never,
       terminalVncHttpService: {} as never,
       sessionBroadcast: {} as never,
-      remoteInterop: {} as never,
       responses: {} as never,
     };
 
@@ -332,7 +311,6 @@ describe("web channel http surface service", () => {
       controlPlaneService: {} as never,
       terminalVncHttpService: {} as never,
       sessionBroadcast: {} as never,
-      remoteInterop: {} as never,
       responses: {} as never,
     } as any);
 

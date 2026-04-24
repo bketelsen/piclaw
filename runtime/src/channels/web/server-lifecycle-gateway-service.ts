@@ -6,14 +6,13 @@ import { createLogger } from "../../utils/logger.js";
 import { startWorkspaceWatcher, type WorkspaceWatcherChannel } from "./handlers/workspace.js";
 import { checkCsrfOrigin } from "./http/security.js";
 import type { TerminalSocketData } from "./terminal/terminal-session-service.js";
-import type { VncSocketData } from "./vnc/vnc-session-service.js";
 
 const log = createLogger("web");
 const LINK_PREVIEW_CACHE_PURGE_INTERVAL_MS = 12 * 60 * 60 * 1000;
 const MAX_BIND_ATTEMPTS = 5;
 const BIND_RETRY_MS = 1500;
 
-export type WebSocketSessionData = TerminalSocketData | VncSocketData;
+export type WebSocketSessionData = TerminalSocketData;
 
 interface JsonResponder {
   json(payload: unknown, status?: number): Response;
@@ -29,14 +28,6 @@ interface TerminalServiceLike {
   attachClient(ws: ServerWebSocket<TerminalSocketData>): void;
   handleMessage(ws: ServerWebSocket<TerminalSocketData>, message: string | Buffer | Uint8Array): void;
   detachClient(ws: ServerWebSocket<TerminalSocketData>): void;
-  shutdown(): void;
-}
-
-interface VncServiceLike {
-  resolveOwnerFromRequest(req: Request, targetId: string, allowUnauthenticated?: boolean): VncSocketData | null;
-  attachClient(ws: ServerWebSocket<VncSocketData>): void;
-  handleMessage(ws: ServerWebSocket<VncSocketData>, message: string | Buffer | Uint8Array): void;
-  detachClient(ws: ServerWebSocket<VncSocketData>): void;
   shutdown(): void;
 }
 
@@ -78,7 +69,6 @@ export interface WebServerLifecycleGatewayDeps extends JsonResponder {
   purgeExpiredLinkPreviewImageCache(nowIso: string, limit: number): { purgedEntries: number; purgedMedia: number };
   authGateway: AuthGatewayLike;
   terminalService: TerminalServiceLike;
-  vncService: VncServiceLike;
   uiBridge: UiBridgeLike;
   sse: SseHubLike;
   serve?: typeof Bun.serve;
@@ -95,7 +85,6 @@ export interface WebServerLifecycleGatewayChannel extends JsonResponder, Workspa
   handleRequest(req: Request): Promise<Response>;
   authGateway: AuthGatewayLike;
   terminalService: TerminalServiceLike;
-  vncService: VncServiceLike;
   uiBridge: UiBridgeLike;
   sse: SseHubLike;
 }
@@ -116,7 +105,6 @@ export function createWebServerLifecycleGateway(
     purgeExpiredLinkPreviewImageCache: (nowIso, limit) => purgeExpiredLinkPreviewImageCache(nowIso, limit),
     authGateway: channel.authGateway,
     terminalService: channel.terminalService,
-    vncService: channel.vncService,
     uiBridge: channel.uiBridge,
     sse: channel.sse,
   });
@@ -156,24 +144,12 @@ export class WebServerLifecycleGatewayService {
           fetch: (req, server) => this.handleFetch(req, server),
           websocket: {
             open: (ws) => {
-              if (ws.data?.kind === "vnc") {
-                this.deps.vncService.attachClient(ws as ServerWebSocket<VncSocketData>);
-                return;
-              }
               this.deps.terminalService.attachClient(ws as ServerWebSocket<TerminalSocketData>);
             },
             message: (ws, message) => {
-              if (ws.data?.kind === "vnc") {
-                this.deps.vncService.handleMessage(ws as ServerWebSocket<VncSocketData>, message as any);
-                return;
-              }
               this.deps.terminalService.handleMessage(ws as ServerWebSocket<TerminalSocketData>, message as any);
             },
             close: (ws) => {
-              if (ws.data?.kind === "vnc") {
-                this.deps.vncService.detachClient(ws as ServerWebSocket<VncSocketData>);
-                return;
-              }
               this.deps.terminalService.detachClient(ws as ServerWebSocket<TerminalSocketData>);
             },
           },
@@ -226,7 +202,6 @@ export class WebServerLifecycleGatewayService {
     this.deps.sse.closeAll();
     this.deps.uiBridge.stop();
     this.deps.terminalService.shutdown();
-    this.deps.vncService.shutdown();
     if (this.linkPreviewCachePurgeTimer) {
       this.clearInterval(this.linkPreviewCachePurgeTimer);
       this.linkPreviewCachePurgeTimer = null;
@@ -245,9 +220,6 @@ export class WebServerLifecycleGatewayService {
     const pathname = new URL(req.url).pathname;
     if (pathname === "/terminal/ws") {
       return this.handleTerminalWebSocketUpgrade(req, server);
-    }
-    if (pathname === "/vnc/ws") {
-      return this.handleVncWebSocketUpgrade(req, server);
     }
     return this.deps.handleRequest(req);
   }
@@ -322,31 +294,6 @@ export class WebServerLifecycleGatewayService {
         });
       });
     await this.workspaceWatcherSyncPromise;
-  }
-
-  handleVncWebSocketUpgrade(req: Request, server?: Bun.Server<WebSocketSessionData>): Response | undefined {
-    const url = new URL(req.url);
-    const targetId = url.searchParams.get("target")?.trim() || "";
-    const handoffToken = url.searchParams.get("handoff")?.trim() || "";
-    if (!targetId) {
-      return this.deps.json({ error: "Missing VNC target." }, 400);
-    }
-    const authEnabled = this.deps.authGateway.isAuthEnabled();
-    if (authEnabled && !this.deps.authGateway.isAuthenticated(req)) {
-      return this.deps.json({ error: "Unauthorized" }, 401);
-    }
-    if (!checkCsrfOrigin(req)) {
-      return this.deps.json({ error: "Origin not allowed" }, 403);
-    }
-    const owner = this.deps.vncService.resolveOwnerFromRequest(req, targetId, !authEnabled);
-    if (!owner) {
-      return this.deps.json({ error: "Unauthorized or unknown/disallowed VNC target" }, 401);
-    }
-    owner.handoffToken = handoffToken || null;
-    if (!server?.upgrade(req, { data: owner })) {
-      return this.deps.json({ error: "WebSocket upgrade failed" }, 400);
-    }
-    return undefined;
   }
 
   private async loadTlsOptions(): Promise<{ cert: string; key: string } | null> {

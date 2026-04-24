@@ -54,9 +54,6 @@ import {
 } from "./web/core/web-channel-prototype.js";
 import { TerminalSessionService } from "./web/terminal/terminal-session-service.js";
 import type { TerminalSocketData } from "./web/terminal/terminal-session-service.js";
-import { VncSessionService } from "./web/vnc/vnc-session-service.js";
-import type { VncSocketData } from "./web/vnc/vnc-session-service.js";
-import type { RemoteInteropService } from "../remote/service.js";
 import type { WebMessageProcessingStorageService } from "./web/messaging/message-processing-storage-service.js";
 import type { WebChannelRuntimeFollowupFacadeService } from "./web/runtime/runtime-followup-facade-service.js";
 import { initializeWebChannelConstructor } from "./web/core/web-channel-constructor-factory.js";
@@ -96,40 +93,6 @@ function createLazyTerminalService(factory: () => TerminalSessionService): Termi
   } as unknown as TerminalSessionService;
 }
 
-function createLazyVncService(factory: () => VncSessionService): VncSessionService {
-  let instance: VncSessionService | null = null;
-  const get = (): VncSessionService => {
-    instance ??= factory();
-    return instance;
-  };
-  return {
-    resolveTargetReference(targetRef: string) {
-      return get().resolveTargetReference(targetRef);
-    },
-    resolveOwnerFromRequest(req: Request, targetRef: string, allowUnauthenticated = false) {
-      return get().resolveOwnerFromRequest(req, targetRef, allowUnauthenticated);
-    },
-    createHandoffFromRequest(req: Request, targetRef: string, allowUnauthenticated = false) {
-      return get().createHandoffFromRequest(req, targetRef, allowUnauthenticated);
-    },
-    getSessionInfo(targetRef?: string | null) {
-      return get().getSessionInfo(targetRef);
-    },
-    attachClient(ws: Bun.ServerWebSocket<VncSocketData>) {
-      return get().attachClient(ws);
-    },
-    handleMessage(ws: Bun.ServerWebSocket<VncSocketData>, message: string | Buffer | Uint8Array) {
-      return get().handleMessage(ws, message);
-    },
-    detachClient(ws: Bun.ServerWebSocket<VncSocketData>) {
-      return get().detachClient(ws);
-    },
-    shutdown() {
-      return get().shutdown();
-    },
-  } as unknown as VncSessionService;
-}
-
 /** Construction options for WebChannel: queue and agentPool references. */
 export interface WebChannelOpts {
   queue: AgentQueue;
@@ -140,11 +103,9 @@ export interface WebChannelOpts {
 // eslint-disable-next-line @typescript-eslint/no-unsafe-declaration-merging
 export class WebChannel implements WebChannelLike {
   private _terminalService: TerminalSessionService | null = null;
-  private _vncService: VncSessionService | null = null;
 
   queue!: AgentQueue;
   agentPool!: AgentPool;
-  remoteInterop!: RemoteInteropService;
   responses = new ResponseService();
   requestRouter!: RequestRouterService;
   endpointContexts!: WebChannelEndpointContexts;
@@ -160,10 +121,6 @@ export class WebChannel implements WebChannelLike {
   terminalService = createLazyTerminalService(() => {
     this._terminalService ??= new TerminalSessionService();
     return this._terminalService;
-  });
-  vncService = createLazyVncService(() => {
-    this._vncService ??= new VncSessionService();
-    return this._vncService;
   });
   private readonly sessionBroadcast!: WebSessionBroadcastService;
   private readonly runtimeState!: WebChannelRuntimeStateService;

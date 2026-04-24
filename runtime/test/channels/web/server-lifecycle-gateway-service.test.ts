@@ -35,9 +35,7 @@ function createFixture(overrides: Partial<WebServerLifecycleGatewayDeps> = {}) {
     purgeCalls: [] as Array<{ nowIso: string; limit: number }>,
     authChecks: [] as string[],
     terminalResolveCalls: [] as boolean[],
-    vncResolveCalls: [] as Array<{ targetId: string; allowUnauthenticated: boolean }>,
     terminalShutdownCalls: 0,
-    vncShutdownCalls: 0,
     sseCloseCalls: 0,
     uiBridgeStopCalls: 0,
     upgradeCalls: [] as Array<{ url: string; data: unknown }>,
@@ -53,7 +51,6 @@ function createFixture(overrides: Partial<WebServerLifecycleGatewayDeps> = {}) {
   };
 
   const terminalOwner = { kind: "terminal" as const, token: "terminal-token", userId: "user-1" };
-  const vncOwner = { kind: "vnc" as const, token: "vnc-token", userId: "user-1", targetRef: "target-a" };
   const watcher = {
     close: async () => {
       state.watcherCloseCalls += 1;
@@ -122,18 +119,6 @@ function createFixture(overrides: Partial<WebServerLifecycleGatewayDeps> = {}) {
         state.terminalShutdownCalls += 1;
       },
     },
-    vncService: {
-      resolveOwnerFromRequest: (_req, targetId, allowUnauthenticated = false) => {
-        state.vncResolveCalls.push({ targetId, allowUnauthenticated });
-        return { ...vncOwner, targetRef: targetId };
-      },
-      attachClient: () => {},
-      handleMessage: () => {},
-      detachClient: () => {},
-      shutdown: () => {
-        state.vncShutdownCalls += 1;
-      },
-    },
     uiBridge: {
       stop: () => {
         state.uiBridgeStopCalls += 1;
@@ -178,7 +163,6 @@ function createFixture(overrides: Partial<WebServerLifecycleGatewayDeps> = {}) {
     state,
     server,
     terminalOwner,
-    vncOwner,
     setWorkspaceVisible: (value: boolean) => {
       workspaceVisible = value;
     },
@@ -198,15 +182,6 @@ describe("web server lifecycle gateway service", () => {
     const terminalResponse = await service.handleFetch(terminalReq, fixture.server);
     expect(terminalResponse).toBeUndefined();
     expect(fixture.state.upgradeCalls[0]?.data).toEqual(fixture.terminalOwner);
-
-    const vncReq = createRequest("/vnc/ws?target=desktop-a&handoff=handoff-1");
-    const vncResponse = await service.handleFetch(vncReq, fixture.server);
-    expect(vncResponse).toBeUndefined();
-    expect(fixture.state.upgradeCalls[1]?.data).toEqual({
-      ...fixture.vncOwner,
-      targetRef: "desktop-a",
-      handoffToken: "handoff-1",
-    });
 
     const standardResponse = await service.handleFetch(createRequest("/timeline?limit=10"));
     expect(standardResponse?.status).toBe(200);
@@ -258,48 +233,6 @@ describe("web server lifecycle gateway service", () => {
       ...upgradeFailure.server,
       upgrade: () => false,
     } as any)?.status).toBe(400);
-  });
-
-  test("vnc websocket upgrade preserves target, auth, csrf, and handoff behavior", async () => {
-    const fixture = createFixture();
-
-    const missingTarget = fixture.service.handleVncWebSocketUpgrade(createRequest("/vnc/ws"), fixture.server);
-    expect(missingTarget?.status).toBe(400);
-
-    const unauthenticated = createFixture({
-      authGateway: {
-        isAuthEnabled: () => true,
-        isAuthenticated: () => false,
-      },
-    });
-    expect(unauthenticated.service.handleVncWebSocketUpgrade(createRequest("/vnc/ws?target=desk"), unauthenticated.server)?.status).toBe(401);
-
-    const csrfBlocked = createFixture();
-    const csrfResponse = csrfBlocked.service.handleVncWebSocketUpgrade(
-      createRequest("/vnc/ws?target=desk", { headers: { origin: "https://evil.example", host: "localhost" } }),
-      csrfBlocked.server,
-    );
-    expect(csrfResponse?.status).toBe(403);
-
-    const noOwner = createFixture({
-      vncService: {
-        resolveOwnerFromRequest: () => null,
-        attachClient: () => {},
-        handleMessage: () => {},
-        detachClient: () => {},
-        shutdown: () => {},
-      },
-    });
-    expect(noOwner.service.handleVncWebSocketUpgrade(createRequest("/vnc/ws?target=desk"), noOwner.server)?.status).toBe(401);
-
-    const okResponse = await fixture.service.handleFetch(createRequest("/vnc/ws?target=desk&handoff=token-7"), fixture.server);
-    expect(okResponse).toBeUndefined();
-    expect(fixture.state.vncResolveCalls).toEqual([{ targetId: "desk", allowUnauthenticated: true }]);
-    expect(fixture.state.upgradeCalls[0]?.data).toEqual({
-      ...fixture.vncOwner,
-      targetRef: "desk",
-      handoffToken: "token-7",
-    });
   });
 
   test("start retries busy ports, falls back when tls loading fails, and wires lifecycle side effects", async () => {
@@ -358,7 +291,6 @@ describe("web server lifecycle gateway service", () => {
     expect(fixture.state.sseCloseCalls).toBe(1);
     expect(fixture.state.uiBridgeStopCalls).toBe(1);
     expect(fixture.state.terminalShutdownCalls).toBe(1);
-    expect(fixture.state.vncShutdownCalls).toBe(1);
     expect(fixture.state.clearIntervalCalls).toHaveLength(1);
     expect(fixture.state.watcherCloseCalls).toBe(1);
     expect(fixture.service.server).toBeNull();

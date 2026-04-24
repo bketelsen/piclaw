@@ -50,33 +50,8 @@ import { createAgentPoolServices, type AgentPoolServices } from "./agent-pool/se
 import { type AgentSessionManagerInstrumentationSnapshot, type PoolEntry } from "./agent-pool/session-manager.js";
 import {
   type ChatBranchRecord,
-  type SshConfig,
-  type SshConfigApplyTiming,
-  type SshConfigClearResult,
-  type SshConfigSetResult,
-  deleteSshConfig,
-  getSshConfig,
   listRecentChatJids,
-  upsertSshConfig,
 } from "./db.js";
-import { setSshToolHandlers } from "./extensions/ssh.js";
-import { setProxmoxToolHandlers } from "./extensions/proxmox.js";
-import { setPortainerToolHandlers } from "./extensions/portainer.js";
-import {
-  clearStoredProxmoxConfig,
-  getStoredProxmoxConfig,
-  requestStoredProxmoxApi,
-  runStoredProxmoxWorkflow,
-  setStoredProxmoxConfig,
-} from "./proxmox/handlers.js";
-import {
-  clearStoredPortainerConfig,
-  getStoredPortainerConfig,
-  requestStoredPortainerApi,
-  runStoredPortainerWorkflow,
-  setStoredPortainerConfig,
-} from "./portainer/handlers.js";
-import { applyLiveSshConfig, clearLiveSshConfig, hasLiveChatSshSession, resolveSshCoreConfigFromChatConfig } from "./extensions/ssh-core.js";
 import { createLogger } from "./utils/logger.js";
 
 const log = createLogger("agent-pool");
@@ -226,25 +201,6 @@ export class AgentPool {
       onError: (message, details) => log.error(message, details),
     }));
     this.sideStreamSimple = options.sideStreamSimple;
-    setSshToolHandlers({
-      get: (chatJid) => this.getSshConfig(chatJid),
-      set: (chatJid, config) => this.setSshConfig(chatJid, config),
-      clear: (chatJid) => this.clearSshConfig(chatJid),
-    });
-    setProxmoxToolHandlers({
-      get: (chatJid) => getStoredProxmoxConfig(chatJid),
-      set: (chatJid, config) => setStoredProxmoxConfig(chatJid, config),
-      clear: (chatJid) => clearStoredProxmoxConfig(chatJid),
-      request: (chatJid, input) => requestStoredProxmoxApi(chatJid, input),
-      workflow: (chatJid, input) => runStoredProxmoxWorkflow(chatJid, input),
-    });
-    setPortainerToolHandlers({
-      get: (chatJid) => getStoredPortainerConfig(chatJid),
-      set: (chatJid, config) => setStoredPortainerConfig(chatJid, config),
-      clear: (chatJid) => clearStoredPortainerConfig(chatJid),
-      request: (chatJid, input) => requestStoredPortainerApi(chatJid, input),
-      workflow: (chatJid, input) => runStoredPortainerWorkflow(chatJid, input),
-    });
     mkdirSync(SESSIONS_DIR, { recursive: true });
     mkdirSync(this.logsDir, { recursive: true });
     this.cleanupTimer = setInterval(
@@ -530,31 +486,6 @@ export class AgentPool {
   /** Execute a raw slash command in the AgentSession (extension commands). */
   async applySlashCommand(chatJid: string, rawText: string): Promise<AgentControlResult> {
     return this.runtimeFacade.applySlashCommand(chatJid, rawText);
-  }
-
-  getSshConfig(chatJid: string): SshConfig | null {
-    return getSshConfig(chatJid);
-  }
-
-  async setSshConfig(
-    chatJid: string,
-    config: Omit<SshConfig, "chat_jid" | "created_at" | "updated_at">,
-  ): Promise<SshConfigSetResult> {
-    const apply_timing: SshConfigApplyTiming = hasLiveChatSshSession(chatJid) ? "immediate" : "next_session";
-    if (apply_timing === "immediate") {
-      await applyLiveSshConfig(chatJid, resolveSshCoreConfigFromChatConfig(config));
-    }
-    const next = upsertSshConfig({ chat_jid: chatJid, ...config });
-    return { config: next, apply_timing };
-  }
-
-  async clearSshConfig(chatJid: string): Promise<SshConfigClearResult> {
-    const apply_timing: SshConfigApplyTiming = hasLiveChatSshSession(chatJid) ? "immediate" : "next_session";
-    const deleted = deleteSshConfig(chatJid);
-    if (apply_timing === "immediate") {
-      await clearLiveSshConfig(chatJid);
-    }
-    return { deleted, apply_timing };
   }
 
   /** Gracefully shut down all sessions. */

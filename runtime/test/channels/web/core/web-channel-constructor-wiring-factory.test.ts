@@ -60,9 +60,6 @@ describe("web channel constructor wiring factory", () => {
       sse: { clients: { size: 0 } },
       uiBridge: { stop: () => {} },
     } as unknown as ReturnType<WebChannelConstructorFactoryDeps["createSessionBroadcast"]>;
-    const remoteInterop = {
-      handleRequest: async (_req: Request) => new Response("remote-interop"),
-    } as unknown as ReturnType<WebChannelConstructorFactoryDeps["createRemoteInterop"]>;
     const runtimeState = sentinel<ReturnType<WebChannelConstructorFactoryDeps["createRuntimeState"]>>("runtime-state");
     const interactionBroadcaster = {
       broadcastAgentResponse: () => {
@@ -86,8 +83,6 @@ describe("web channel constructor wiring factory", () => {
     const terminalVncHttpService = {
       handleTerminalSession: (_req: Request) => new Response("terminal-session"),
       handleTerminalHandoff: async (_req: Request) => new Response("terminal-handoff"),
-      handleVncSession: (_req: Request) => new Response("vnc-session"),
-      handleVncHandoff: async (_req: Request) => new Response("vnc-handoff"),
     } as unknown as ReturnType<WebChannelConstructorFactoryDeps["createTerminalVncHttpService"]>;
     const adaptiveCardSidePromptService = sentinel<ReturnType<WebChannelConstructorFactoryDeps["createAdaptiveCardSidePromptService"]>>(
       "adaptive-card-side-prompt",
@@ -123,7 +118,6 @@ describe("web channel constructor wiring factory", () => {
         },
       } as unknown as WebChannelConstructorFactoryChannel["queuedFollowupLifecycle"],
       terminalService: sentinel<WebChannelConstructorFactoryChannel["terminalService"]>("terminal-service"),
-      vncService: sentinel<WebChannelConstructorFactoryChannel["vncService"]>("vnc-service"),
       webauthnChallenges: sentinel<WebChannelConstructorFactoryChannel["webauthnChallenges"]>("webauthn-challenges"),
       totpFailureTracker: sentinel<WebChannelConstructorFactoryChannel["totpFailureTracker"]>("totp-failure-tracker"),
       json: (payload, status = 200) => new Response(JSON.stringify(payload), { status }),
@@ -168,11 +162,6 @@ describe("web channel constructor wiring factory", () => {
         creationOrder.push("sessionBroadcast");
         expect(agentPool).toBe(channel.agentPool);
         return sessionBroadcast;
-      },
-      createRemoteInterop: (agentPool) => {
-        creationOrder.push("remoteInterop");
-        expect(agentPool).toBe(channel.agentPool);
-        return remoteInterop;
       },
       createRuntimeState: (callbacks, runtimeOptions) => {
         creationOrder.push("runtimeState");
@@ -246,7 +235,6 @@ describe("web channel constructor wiring factory", () => {
         creationOrder.push("serverLifecycleGateway");
         expect(seenChannel.authGateway).toBe(authGateway);
         expect(seenChannel.terminalService).toBe(channel.terminalService);
-        expect(seenChannel.vncService).toBe(channel.vncService);
         expect(seenChannel.uiBridge).toBe(sessionBroadcast.uiBridge);
         expect(seenChannel.sse).toBe(sessionBroadcast.sse);
         expect(configs).toEqual({
@@ -259,7 +247,6 @@ describe("web channel constructor wiring factory", () => {
         creationOrder.push("terminalVncHttpService");
         expect(seenChannel.authGateway).toBe(authGateway);
         expect(seenChannel.terminalService).toBe(channel.terminalService);
-        expect(seenChannel.vncService).toBe(channel.vncService);
         expect(configs).toEqual({ webRuntimeConfig: options.webRuntimeConfig });
         return terminalVncHttpService;
       },
@@ -324,7 +311,6 @@ describe("web channel constructor wiring factory", () => {
     ]);
 
     expect(result.sessionBroadcast).toBe(sessionBroadcast);
-    expect(result.remoteInterop).not.toBe(remoteInterop);
     expect(result.runtimeState).toBe(runtimeState);
     expect(result.interactionBroadcaster).toBe(interactionBroadcaster);
     expect(result.authGateway).toBe(authGateway);
@@ -423,10 +409,6 @@ describe("web channel constructor wiring factory", () => {
     expect(creationOrder).not.toContain("terminalVncHttpService");
     expect(await result.terminalVncHttpService.handleTerminalSession(new Request("https://example.com/terminal/session")).text()).toBe("terminal-session");
     expect(creationOrder.filter((entry) => entry === "terminalVncHttpService")).toEqual(["terminalVncHttpService"]);
-
-    expect(creationOrder).not.toContain("remoteInterop");
-    expect(await (await result.remoteInterop.handleRequest(new Request("https://example.com/api/remote/ping"))).text()).toBe("remote-interop");
-    expect(creationOrder.filter((entry) => entry === "remoteInterop")).toEqual(["remoteInterop"]);
 
     identity = {
       assistantName: "Nova",

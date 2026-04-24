@@ -7,7 +7,6 @@
  * Consumers:
  *   - channels/web/http/static.ts         (static asset serving)
  *   - channels/web/request-router-service.ts (compose-box static route)
- *   - channels/web/http/editor-vendor-route.ts (editor vendor assets)
  *   - extensions/image-processing.ts      (display-only path stripping)
  */
 

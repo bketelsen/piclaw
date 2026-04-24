@@ -1,5 +1,4 @@
 import { registerToolStatusHintProvider } from "../tool-status-hints.js";
-import { getSshStatusHintTarget } from "./ssh.js";
 
 const PI_LOCAL_STATUS_ICON_SVG = `<svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" focusable="false"><path fill-rule="evenodd" d="M4.95 4.95h10.57V12H12v3.52H8.48v3.53H4.95zm3.53 3.53V12H12V8.48z"></path><path d="M15.52 12h3.52v7.05h-3.52z"></path></svg>`;
 const BASH_STATUS_ICON_SVG = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><rect x="3.5" y="5" width="17" height="14" rx="2"></rect><path d="M7.5 10l2.5 2-2.5 2"></path><path d="M12.5 15H16"></path></svg>`;
@@ -19,7 +18,8 @@ registerToolStatusHintProvider({
   id: "local_core_tools",
   buildHints: ({ chatJid, toolName, args, payload }) => {
     if (!["read", "write", "edit", "bash"].includes(toolName)) return null;
-    if (getSshStatusHintTarget(chatJid, payload)) return null;
+    void chatJid;
+    void payload;
 
     const record = args && typeof args === "object" ? args as Record<string, unknown> : null;
     if (toolName === "bash") {

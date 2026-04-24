@@ -704,13 +704,12 @@ describe("CSRF origin checks", () => {
   });
 
   test("does not reserve /api/remote paths anymore", async () => {
-    const router = new RequestRouterService({
-      ...new StubChannel(),
-      handleRemote: async () => new Response(JSON.stringify({ ok: true }), {
-        status: 200,
-        headers: { "Content-Type": "application/json" },
-      }),
-    } as any);
+    const channel = new StubChannel() as any;
+    channel.handleRemote = async () => new Response(JSON.stringify({ ok: true }), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    });
+    const router = new RequestRouterService(channel);
 
     const res = await router.handle(new Request("http://example.com/api/remote/ping", { method: "GET" }));
     expect(res.status).toBe(404);

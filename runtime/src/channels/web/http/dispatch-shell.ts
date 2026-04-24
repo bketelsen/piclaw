@@ -85,14 +85,6 @@ export async function handleShellRoutes(
     return await channel.handleTerminalHandoff(req);
   }
 
-  if (req.method === "GET" && pathname === "/vnc/session") {
-    return channel.handleVncSession(req);
-  }
-
-  if (req.method === "POST" && pathname === "/vnc/handoff") {
-    return await channel.handleVncHandoff(req);
-  }
-
   if (flags.isAvatar) {
     return await channel.handleAvatar("agent", req);
   }

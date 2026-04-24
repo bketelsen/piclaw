@@ -5,8 +5,6 @@
 import type { AuthStorage, ExtensionFactory, ModelRegistry, SettingsManager } from "@mariozechner/pi-coding-agent";
 
 import { getAttachmentRegistry } from "./attachments.js";
-import { getSshConfig } from "../db.js";
-import { createChatSshCoreExtension, resolveSshCoreConfigFromChatConfig } from "../extensions/ssh-core.js";
 import { AgentBranchManager } from "./branch-manager.js";
 import { AgentRuntimeFacade } from "./runtime-facade.js";
 import { AgentSessionBinder } from "./session-binder.js";
@@ -52,18 +50,8 @@ export interface AgentPoolServices {
 }
 
 async function resolveSessionExtensionFactories(chatJid: string): Promise<ExtensionFactory[]> {
-  let sshConfig: ReturnType<typeof getSshConfig> | undefined;
-  try {
-    sshConfig = getSshConfig(chatJid);
-  } catch (error) {
-    if (
-      !(error instanceof Error) ||
-      (error.message !== "Database not initialized" && error.message !== "Cannot use a closed database")
-    ) {
-      throw error;
-    }
-  }
-  return [createChatSshCoreExtension(chatJid, sshConfig ? resolveSshCoreConfigFromChatConfig(sshConfig) : null)];
+  void chatJid;
+  return [];
 }
 
 /**

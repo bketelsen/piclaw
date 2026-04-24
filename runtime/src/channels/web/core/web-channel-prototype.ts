@@ -465,16 +465,6 @@ export function installWebChannelPrototype(
       writable: true,
       value: withHttpSurface((service, req: Request) => service.handleTerminalHandoff(req)),
     },
-    handleVncSession: {
-      configurable: true,
-      writable: true,
-      value: withHttpSurface((service, req: Request) => service.handleVncSession(req)),
-    },
-    handleVncHandoff: {
-      configurable: true,
-      writable: true,
-      value: withHttpSurface((service, req: Request) => service.handleVncHandoff(req)),
-    },
     broadcastEvent: {
       configurable: true,
       writable: true,
@@ -651,11 +641,6 @@ export function installWebChannelPrototype(
           isSteeringMessage?: boolean;
         } = {},
       ): InteractionRow | null => service.storeMessage(chatJid, content, isBot, mediaIds, options)),
-    },
-    handleRemote: {
-      configurable: true,
-      writable: true,
-      value: withHttpSurface(async (service, req: Request) => await service.handleRemote(req)),
     },
     serveStatic: {
       configurable: true,

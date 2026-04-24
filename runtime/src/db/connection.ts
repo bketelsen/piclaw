@@ -81,30 +81,6 @@ export function shouldBlockLiveDatabaseOpenInTests(options: {
  *   - workspace_files – file metadata cache for workspace search
  *   - workspace_fts – FTS5 index over workspace file contents
  */
-function renameLegacyConfigTable(database: Database, fromName: string, toName: string): void {
-  const rows = database.prepare(
-    "SELECT name FROM sqlite_master WHERE type = 'table' AND name IN (?, ?) ORDER BY name"
-  ).all(fromName, toName) as Array<{ name: string }>;
-  const names = new Set(rows.map((row) => row.name));
-  if (!names.has(fromName) || names.has(toName)) return;
-  try {
-    database.exec(`ALTER TABLE ${fromName} RENAME TO ${toName}`);
-  } catch (error) {
-    log.warn("Failed to rename legacy config table", {
-      operation: "rename_legacy_config_table",
-      fromName,
-      toName,
-      err: error,
-    });
-  }
-}
-
-function migrateLegacyConfigTables(database: Database): void {
-  renameLegacyConfigTable(database, "chat_ssh_configs", "ssh_configs");
-  renameLegacyConfigTable(database, "chat_proxmox_configs", "proxmox_configs");
-  renameLegacyConfigTable(database, "chat_portainer_configs", "portainer_configs");
-}
-
 function createSchema(database: Database): void {
   database.exec(`
     CREATE TABLE IF NOT EXISTS chats (
@@ -260,41 +236,6 @@ function createSchema(database: Database): void {
     CREATE INDEX IF NOT EXISTS idx_scheduled_tasks_created_at ON scheduled_tasks(created_at);
     CREATE INDEX IF NOT EXISTS idx_scheduled_tasks_last_run ON scheduled_tasks(last_run);
 
-    CREATE TABLE IF NOT EXISTS ssh_configs (
-      chat_jid TEXT PRIMARY KEY,
-      ssh_target TEXT NOT NULL,
-      ssh_port INTEGER NOT NULL DEFAULT 22,
-      private_key_keychain TEXT NOT NULL,
-      known_hosts_keychain TEXT,
-      strict_host_key_checking TEXT NOT NULL DEFAULT 'yes',
-      created_at TEXT NOT NULL,
-      updated_at TEXT NOT NULL,
-      FOREIGN KEY (chat_jid) REFERENCES chats(jid)
-    );
-    CREATE INDEX IF NOT EXISTS idx_ssh_configs_updated_at ON ssh_configs(updated_at);
-
-    CREATE TABLE IF NOT EXISTS proxmox_configs (
-      chat_jid TEXT PRIMARY KEY,
-      base_url TEXT NOT NULL,
-      api_token_keychain TEXT NOT NULL,
-      allow_insecure_tls INTEGER NOT NULL DEFAULT 1,
-      created_at TEXT NOT NULL,
-      updated_at TEXT NOT NULL,
-      FOREIGN KEY (chat_jid) REFERENCES chats(jid)
-    );
-    CREATE INDEX IF NOT EXISTS idx_proxmox_configs_updated_at ON proxmox_configs(updated_at);
-
-    CREATE TABLE IF NOT EXISTS portainer_configs (
-      chat_jid TEXT PRIMARY KEY,
-      base_url TEXT NOT NULL,
-      api_token_keychain TEXT NOT NULL,
-      allow_insecure_tls INTEGER NOT NULL DEFAULT 1,
-      created_at TEXT NOT NULL,
-      updated_at TEXT NOT NULL,
-      FOREIGN KEY (chat_jid) REFERENCES chats(jid)
-    );
-    CREATE INDEX IF NOT EXISTS idx_portainer_configs_updated_at ON portainer_configs(updated_at);
-
     CREATE TABLE IF NOT EXISTS task_run_logs (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       task_id TEXT NOT NULL,
@@ -306,93 +247,6 @@ function createSchema(database: Database): void {
       FOREIGN KEY (task_id) REFERENCES scheduled_tasks(id)
     );
     CREATE INDEX IF NOT EXISTS idx_task_run_logs ON task_run_logs(task_id, run_at);
-
-    -- Remote interop peer registry.
-    CREATE TABLE IF NOT EXISTS remote_peers (
-      instance_id TEXT PRIMARY KEY,
-      public_key TEXT NOT NULL,
-      display_name TEXT,
-      status TEXT NOT NULL,
-      mode TEXT NOT NULL DEFAULT 'mediated',
-      profile TEXT NOT NULL DEFAULT 'restricted',
-      trust_epoch INTEGER NOT NULL DEFAULT 1,
-      created_at TEXT NOT NULL,
-      updated_at TEXT NOT NULL,
-      last_seen_at TEXT,
-      blocked_reason TEXT
-    );
-    CREATE INDEX IF NOT EXISTS idx_remote_peers_status ON remote_peers(status);
-
-    -- Pending inbound pairing requests.
-    CREATE TABLE IF NOT EXISTS remote_pair_requests (
-      id TEXT PRIMARY KEY,
-      instance_id TEXT NOT NULL,
-      public_key TEXT NOT NULL,
-      display_name TEXT,
-      callback_url TEXT,
-      protocol_version TEXT,
-      nonce TEXT,
-      expires_at TEXT NOT NULL,
-      status TEXT NOT NULL,
-      created_at TEXT NOT NULL,
-      source_ip TEXT
-    );
-    CREATE INDEX IF NOT EXISTS idx_remote_pair_requests_instance ON remote_pair_requests(instance_id);
-    CREATE INDEX IF NOT EXISTS idx_remote_pair_requests_status ON remote_pair_requests(status);
-
-    -- Remote request ledger (proposals, executes).
-    CREATE TABLE IF NOT EXISTS remote_requests (
-      id TEXT PRIMARY KEY,
-      peer_instance_id TEXT NOT NULL,
-      request_type TEXT NOT NULL,
-      status TEXT NOT NULL,
-      prompt TEXT,
-      created_at TEXT NOT NULL,
-      decision TEXT,
-      remote_mode TEXT,
-      error TEXT,
-      result TEXT
-    );
-    CREATE INDEX IF NOT EXISTS idx_remote_requests_peer ON remote_requests(peer_instance_id, created_at);
-
-    -- Remote audit logs for interop requests.
-    CREATE TABLE IF NOT EXISTS remote_audit_logs (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      peer_instance_id TEXT,
-      endpoint TEXT NOT NULL,
-      decision TEXT,
-      status TEXT,
-      error TEXT,
-      created_at TEXT NOT NULL
-    );
-    CREATE INDEX IF NOT EXISTS idx_remote_audit_created_at ON remote_audit_logs(created_at);
-
-    -- Received result callbacks (requesting side) for mediated proposals.
-    CREATE TABLE IF NOT EXISTS remote_result_callbacks (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      negotiation_id TEXT NOT NULL,
-      peer_instance_id TEXT NOT NULL,
-      decision TEXT NOT NULL,
-      result TEXT,
-      reason TEXT,
-      received_at TEXT NOT NULL
-    );
-    CREATE INDEX IF NOT EXISTS idx_remote_result_callbacks_neg ON remote_result_callbacks(negotiation_id);
-
-    -- Pending outbound pairing requests (initiator side).
-    CREATE TABLE IF NOT EXISTS remote_pair_outbound_requests (
-      id TEXT PRIMARY KEY,
-      instance_id TEXT NOT NULL,
-      public_key TEXT NOT NULL,
-      fingerprint TEXT NOT NULL,
-      base_url TEXT NOT NULL,
-      nonce TEXT NOT NULL,
-      status TEXT NOT NULL DEFAULT 'pending',
-      expires_at TEXT NOT NULL,
-      created_at TEXT NOT NULL
-    );
-    CREATE INDEX IF NOT EXISTS idx_remote_pair_outbound_instance ON remote_pair_outbound_requests(instance_id);
-    CREATE INDEX IF NOT EXISTS idx_remote_pair_outbound_status ON remote_pair_outbound_requests(status);
 
     -- Simple key-value store for the router's per-chat cursor positions.
     CREATE TABLE IF NOT EXISTS router_state (
@@ -797,7 +651,6 @@ export function initDatabase(): void {
   db.exec(useMemory ? "PRAGMA journal_mode = MEMORY;" : "PRAGMA journal_mode = WAL;");
   db.exec("PRAGMA busy_timeout = 5000;");
   db.exec("PRAGMA secure_delete = ON;");
-  migrateLegacyConfigTables(db);
   createSchema(db);
   ensureChatBranchConstraints(db);
   ensureMessageColumns(db);
@@ -807,43 +660,6 @@ export function initDatabase(): void {
   ensureChatCursorFailedColumns(db);
   migrateChatCursors(db);
   dropChatBranchDisplayName(db);
-  ensureRemotePeerBaseUrl(db);
-  ensureOutboundPairRequestsTable(db);
-}
-
-/**
- * Idempotent migration: ensure the outbound pair requests table exists.
- * Needed for instances that were initialised before this table was added.
- */
-function ensureOutboundPairRequestsTable(database: Database): void {
-  database.exec(`
-    CREATE TABLE IF NOT EXISTS remote_pair_outbound_requests (
-      id TEXT PRIMARY KEY,
-      instance_id TEXT NOT NULL,
-      public_key TEXT NOT NULL,
-      fingerprint TEXT NOT NULL,
-      base_url TEXT NOT NULL,
-      nonce TEXT NOT NULL,
-      status TEXT NOT NULL DEFAULT 'pending',
-      expires_at TEXT NOT NULL,
-      created_at TEXT NOT NULL
-    )`);
-  database.exec(`CREATE INDEX IF NOT EXISTS idx_remote_pair_outbound_instance ON remote_pair_outbound_requests(instance_id)`);
-  database.exec(`CREATE INDEX IF NOT EXISTS idx_remote_pair_outbound_status ON remote_pair_outbound_requests(status)`);
-}
-
-/**
- * Add nullable base_url column to remote_peers if it doesn't already exist.
- * Required for bidirectional pairing and /unpair routing.
- */
-function ensureRemotePeerBaseUrl(database: Database): void {
-  const cols = database.prepare("PRAGMA table_info(remote_peers)").all() as Array<{ name: string }>;
-  if (cols.some((c) => c.name === "base_url")) return;
-  try {
-    database.exec("ALTER TABLE remote_peers ADD COLUMN base_url TEXT");
-  } catch (err) {
-    debugSuppressedError(log, "remote_peers base_url column may already exist.", err, {});
-  }
 }
 
 /**

@@ -132,14 +132,11 @@ export interface WebChannelLike
   /** General endpoint handlers. */
   serveStatic(relPath: string): Promise<Response>;
   serveDocsStatic(relPath: string): Promise<Response>;
-  handleRemote(req: Request): Promise<Response>;
   handleManifest(req: Request): Promise<Response>;
   handleAvatar(kind: "agent" | "user", req: Request): Promise<Response>;
   handleSse(req: Request): Response;
   handleTerminalSession(req: Request): Response;
   handleTerminalHandoff(req: Request): Promise<Response>;
-  handleVncSession(req: Request): Response;
-  handleVncHandoff(req: Request): Promise<Response>;
   handleAgents(): Promise<Response>;
 
   handleWorkspaceVisibility(req: Request): Promise<Response>;

@@ -34,12 +34,6 @@ import { handleContentPrimaryRoutes, handleContentSecondaryRoutes } from "./http
 import { handleMediaRoutes } from "./http/dispatch-media.js";
 import { handleShellRoutes } from "./http/dispatch-shell.js";
 import { handleWorkspaceRoutes } from "./http/dispatch-workspace.js";
-import "./http/editor-vendor-route.js";
-import "./http/csv-viewer-route.js";
-import "./http/image-viewer-route.js";
-import "./http/video-viewer-route.js";
-import "./http/pdf-viewer-route.js";
-import "./http/html-viewer-route.js";
 import { handleExtensionRoutes } from "./http/extension-routes.js";
 import { enforceRequestGuards } from "./http/request-guards.js";
 import { getRouteFlags } from "./http/route-flags.js";
@@ -113,17 +107,6 @@ export class RequestRouterService {
   private async route(req: Request): Promise<Response> {
     const url = new URL(req.url);
     const pathname = url.pathname;
-
-    if (pathname.startsWith("/api/remote/")) {
-      try {
-        return await this.channel.handleRemote(req);
-      } catch {
-        return new Response(JSON.stringify({ error: "Internal server error." }), {
-          status: 500,
-          headers: { "Content-Type": "application/json" },
-        });
-      }
-    }
 
     const flags = getRouteFlags(req, pathname);
     const guardResponse = await enforceRequestGuards(this.channel, req, pathname, flags);
