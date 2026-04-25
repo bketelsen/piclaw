@@ -26,7 +26,7 @@ HTTP 429 responses to avoid server-side rate limits.
 ### Import
 
 ```typescript
-import { cleanupTimeline } from "/workspace/.pi/skills/timeline-cleanup/cleanup.ts";
+import { cleanupTimeline } from "~/.piclaw/.pi/skills/timeline-cleanup/cleanup.ts";
 
 const result = await cleanupTimeline({
   patterns: ["reload", "compaction"],
@@ -46,7 +46,7 @@ const result = await cleanupTimeline({
 ### CLI
 
 ```bash
-bun run /workspace/.pi/skills/timeline-cleanup/cleanup.ts \
+bun run ~/.piclaw/.pi/skills/timeline-cleanup/cleanup.ts \
   --patterns "reload,compaction,compacting" \
   --before 5000 \
   --dry-run
@@ -57,7 +57,7 @@ bun run /workspace/.pi/skills/timeline-cleanup/cleanup.ts \
 The `cleanupAll()` function runs all standard pattern groups in sequence. Use it for a full housekeeping pass:
 
 ```typescript
-import { cleanupAll } from "/workspace/.pi/skills/timeline-cleanup/cleanup.ts";
+import { cleanupAll } from "~/.piclaw/.pi/skills/timeline-cleanup/cleanup.ts";
 const results = await cleanupAll({ beforeRowid: 5000, dryRun: true });
 ```
 
@@ -89,7 +89,7 @@ This causes a brief (~5s) interruption. Only use when significant space can be r
 
 ## Environment
 
-- `PICLAW_STORE` — message DB parent directory (default: `/workspace/.piclaw/store`)
+- `PICLAW_STORE` — message DB parent directory (default: `~/.piclaw/store`)
 - `PICLAW_WEB_PORT` — web server port (default: 8080)
 - `PICLAW_INTERNAL_SECRET` / `PICLAW_WEB_INTERNAL_SECRET` — internal API auth
 

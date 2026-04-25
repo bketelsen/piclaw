@@ -1,16 +1,22 @@
 import { expect, test } from "bun:test";
 import { existsSync, readFileSync } from "node:fs";
+import { join, resolve } from "node:path";
+
+const REPO_ROOT = resolve(import.meta.dir, "../../..");
+const RUNTIME_DIR = join(REPO_ROOT, "runtime");
+const BUILD_VENDOR_SCRIPT = join(RUNTIME_DIR, "scripts", "build-vendored-dependency.ts");
+const BUN_PATH = process.execPath;
 
 function buildGhosttyVendor() {
   return Bun.spawnSync(
     [
-      "bun",
-      "/workspace/piclaw/runtime/scripts/build-vendored-dependency.ts",
+      BUN_PATH,
+      BUILD_VENDOR_SCRIPT,
       "--manifest",
       "vendor-manifests/ghostty-web.json",
     ],
     {
-      cwd: "/workspace/piclaw/runtime",
+      cwd: RUNTIME_DIR,
       stdout: "pipe",
       stderr: "pipe",
     },
@@ -23,9 +29,9 @@ test("ghostty-web export manifest vendors js + wasm with metadata", () => {
     throw new Error(`${proc.stdout.toString()}\n${proc.stderr.toString()}`.trim());
   }
 
-  const jsFile = "/workspace/piclaw/runtime/web/static/js/vendor/ghostty-web.js";
-  const wasmFile = "/workspace/piclaw/runtime/web/static/js/vendor/ghostty-vt.wasm";
-  const metaFile = "/workspace/piclaw/runtime/web/static/js/vendor/ghostty-web.meta.json";
+  const jsFile = join(RUNTIME_DIR, "web/static/js/vendor/ghostty-web.js");
+  const wasmFile = join(RUNTIME_DIR, "web/static/js/vendor/ghostty-vt.wasm");
+  const metaFile = join(RUNTIME_DIR, "web/static/js/vendor/ghostty-web.meta.json");
 
   expect(existsSync(jsFile)).toBe(true);
   expect(existsSync(wasmFile)).toBe(true);

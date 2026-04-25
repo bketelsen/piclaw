@@ -349,9 +349,9 @@ Development validation currently uses:
 
 The harness now bundles under:
 
-- `/workspace/piclaw/.tmp/azure-openai.harness.bundle.mjs`
+- `~/projects/piclaw/.tmp/azure-openai.harness.bundle.mjs`
 
-That avoids Bun resolving dependencies from `/workspace/node_modules` instead of this repo's `node_modules` tree.
+That avoids Bun resolving dependencies from `~/.piclaw/node_modules` instead of this repo's `node_modules` tree.
 
 ### Request/session correlation status
 
@@ -370,8 +370,8 @@ Focused Azure harness runs on the upgraded `0.67.2` stack were validated for:
 
 Representative reports:
 
-- `/workspace/tmp/azure-openai-harness-0672-gpt53.json`
-- `/workspace/tmp/azure-openai-harness-0672-gpt54.json`
+- `~/.piclaw/tmp/azure-openai-harness-0672-gpt53.json`
+- `~/.piclaw/tmp/azure-openai-harness-0672-gpt54.json`
 
 The harness now checks these invariants automatically and fails if:
 
@@ -385,7 +385,7 @@ Optional Azure-native request-id mirroring remains available in the harness via:
 
 and also passed focused `json` / `tool` / `history` validation on `gpt-5-3-codex`:
 
-- `/workspace/tmp/azure-openai-harness-0672-gpt53-xms.json`
+- `~/.piclaw/tmp/azure-openai-harness-0672-gpt53-xms.json`
 
 ### Upstream `0.67.2` Responses impact
 

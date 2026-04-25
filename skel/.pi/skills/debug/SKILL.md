@@ -14,7 +14,7 @@ Diagnose and fix issues with the Pibox container environment.
    ```bash
    uname -a && cat /etc/os-release | head -3
    whoami && id
-   df -h / /workspace /home/agent 2>/dev/null
+   df -h / ~/.piclaw "$HOME" 2>/dev/null
    free -h
    ```
 
@@ -46,5 +46,5 @@ Diagnose and fix issues with the Pibox container environment.
 - *bun not found:* `source ~/.bashrc` or check `~/.bun/bin` is in PATH
 - *brew not found:* `eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"`
 - *pi not found:* `bun add -g @mariozechner/pi-coding-agent`
-- *Permission denied:* `sudo chown -R agent:agent /workspace`
+- *Permission denied:* `sudo chown -R "$USER":"$USER" ~/.piclaw`
 - *Config not persisting:* Check `/config` volume is mounted and `~/.pi` is symlinked

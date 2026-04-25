@@ -17,14 +17,14 @@ tail -n 80 /var/log/piclaw/piclaw.stderr.log
 
 2) Inspect current extension file(s)
 ```bash
-readlink -f /workspace/.pi/extensions/context-mode.ts
-sed -n '1,120p' /workspace/.pi/extensions/context-mode.ts
+readlink -f ~/.piclaw/.pi/extensions/context-mode.ts
+sed -n '1,120p' ~/.piclaw/.pi/extensions/context-mode.ts
 ```
 
 3) Ensure imports reference installed piclaw (not workspace src)
 - Use installed path:
   /home/agent/.bun/install/global/node_modules/piclaw/dist/...
-- Avoid /workspace/piclaw or node_modules symlinked to workspace.
+- Avoid ~/projects/piclaw or node_modules symlinked to workspace.
 
 4) Harden extension
 - Remove/avoid startup cleanup that touches DB before init.
@@ -33,12 +33,12 @@ sed -n '1,120p' /workspace/.pi/extensions/context-mode.ts
 
 5) Update skel extension too
 ```bash
-cp /workspace/.pi/extensions/context-mode.ts /workspace/piclaw/skel/.pi/extensions/context-mode.ts
+cp ~/.piclaw/.pi/extensions/context-mode.ts ~/projects/piclaw/skel/.pi/extensions/context-mode.ts
 ```
 
 6) Fix workspace watcher permissions (if fs.watch warns on tailscale)
 ```bash
-sudo chown -R agent:agent /workspace/.piclaw/tailscale
+sudo chown -R agent:agent ~/.piclaw/tailscale
 ```
 
 7) Restart piclaw

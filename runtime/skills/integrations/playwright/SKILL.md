@@ -58,5 +58,5 @@ Use Playwright for browser automation and web scraping.
   ```
 - To keep browser binaries in the workspace, set:
   ```bash
-  export PLAYWRIGHT_BROWSERS_PATH=/workspace/.cache/ms-playwright
+  export PLAYWRIGHT_BROWSERS_PATH=~/.piclaw/.cache/ms-playwright
   ```

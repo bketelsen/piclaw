@@ -9,9 +9,8 @@ const CONFIG_SUBPROCESS = join(RUNTIME_DIR, "test", "config", "config-subprocess
 type ConfigSnapshot = Record<string, any>;
 
 function writeWorkspaceConfig(workspace: string, config: Record<string, unknown>): string {
-  const configDir = join(workspace, ".piclaw");
-  mkdirSync(configDir, { recursive: true });
-  const configPath = join(configDir, "config.json");
+  mkdirSync(workspace, { recursive: true });
+  const configPath = join(workspace, "config.json");
   writeFileSync(configPath, JSON.stringify(config, null, 2), "utf8");
   return configPath;
 }
@@ -174,13 +173,17 @@ test("CLI workspace flag overrides env workspace and relocates derived state pat
       ["WORKSPACE_DIR", "STORE_DIR", "DATA_DIR", "PICLAW_CONFIG_PATH"],
       {
         args: ["--workspace", cliWs.workspace],
+        env: {
+          PICLAW_STORE: "",
+          PICLAW_DATA: "",
+        },
       },
     );
 
     expect(snapshot.WORKSPACE_DIR).toBe(resolve(cliWs.workspace));
-    expect(snapshot.STORE_DIR).toBe(resolve(cliWs.workspace, ".piclaw", "store"));
-    expect(snapshot.DATA_DIR).toBe(resolve(cliWs.workspace, ".piclaw", "data"));
-    expect(snapshot.PICLAW_CONFIG_PATH).toBe(resolve(cliWs.workspace, ".piclaw", "config.json"));
+    expect(snapshot.STORE_DIR).toBe(resolve(cliWs.workspace, "store"));
+    expect(snapshot.DATA_DIR).toBe(resolve(cliWs.workspace, "data"));
+    expect(snapshot.PICLAW_CONFIG_PATH).toBe(resolve(cliWs.workspace, "config.json"));
   } finally {
     envWs.cleanup();
     cliWs.cleanup();

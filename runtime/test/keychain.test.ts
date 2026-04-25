@@ -3,6 +3,10 @@ import { writeFileSync } from "fs";
 import { join } from "path";
 import { closeDbQuietly, importFresh, setEnv, withTempWorkspaceEnv } from "./helpers.js";
 
+function stripShellStartupNoise(text: string): string {
+  return text.replace(/^sh: \d+: \/etc\/profile\.d\/brew\.sh: \[\[: not found\n?/gm, "");
+}
+
 async function withKeychainContext(
   run: (ctx: {
     workspace: { workspace: string; store: string; data: string };
@@ -227,7 +231,7 @@ test("builds injected POSIX and PowerShell exec commands", async () => {
       proc.exited,
     ]);
     expect(exitCode).toBe(0);
-    expect(stderr).toBe("");
+    expect(stripShellStartupNoise(stderr)).toBe("");
     expect(stdout.trim()).toBe("$STRIPE_KEY stripe-secret");
 
     const procQuoted = Bun.spawn([wrappedWithQuote.command, ...wrappedWithQuote.commandArgs], {
@@ -241,7 +245,7 @@ test("builds injected POSIX and PowerShell exec commands", async () => {
       procQuoted.exited,
     ]);
     expect(exitCodeQuoted).toBe(0);
-    expect(stderrQuoted).toBe("");
+    expect(stripShellStartupNoise(stderrQuoted)).toBe("");
     expect(stdoutQuoted).toBe("it's-secret");
   });
 });

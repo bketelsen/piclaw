@@ -264,7 +264,7 @@ GITHUB_TOKEN=$GITHUB_PICLAW_BOT_PAT \
   ERR  some-file.md: GitHub API POST ... → 422: ...             ← label doesn't exist
 
 Done. created=49 skipped=1 total=50
-State written to: /workspace/piclaw/scripts/migrate-state.json
+State written to: ~/projects/piclaw/scripts/migrate-state.json
 ```
 
 ### Rate limits

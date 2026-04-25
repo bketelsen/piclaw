@@ -12,7 +12,7 @@ A one-shot maintenance skill to:
    - for `web:*`, this now means all web session trees (roots plus branches), not just the currently visible tab
 2. Run a restic backup before cleanup.
 3. Clean up low-value timeline messages using the unified `messages` tool actions.
-4. **Immediately read and follow** `/workspace/.pi/skills/situate-daily-notes/SKILL.md` as a required sub-step.
+4. **Immediately read and follow** `~/.piclaw/.pi/skills/situate-daily-notes/SKILL.md` as a required sub-step.
 5. Finish the daily-note summaries before reporting completion.
 
 It is intended to be run once per day after work.
@@ -22,9 +22,9 @@ It is intended to be run once per day after work.
 ## What it does
 
 - Runs:
-  - `/workspace/scripts/situate.ts` with `--update-notes`
+  - `~/.piclaw/scripts/situate.ts` with `--update-notes`
     - for `web:*`, transcript previews in the generated report are linearised per session tree rather than globally interleaved
-  - optional restic backup (`/workspace/.piclaw/restic/backup.sh`) **before cleanup starts**
+  - optional restic backup (`~/.piclaw/restic/backup.sh`) **before cleanup starts**
   - `timeline` cleanup groups: reloads, compaction, greetings, slash command chatter, command responses, one-word acks, transitions, version/build/git noise and related noise
   - then the `situate-daily-notes` workflow immediately afterwards
 - Uses the `messages` tool actions internally:
@@ -37,17 +37,17 @@ It is intended to be run once per day after work.
 
 After cleanup, explicitly read and follow:
 
-- `/workspace/.pi/skills/situate-daily-notes/SKILL.md`
+- `~/.piclaw/.pi/skills/situate-daily-notes/SKILL.md`
 
 Do not stop at the report. The close-of-day workflow only ends after the relevant daily note files have been updated.
 
 ## Usage
 
 ```bash
-bun run /workspace/.pi/skills/close-of-day/close-of-day.ts \
+bun run ~/.piclaw/.pi/skills/close-of-day/close-of-day.ts \
   --days 1 \
   --chat-jid web:default \
-  --report /workspace/exports/close-of-day.md \
+  --report ~/.piclaw/exports/close-of-day.md \
   --cleanup
 ```
 
@@ -58,10 +58,10 @@ Optional flags:
 - `--days <n>` — how many days to include in the situation report and cleanup search window.
 - `--since <iso8601>` — override window start for cleanup.
 - `--chat-jid <jid>` — target chat context (default `web:default`).
-- `--report <path>` — path for the generated situation report (default `/workspace/exports/close-of-day-<DATE>.md`).
+- `--report <path>` — path for the generated situation report (default `~/.piclaw/exports/close-of-day-<DATE>.md`).
 - `--include-media` — allow delete operations to remove messages that still have attachments.
 - `--skip-backup` — skip restic backup.
-- `--backup-cmd <command>` — override backup command (default `/workspace/.piclaw/restic/backup.sh`).
+- `--backup-cmd <command>` — override backup command (default `~/.piclaw/restic/backup.sh`).
 - `--situate-only` — skip cleanup.
 - `--cleanup-only` — skip the situate step.
 
@@ -69,10 +69,10 @@ Optional flags:
 
 ```bash
 # Preview cleanup impact only
-bun run /workspace/.pi/skills/close-of-day/close-of-day.ts --days 1
+bun run ~/.piclaw/.pi/skills/close-of-day/close-of-day.ts --days 1
 
 # Do the cleanup, including attachment-bearing messages
-bun run /workspace/.pi/skills/close-of-day/close-of-day.ts --days 1 --cleanup --include-media --report /workspace/exports/close-of-day-2026-03-12.md
+bun run ~/.piclaw/.pi/skills/close-of-day/close-of-day.ts --days 1 --cleanup --include-media --report ~/.piclaw/exports/close-of-day-2026-03-12.md
 ```
 
 ## Completion criteria

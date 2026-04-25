@@ -12,14 +12,14 @@ Situate yourself by generating a 1-page situation report and maintaining Obsidia
 
 - **On demand only** when the user asks you to "situate yourself" or "catch up"
 - When you need to recall what's been discussed recently
-- As a **required chained step** of `/workspace/.pi/skills/close-of-day/SKILL.md`
+- As a **required chained step** of `~/.piclaw/.pi/skills/close-of-day/SKILL.md`
 
 Do not run this automatically at session start.
 
 ## Quick start
 
 ```bash
-bun run /workspace/.pi/skills/situate-daily-notes/situate.ts
+bun run ~/.piclaw/.pi/skills/situate-daily-notes/situate.ts
 ```
 
 This:
@@ -124,12 +124,12 @@ Then:
 | Flag | Default | Description |
 |---|---|---|
 | `--days <n>` | `7` | How many days of history to include |
-| `--out <path>` | `/workspace/exports/situation.md` | Situation report output path |
+| `--out <path>` | `~/.piclaw/exports/situation.md` | Situation report output path |
 
 ## Standalone daily notes generation
 
 ```bash
-bun run /workspace/.pi/skills/situate-daily-notes/daily-notes.ts [--days <n>] [--force]
+bun run ~/.piclaw/.pi/skills/situate-daily-notes/daily-notes.ts [--days <n>] [--force]
 ```
 
 ## Full transcript gathering

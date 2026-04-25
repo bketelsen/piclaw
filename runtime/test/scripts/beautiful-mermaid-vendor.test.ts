@@ -7,12 +7,18 @@ import { expect, test } from "bun:test";
 import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
+
+const REPO_ROOT = resolve(import.meta.dir, "../../..");
+const RUNTIME_DIR = join(REPO_ROOT, "runtime");
+const BUILD_VENDOR_SCRIPT = join(RUNTIME_DIR, "scripts", "build-vendored-dependency.ts");
+const LEGACY_BUILD_SCRIPT = join(RUNTIME_DIR, "scripts", "build-beautiful-mermaid-vendor.ts");
+const BUN_PATH = process.execPath;
 
 function buildVendorScript(scriptPath: string, outFile: string, metaFile: string, extraArgs: string[] = []) {
   return Bun.spawnSync(
     [
-      "bun",
+      BUN_PATH,
       scriptPath,
       ...extraArgs,
       "--outfile",
@@ -21,7 +27,7 @@ function buildVendorScript(scriptPath: string, outFile: string, metaFile: string
       metaFile,
     ],
     {
-      cwd: "/workspace/piclaw/runtime",
+      cwd: RUNTIME_DIR,
       stdout: "pipe",
       stderr: "pipe",
     },
@@ -44,7 +50,7 @@ function expectDeterministicVendorOutput(outFile: string, metaFile: string) {
   };
 
   const installed = JSON.parse(
-    readFileSync("/workspace/piclaw/node_modules/beautiful-mermaid/package.json", "utf8"),
+    readFileSync(join(REPO_ROOT, "node_modules", "beautiful-mermaid", "package.json"), "utf8"),
   ) as { version: string };
 
   expect(meta.manifest_id).toBe("beautiful-mermaid");
@@ -64,7 +70,7 @@ test("generic vendored dependency build script writes mermaid bundle + metadata 
   mkdirSync(base, { recursive: true });
 
   const proc = buildVendorScript(
-    "/workspace/piclaw/runtime/scripts/build-vendored-dependency.ts",
+    BUILD_VENDOR_SCRIPT,
     outFile,
     metaFile,
     ["--manifest", "vendor-manifests/beautiful-mermaid.json"],
@@ -85,7 +91,7 @@ test("legacy mermaid build wrapper delegates to the manifest-driven workflow", (
   mkdirSync(base, { recursive: true });
 
   const proc = buildVendorScript(
-    "/workspace/piclaw/runtime/scripts/build-beautiful-mermaid-vendor.ts",
+    LEGACY_BUILD_SCRIPT,
     outFile,
     metaFile,
   );

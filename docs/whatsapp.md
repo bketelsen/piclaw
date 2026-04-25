@@ -9,7 +9,7 @@ store, and session state as the web UI.
 - A WhatsApp account you can scan a QR code or request a pairing code from
 - `WHATSAPP_PHONE` set to your international number (no `+` or spaces)
 - Piclaw accessible with persistent storage (the Baileys session is stored in
-  `/workspace/.piclaw/data/sessions/`)
+  `~/.piclaw/data/sessions/`)
 
 ## Enabling
 
@@ -19,7 +19,7 @@ Set your phone number as an environment variable or in config:
 PICLAW_WHATSAPP_PHONE=1234567890
 ```
 
-Or in `/workspace/.piclaw/config.json`:
+Or in `~/.piclaw/config.json`:
 
 ```json
 { "whatsappPhone": "1234567890" }
@@ -68,13 +68,13 @@ PICLAW_ASSISTANT_NAME=MyBot
 ## Session persistence
 
 WhatsApp state (auth keys, session identifiers) is stored via the Baileys library
-in `/workspace/.piclaw/data/` as part of Piclaw's normal persistent data. Reconnects
+in `~/.piclaw/data/` as part of Piclaw's normal persistent data. Reconnects
 after a container restart are usually seamless without re-scanning.
 
 If you need to reset the WhatsApp session:
 
 ```bash
-rm -rf /workspace/.piclaw/data/sessions/whatsapp*
+rm -rf ~/.piclaw/data/sessions/whatsapp*
 ```
 
 Then restart Piclaw and pair again.

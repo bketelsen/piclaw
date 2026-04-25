@@ -46,7 +46,7 @@ rounded corners, and Google Fonts imports. A helper handles this in one call:
 
 ```html
 <script src="/static/js/vendor/beautiful-mermaid.js"></script>
-<script src="/workspace/.pi/skills/visual-artifact-generator/scripts/mermaid-fixup.js"></script>
+<script src="~/.piclaw/.pi/skills/visual-artifact-generator/scripts/mermaid-fixup.js"></script>
 <script>
   const isDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
   beautifulMermaid.renderMermaidSVGAsync(source, {
@@ -64,8 +64,8 @@ rounded corners, and Google Fonts imports. A helper handles this in one call:
 
 All generated artifacts follow the saved visual-design profile:
 
-- **Style file:** `/workspace/.pi/skills/visual-design/SKILL.md`
-- **Preference source:** `/workspace/notes/preferences/visual-design.md`
+- **Style file:** `~/.piclaw/.pi/skills/visual-design/SKILL.md`
+- **Preference source:** `~/.piclaw/notes/preferences/visual-design.md`
 
 Key defaults: clean/functional style, minimal density, theme-aware neutral/gray
 palette with subtle accents, IBM Plex Sans body, JetBrains Mono NF for code,
@@ -81,7 +81,7 @@ Piclaw's vendored library environment.
 
 ## Output location
 
-Artifacts are written to `/workspace/.pi/artifacts/` by default and opened
+Artifacts are written to `~/.piclaw/.pi/artifacts/` by default and opened
 via `open_workspace_file` or `attach_file`. The draw.io editor pane handles
 `.drawio` files natively.
 

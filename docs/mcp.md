@@ -37,20 +37,20 @@ In the web UI, plain `/mcp` opens the MCP management panel. In non-UI contexts i
 Preferred shared config locations:
 
 1. user/global shared MCP config: `~/.config/mcp/mcp.json`
-2. project-local shared MCP config: `/workspace/.mcp.json`
+2. project-local shared MCP config: `~/.piclaw/.mcp.json`
 
 Pi-specific override layers still work:
 
 3. Pi-home config: `~/.pi/agent/mcp.json` (or an override path passed via `--mcp-config`)
-4. project-local Pi override: `/workspace/.pi/mcp.json`
+4. project-local Pi override: `~/.piclaw/.pi/mcp.json`
 
 Use the shared files when the MCP configuration should also be usable by other MCP-aware tools. Use the Pi-owned files only for PiClaw-specific overrides.
 
 Starter examples seeded on first startup:
 
 ```text
-/workspace/.mcp.json.example
-/workspace/.pi/mcp.json.example
+~/.piclaw/.mcp.json.example
+~/.piclaw/.pi/mcp.json.example
 ```
 
 In the container image, Pi home is typically bind-mounted at:

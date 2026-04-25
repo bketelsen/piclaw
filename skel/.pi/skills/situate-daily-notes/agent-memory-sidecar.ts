@@ -1,9 +1,10 @@
 import { Database } from "bun:sqlite";
 import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from "fs";
-import { resolve } from "path";
+import { homedir } from "os";
+import { join, resolve } from "path";
 
-const WORKSPACE_DIR = resolve(process.env.PICLAW_WORKSPACE || "/workspace");
-const STORE_DIR = resolve(process.env.PICLAW_STORE || `${WORKSPACE_DIR}/.piclaw/store`);
+const WORKSPACE_DIR = resolve(process.env.PICLAW_HOME || join(homedir(), ".piclaw"));
+const STORE_DIR = resolve(process.env.PICLAW_STORE || join(homedir(), ".piclaw", "store"));
 
 export const DAILY_NOTES_DIR = resolve(WORKSPACE_DIR, "notes/daily");
 export const AGENT_MEMORY_DIR = resolve(WORKSPACE_DIR, "notes/memory");

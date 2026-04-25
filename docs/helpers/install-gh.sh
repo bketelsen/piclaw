@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-INSTALL_DIR="/workspace/.local/bin"
-CONFIG_DIR="/workspace/.config/gh"
+INSTALL_DIR="$HOME/.piclaw/.local/bin"
+CONFIG_DIR="$HOME/.piclaw/.config/gh"
 
 mkdir -p "$INSTALL_DIR" "$CONFIG_DIR"
 
@@ -30,16 +30,16 @@ chmod +x "${INSTALL_DIR}/gh"
 
 cat <<'EOF'
 
-Installed gh to /workspace/.local/bin/gh
+Installed gh to ~/.piclaw/.local/bin/gh
 
-Make sure /workspace/.env.sh contains:
+Make sure ~/.piclaw/.env.sh contains:
 
-export PATH="/workspace/.local/bin:$PATH"
-export GH_CONFIG_DIR=/workspace/.config/gh
-mkdir -p /workspace/.config/gh
+export PATH="$HOME/.piclaw/.local/bin:$PATH"
+export GH_CONFIG_DIR=$HOME/.piclaw/.config/gh
+mkdir -p "$HOME/.piclaw/.config/gh"
 
 Then run:
-  source /workspace/.env.sh
+  source ~/.piclaw/.env.sh
   gh --version
   gh auth login
 

@@ -1,11 +1,17 @@
 import { expect, test } from "bun:test";
 import { existsSync, readFileSync } from "node:fs";
+import { join, resolve } from "node:path";
+
+const REPO_ROOT = resolve(import.meta.dir, "../../..");
+const RUNTIME_DIR = join(REPO_ROOT, "runtime");
+const KATEX_VENDOR_SCRIPT = join(RUNTIME_DIR, "scripts", "vendor-katex-css-fonts.ts");
+const BUN_PATH = process.execPath;
 
 function buildKatexAssets() {
   return Bun.spawnSync(
-    ["bun", "/workspace/piclaw/runtime/scripts/vendor-katex-css-fonts.ts"],
+    [BUN_PATH, KATEX_VENDOR_SCRIPT],
     {
-      cwd: "/workspace/piclaw/runtime",
+      cwd: RUNTIME_DIR,
       stdout: "pipe",
       stderr: "pipe",
     },
@@ -18,10 +24,10 @@ test("katex asset workflow vendors rewritten CSS + woff2 fonts with provenance m
     throw new Error(`${proc.stdout.toString()}\n${proc.stderr.toString()}`.trim());
   }
 
-  const cssFile = "/workspace/piclaw/runtime/web/src/styles/katex.bundle.css";
-  const metaFile = "/workspace/piclaw/runtime/web/src/styles/katex.bundle.meta.json";
-  const mainFontFile = "/workspace/piclaw/runtime/web/static/fonts/KaTeX_Main-Regular.woff2";
-  const sizeFontFile = "/workspace/piclaw/runtime/web/static/fonts/KaTeX_Size4-Regular.woff2";
+  const cssFile = join(RUNTIME_DIR, "web/src/styles/katex.bundle.css");
+  const metaFile = join(RUNTIME_DIR, "web/src/styles/katex.bundle.meta.json");
+  const mainFontFile = join(RUNTIME_DIR, "web/static/fonts/KaTeX_Main-Regular.woff2");
+  const sizeFontFile = join(RUNTIME_DIR, "web/static/fonts/KaTeX_Size4-Regular.woff2");
 
   expect(existsSync(cssFile)).toBe(true);
   expect(existsSync(metaFile)).toBe(true);
@@ -38,7 +44,7 @@ test("katex asset workflow vendors rewritten CSS + woff2 fonts with provenance m
     font_count: number;
   };
   const katexPackage = JSON.parse(
-    readFileSync("/workspace/piclaw/node_modules/katex/package.json", "utf8"),
+    readFileSync(join(REPO_ROOT, "node_modules", "katex", "package.json"), "utf8"),
   ) as { version: string };
 
   expect(meta.manifest_id).toBe("katex-css-fonts");

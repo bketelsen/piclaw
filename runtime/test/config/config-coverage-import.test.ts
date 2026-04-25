@@ -4,9 +4,8 @@ import { join } from "path";
 import { importFresh, withTempWorkspaceEnv } from "../helpers.js";
 
 function writeWorkspaceConfig(workspace: string, config: Record<string, unknown>): void {
-  const configDir = join(workspace, ".piclaw");
-  mkdirSync(configDir, { recursive: true });
-  writeFileSync(join(configDir, "config.json"), JSON.stringify(config, null, 2), "utf8");
+  mkdirSync(workspace, { recursive: true });
+  writeFileSync(join(workspace, "config.json"), JSON.stringify(config, null, 2), "utf8");
 }
 
 test("plain import covers config module init branches with isolated argv and env", async () => {
@@ -141,7 +140,7 @@ test("plain import covers config module init branches with isolated argv and env
         });
         expect(cfg.getToolActivationConfig()).toBe(cfg.TOOL_ACTIVATION_CONFIG);
 
-        const configPath = join(ws.workspace, ".piclaw", "config.json");
+        const configPath = join(ws.workspace, "config.json");
         cfg.setAssistantName("  Pi (Coverage) Bot  ");
         cfg.setAssistantAvatar("  /assistant.svg  ");
         cfg.setUserName("  Casey  ");

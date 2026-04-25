@@ -26,8 +26,8 @@ async function withFreshConfig(
 ): Promise<void> {
   await withTempWorkspaceEnv("piclaw-config-", options.env ?? {}, async (workspace) => {
     if (options.config) {
-      const configPath = join(workspace.workspace, ".piclaw", "config.json");
-      mkdirSync(join(workspace.workspace, ".piclaw"), { recursive: true });
+      const configPath = join(workspace.workspace, "config.json");
+      mkdirSync(workspace.workspace, { recursive: true });
       writeFileSync(configPath, `${JSON.stringify(options.config, null, 2)}\n`, "utf8");
     }
     if (options.dotEnv !== undefined) {
@@ -216,7 +216,7 @@ describe("core config", () => {
         },
       },
       async ({ workspace, config }) => {
-        const configPath = join(workspace.workspace, ".piclaw", "config.json");
+        const configPath = join(workspace.workspace, "config.json");
 
         expect(config.setWebTotpSecret("  new-secret  ")).toBe("new-secret");
         expect(config.getWebRuntimeConfig().totpSecret).toBe("new-secret");

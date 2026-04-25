@@ -39,7 +39,7 @@ Out of scope:
 
 ## Constraints
 
-- use `/workspace/piclaw` as the canonical repo
+- use `~/projects/piclaw` as the canonical repo
 - work from a clean branch based on `origin/main`
 - keep `runtime/src/extensions/` conceptually separate from `runtime/extensions/`
 - do not widen into feature work inside the moved extensions/skills

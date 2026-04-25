@@ -64,8 +64,8 @@
  *   decide-all accept|reject      — bulk-decide all pending proposals
  *
  * Environment (auto-injected by piclaw bash tool):
- *   PICLAW_DATA      — piclaw data dir  (default: /workspace/.piclaw/data)
- *   PICLAW_STORE     — piclaw store dir (default: /workspace/.piclaw/store)
+ *   PICLAW_DATA      — piclaw data dir  (default: ~/.piclaw/data)
+ *   PICLAW_STORE     — piclaw store dir (default: ~/.piclaw/store)
  *
  * CLI overrides:
  *   --store-dir <dir>  — override PICLAW_STORE for DB location
@@ -73,6 +73,7 @@
  */
 
 import { readFileSync, mkdirSync, writeFileSync } from "fs";
+import { homedir } from "os";
 import { join } from "path";
 import { createHash, createPrivateKey, sign } from "crypto";
 import Database from "bun:sqlite";
@@ -146,8 +147,8 @@ function cliArg(flag: string, fallback: string): string {
 // Config
 // ---------------------------------------------------------------------------
 
-const DATA_DIR  = cliArg("--data-dir",  process.env.PICLAW_DATA  || "/workspace/.piclaw/data");
-const STORE_DIR = cliArg("--store-dir", process.env.PICLAW_STORE || "/workspace/.piclaw/store");
+const DATA_DIR  = cliArg("--data-dir",  process.env.PICLAW_DATA  || join(homedir(), ".piclaw", "data"));
+const STORE_DIR = cliArg("--store-dir", process.env.PICLAW_STORE || join(homedir(), ".piclaw", "store"));
 const IDENTITY_PATH = join(DATA_DIR, "interop", "identity.json");
 const DB_PATH       = join(STORE_DIR, "messages.db");
 

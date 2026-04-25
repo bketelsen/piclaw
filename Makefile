@@ -92,7 +92,7 @@ typecheck: build-ts ## Type-check TypeScript
 
 # ── Pack & install ───────────────────────────────────────────────────
 
-PICLAW_TMPDIR ?= /workspace/.piclaw/tmp
+PICLAW_TMPDIR ?= $(HOME)/.piclaw/tmp
 PACK_DIR ?= $(PICLAW_TMPDIR)/piclaw-pack
 BUN_CACHE_DIR ?= $(PICLAW_TMPDIR)/bun-cache
 

@@ -1,11 +1,17 @@
 import { expect, test } from "bun:test";
 import { existsSync, readFileSync } from "node:fs";
+import { join, resolve } from "node:path";
+
+const REPO_ROOT = resolve(import.meta.dir, "../../..");
+const RUNTIME_DIR = join(REPO_ROOT, "runtime");
+const TERMINAL_FONT_SCRIPT = join(RUNTIME_DIR, "scripts", "vendor-firacode-nerd-font.ts");
+const BUN_PATH = process.execPath;
 
 function buildTerminalFonts() {
   return Bun.spawnSync(
-    ["bun", "/workspace/piclaw/runtime/scripts/vendor-firacode-nerd-font.ts"],
+    [BUN_PATH, TERMINAL_FONT_SCRIPT],
     {
-      cwd: "/workspace/piclaw/runtime",
+      cwd: RUNTIME_DIR,
       stdout: "pipe",
       stderr: "pipe",
     },
@@ -18,9 +24,9 @@ test("terminal font workflow vendors FiraCode Nerd Font Mono with metadata", () 
     throw new Error(`${proc.stdout.toString()}\n${proc.stderr.toString()}`.trim());
   }
 
-  const metaFile = "/workspace/piclaw/runtime/web/static/fonts/vendor/firacode-nerd-font.meta.json";
-  const regularFile = "/workspace/piclaw/runtime/web/static/fonts/vendor/firacode-nerd-font-mono-regular.ttf";
-  const boldFile = "/workspace/piclaw/runtime/web/static/fonts/vendor/firacode-nerd-font-mono-bold.ttf";
+  const metaFile = join(RUNTIME_DIR, "web/static/fonts/vendor/firacode-nerd-font.meta.json");
+  const regularFile = join(RUNTIME_DIR, "web/static/fonts/vendor/firacode-nerd-font-mono-regular.ttf");
+  const boldFile = join(RUNTIME_DIR, "web/static/fonts/vendor/firacode-nerd-font-mono-bold.ttf");
 
   expect(existsSync(metaFile)).toBe(true);
   expect(existsSync(regularFile)).toBe(true);

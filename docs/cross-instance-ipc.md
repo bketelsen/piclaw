@@ -303,7 +303,7 @@ All POST endpoints require `Content-Type: application/json`.
 ```json
 {
   "decision": "accept_execute",
-  "result": "Disk usage: /workspace 18%",
+  "result": "Disk usage: ~/.piclaw 18%",
   "usage": {
     "duration_ms": 950,
     "tool_calls": 1

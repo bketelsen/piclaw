@@ -12,12 +12,12 @@ Use the local SearXNG instance to search the web and optionally fetch pages and 
 
 1. Run a search (JSON output):
    ```bash
-   bun /workspace/.pi/skills/web-search/web-search.ts --query "your query"
+   bun ~/.piclaw/.pi/skills/web-search/web-search.ts --query "your query"
    ```
 
 2. Fetch top results and convert to Markdown:
    ```bash
-   bun /workspace/.pi/skills/web-search/web-search.ts --query "your query" --fetch true --fetch-limit 2
+   bun ~/.piclaw/.pi/skills/web-search/web-search.ts --query "your query" --fetch true --fetch-limit 2
    ```
 
 ## Options

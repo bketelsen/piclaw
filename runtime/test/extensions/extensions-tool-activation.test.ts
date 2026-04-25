@@ -157,9 +157,8 @@ describe("tool-activation extension", () => {
 
   test("default active tools include config-defined additions", async () => {
     await withTempWorkspaceEnv("piclaw-tool-activation-config-", {}, async (ws) => {
-      const configDir = join(ws.workspace, ".piclaw");
-      mkdirSync(configDir, { recursive: true });
-      writeFileSync(join(configDir, "config.json"), JSON.stringify({
+      mkdirSync(ws.workspace, { recursive: true });
+      writeFileSync(join(ws.workspace, "config.json"), JSON.stringify({
         tools: {
           additionalDefaultTools: ["search_workspace", "introspect_sql"],
         },

@@ -47,6 +47,8 @@
  */
 
 import { existsSync } from "fs";
+import { homedir } from "os";
+import { join } from "path";
 import Database from "bun:sqlite";
 
 export interface ProviderModelChartDataPoint {
@@ -109,7 +111,7 @@ export function generateProviderModelChart(options: {
 }): ProviderModelChartResult {
   const daysArg = Number.parseInt(String(options.days ?? 7), 10);
   const days = Number.isFinite(daysArg) && daysArg > 0 ? daysArg : 7;
-  const dbPath = options.dbPath ?? "/workspace/.piclaw/store/messages.db";
+  const dbPath = options.dbPath ?? join(homedir(), ".piclaw", "store", "messages.db");
   const now = options.now ?? new Date();
 
   const startDay = new Date(now);

@@ -9,7 +9,7 @@ Pushing a version tag triggers `.github/workflows/publish.yml` and publishes mul
 
 ## Cutting a release
 
-The authoritative workflow is documented in the [cut-release skill](/workspace/.pi/skills/cut-release/SKILL.md), which covers:
+The authoritative workflow is documented in the [cut-release skill](~/.piclaw/.pi/skills/cut-release/SKILL.md), which covers:
 
 - Gathering the delta and drafting release notes
 - Local rebuild and CI verification (`make build-piclaw && make ci-fast`)
@@ -59,7 +59,7 @@ Boundary note:
 
 ## Release naming
 
-Each release gets a cult/classic movie name. See the [cut-release skill](/workspace/.pi/skills/cut-release/SKILL.md) for the full convention and workflow.
+Each release gets a cult/classic movie name. See the [cut-release skill](~/.piclaw/.pi/skills/cut-release/SKILL.md) for the full convention and workflow.
 
 ## Container runtime compatibility
 

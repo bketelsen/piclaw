@@ -63,7 +63,7 @@ Global installs:
 sudo /usr/local/bun/bin/bun add -g @mariozechner/pi-coding-agent
 
 # piclaw from workspace repo root
-sudo /usr/local/bun/bin/bun add -g --no-save file:/workspace/piclaw
+sudo /usr/local/bun/bin/bun add -g --no-save file:~/projects/piclaw
 
 # ensure wrapper is reachable
 sudo ln -sf /usr/local/bun/bin/piclaw /usr/local/bin/piclaw
@@ -72,20 +72,20 @@ sudo ln -sf /usr/local/bun/bin/piclaw /usr/local/bin/piclaw
 ## Remote changes audit + import
 Check commit history on VM:
 ```
-git -C /workspace/piclaw log --oneline -n 10
+git -C ~/projects/piclaw log --oneline -n 10
 ```
 
 If a new commit exists, pull a patch from the VM and apply locally:
 ```
 # On local machine
 ssh -i ~/.ssh/azurevm_ed25519 agent@your-vm.example.com \
-  "git -C /workspace/piclaw format-patch -1 <commit> --stdout" \
-  > /workspace/tmp/azurevm.patch
+  "git -C ~/projects/piclaw format-patch -1 <commit> --stdout" \
+  > ~/.piclaw/tmp/azurevm.patch
 
 # Apply locally
-cd /workspace/piclaw
+cd ~/projects/piclaw
 
-git am /workspace/tmp/azurevm.patch
+git am ~/.piclaw/tmp/azurevm.patch
 ```
 
 Only import code/UI changes.

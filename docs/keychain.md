@@ -4,7 +4,7 @@ Piclaw includes an encrypted SQLite-backed keychain for storing tokens and usern
 
 ## How it works
 
-- Secrets are stored in `keychain_entries` inside `/workspace/.piclaw/store/messages.db`.
+- Secrets are stored in `keychain_entries` inside `~/.piclaw/store/messages.db`.
 - Each entry is encrypted with **AES-256-GCM**.
 - Keys are derived with **PBKDF2-SHA256** using a per-entry salt.
 - A per-entry nonce is stored alongside the ciphertext.

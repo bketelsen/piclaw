@@ -1,4 +1,5 @@
 import { expect, test } from "bun:test";
+import { join, resolve } from "node:path";
 
 import {
   createRepoDevCommandPlan,
@@ -6,33 +7,36 @@ import {
   resolveRepoBinary,
 } from "../../scripts/repo-dev-command.js";
 
-test("createRepoDevCommandPlan resolves repo-root binaries for build, lint, and typecheck", () => {
-  const buildPlan = createRepoDevCommandPlan("build", "/workspace/piclaw/runtime");
-  const lintPlan = createRepoDevCommandPlan("lint", "/workspace/piclaw/runtime");
-  const typecheckPlan = createRepoDevCommandPlan("typecheck", "/workspace/piclaw/runtime");
+const REPO_ROOT = resolve(import.meta.dir, "../../..");
+const RUNTIME_DIR = join(REPO_ROOT, "runtime");
 
-  expect(buildPlan.cwd).toBe("/workspace/piclaw/runtime");
-  expect(buildPlan.binaryPath).toBe("/workspace/piclaw/node_modules/typescript/bin/tsc");
+test("createRepoDevCommandPlan resolves repo-root binaries for build, lint, and typecheck", () => {
+  const buildPlan = createRepoDevCommandPlan("build", RUNTIME_DIR);
+  const lintPlan = createRepoDevCommandPlan("lint", RUNTIME_DIR);
+  const typecheckPlan = createRepoDevCommandPlan("typecheck", RUNTIME_DIR);
+
+  expect(buildPlan.cwd).toBe(RUNTIME_DIR);
+  expect(buildPlan.binaryPath).toBe(join(REPO_ROOT, "node_modules/typescript/bin/tsc"));
   expect(buildPlan.args).toEqual(["-p", "tsconfig.json"]);
   expect(typeof buildPlan.preRun).toBe("function");
   expect(typeof buildPlan.postRun).toBe("function");
 
-  expect(lintPlan.cwd).toBe("/workspace/piclaw/runtime");
-  expect(lintPlan.binaryPath).toBe("/workspace/piclaw/node_modules/eslint/bin/eslint.js");
+  expect(lintPlan.cwd).toBe(RUNTIME_DIR);
+  expect(lintPlan.binaryPath).toBe(join(REPO_ROOT, "node_modules/eslint/bin/eslint.js"));
   expect(lintPlan.args).toEqual([
     "--config",
-    "/workspace/piclaw/runtime/eslint.config.js",
+    join(RUNTIME_DIR, "eslint.config.js"),
     "src/**/*.ts",
     "test/**/*.ts",
   ]);
 
-  expect(typecheckPlan.cwd).toBe("/workspace/piclaw/runtime");
-  expect(typecheckPlan.binaryPath).toBe("/workspace/piclaw/node_modules/typescript/bin/tsc");
+  expect(typecheckPlan.cwd).toBe(RUNTIME_DIR);
+  expect(typecheckPlan.binaryPath).toBe(join(REPO_ROOT, "node_modules/typescript/bin/tsc"));
   expect(typecheckPlan.args).toEqual(["--noEmit", "-p", "tsconfig.json"]);
 });
 
 test("resolveRepoBinary points at the repo-local node_modules bin directory", () => {
-  expect(resolveRepoBinary("/workspace/piclaw", "tsc")).toBe("/workspace/piclaw/node_modules/typescript/bin/tsc");
+  expect(resolveRepoBinary(REPO_ROOT, "tsc")).toBe(join(REPO_ROOT, "node_modules/typescript/bin/tsc"));
 });
 
 test("listMissingRepoBinaries reports missing tools from the repo-local bin directory", () => {

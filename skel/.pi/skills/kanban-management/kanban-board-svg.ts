@@ -10,7 +10,7 @@
  *   bun run kanban-board-svg.ts [--out path.svg] [--theme dark|light|auto] [--post]
  *
  * Options:
- *   --out <path>      Output file (default: /workspace/tmp/kanban-board.svg)
+ *   --out <path>      Output file (default: ~/.piclaw/tmp/kanban-board.svg)
  *   --theme <name>    dark | light | auto (auto selects by time-of-day)
  *   --post            Write an IPC message with inline SVG media attachment
  *   --chat <jid>      Override chat JID (default: web:default)
@@ -21,6 +21,7 @@
  */
 
 import { readdirSync, readFileSync, existsSync, writeFileSync, mkdirSync, statSync } from "fs";
+import { homedir } from "os";
 import { join, basename } from "path";
 
 // ── CLI parsing ─────────────────────────────────────────────────
@@ -36,7 +37,7 @@ if (process.argv.includes("--help") || process.argv.includes("-h")) {
   console.log("  --done-max <n>    Max done cards shown (default 5)");
   console.log("  --workitems <dir> Workitems directory path");
   console.log("  --kanban <dir>    Legacy alias for the old kanban directory path");
-  console.log("  Defaults to /workspace/workitems and falls back to /workspace/kanban if needed.");
+  console.log("  Defaults to ~/.piclaw/workitems and falls back to ~/.piclaw/kanban if needed.");
   process.exit(0);
 }
 
@@ -49,11 +50,13 @@ const getArg = (flag: string): string | undefined => {
 function resolveBoardDir(): string {
   const explicit = getArg("--workitems") || process.env.WORKITEMS_DIR || getArg("--kanban") || process.env.KANBAN_DIR;
   if (explicit) return explicit;
-  return existsSync("/workspace/workitems") ? "/workspace/workitems" : "/workspace/kanban";
+  const piclawHome = process.env.PICLAW_HOME || join(homedir(), ".piclaw");
+  const workitemsDir = join(piclawHome, "workitems");
+  return existsSync(workitemsDir) ? workitemsDir : join(piclawHome, "kanban");
 }
 
 const BOARD_DIR = resolveBoardDir();
-const OUTPUT = getArg("--out") || "/workspace/tmp/kanban-board.svg";
+const OUTPUT = getArg("--out") || join(process.env.PICLAW_HOME || join(homedir(), ".piclaw"), "tmp", "kanban-board.svg");
 const THEME_RAW = (getArg("--theme") || "auto").trim().toLowerCase();
 const POST_TO_IPC = args.includes("--post");
 const CHAT_JID = getArg("--chat") || process.env.PICLAW_CHAT_JID || "web:default";
@@ -257,7 +260,7 @@ function generate(): string {
 // ── IPC posting ─────────────────────────────────────────────────
 
 function postBoardSvg(svgPath: string): void {
-  const piclawData = process.env.PICLAW_DATA || "/workspace/.piclaw/data";
+  const piclawData = process.env.PICLAW_DATA || join(homedir(), ".piclaw", "data");
   const messagesDir = join(piclawData, "ipc", "messages");
   mkdirSync(messagesDir, { recursive: true });
 

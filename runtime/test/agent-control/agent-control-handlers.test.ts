@@ -8,6 +8,7 @@
 
 import { afterEach, beforeEach, expect, test } from "bun:test";
 import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, truncateSync, writeFileSync } from "fs";
+import { homedir } from "os";
 import { dirname, join, resolve } from "path";
 import { withChatContext } from "../../src/core/chat-context.js";
 import { getTestWorkspace, setEnv } from "../helpers.js";
@@ -19,13 +20,13 @@ let restoreIdentityState: (() => void) | null = null;
 // ── Config fixture ──────────────────────────────────────────────
 // Tests that exercise config-writing handlers must never touch the real
 // workspace config. Resolve the path lazily from the current test env and
-// hard-fail if it ever points at /workspace/.piclaw/config.json.
+// hard-fail if it ever points at the live ~/.piclaw/config.json path.
 let savedConfig: string | null = null;
 let savedConfigPath: string | null = null;
 
 function getConfigPath(): string {
-  const configPath = resolve(process.env.PICLAW_WORKSPACE || "/workspace", ".piclaw", "config.json");
-  if (configPath === "/workspace/.piclaw/config.json") {
+  const configPath = resolve(process.env.PICLAW_HOME || process.env.PICLAW_WORKSPACE || join(homedir(), ".piclaw"), "config.json");
+  if (configPath === resolve(join(homedir(), ".piclaw"), "config.json")) {
     throw new Error("Refusing to use the production config path in tests");
   }
   return configPath;

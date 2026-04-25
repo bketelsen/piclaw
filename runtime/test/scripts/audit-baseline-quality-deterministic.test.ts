@@ -7,6 +7,7 @@ import {
 
 const repoRoot = path.resolve(import.meta.dir, "../../..");
 const auditScriptPath = path.join(repoRoot, "scripts", "audit-baseline-quality-deterministic.ts");
+const BUN_PATH = process.execPath;
 
 describe("audit-baseline-quality-deterministic", () => {
   test("buildAuditCommandEnv isolates runtime state away from the live workspace", () => {
@@ -21,7 +22,7 @@ describe("audit-baseline-quality-deterministic", () => {
   });
 
   test("list-groups exposes finer deterministic subgroup coverage", async () => {
-    const proc = Bun.spawn(["bun", "run", auditScriptPath, "--list-groups"], {
+    const proc = Bun.spawn([BUN_PATH, "run", auditScriptPath, "--list-groups"], {
       cwd: repoRoot,
       stdout: "pipe",
       stderr: "pipe",

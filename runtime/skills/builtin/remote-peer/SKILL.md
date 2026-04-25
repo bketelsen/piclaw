@@ -13,7 +13,7 @@ Send signed prompts to paired remote piclaw peers and manage incoming proposals.
 All operations go through `peer.ts` (auto-resolved relative to this skill directory).
 
 ```bash
-bun /workspace/piclaw/runtime/skills/builtin/remote-peer/peer.ts <command> [args]
+bun ~/projects/piclaw/runtime/skills/builtin/remote-peer/peer.ts <command> [args]
 ```
 
 ### CLI overrides
@@ -105,8 +105,8 @@ The script reads these env vars (all have sensible defaults, overridable via CLI
 
 | Var | Default | Purpose |
 |-----|---------|---------|
-| `PICLAW_DATA`  | `/workspace/.piclaw/data`  | Identity key location |
-| `PICLAW_STORE` | `/workspace/.piclaw/store` | SQLite DB location |
+| `PICLAW_DATA`  | `~/.piclaw/data`  | Identity key location |
+| `PICLAW_STORE` | `~/.piclaw/store` | SQLite DB location |
 
 piclaw's bash tool injects these automatically when available.
 

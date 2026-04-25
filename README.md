@@ -19,48 +19,25 @@ It is for people who want one stateful agent workspace they can run locally or i
 
 ## Quick start
 
-```bash
-mkdir -p ./home ./workspace
+### Native install
 
-docker run -d \
-  --init \
-  --name piclaw \
-  --restart unless-stopped \
-  -p 8080:8080 \
-  -e PICLAW_WEB_PORT=8080 \
-  -v "$(pwd)/home:/config" \
-  -v "$(pwd)/workspace:/workspace" \
-  ghcr.io/rcarmo/piclaw:latest
+```bash
+export PICLAW_HOME="${PICLAW_HOME:-$HOME/.piclaw}"
+mkdir -p "$PICLAW_HOME"
+bun install
+bun run start
 ```
 
 Open `http://localhost:8080` and type `/login` to configure your LLM provider, including custom OpenAI-compatible endpoints when you are not using one of the built-in hosted providers.
 
-> [!TIP]
-> Keep `--init` enabled for `docker run` / `podman run` so the runtime inserts a tiny init process for signal forwarding and zombie reaping. The bundled `docker-compose.yml` now sets the equivalent `init: true` flag.
-
-| Mount | Container path | Contents |
-|---|---|---|
-| Home | `/config` | Agent home (`.pi/`, `.gitconfig`, `.bashrc`) |
-| Workspace | `/workspace` | Projects, notes, and piclaw state |
-
-> [!NOTE]
-> In the container image, `/home/agent/.pi` is backed by `/config/.pi`. With the stock `docker run` / `docker-compose.yml` examples above, Pi home state therefore persists on the host under `./home/.pi/agent/`.
->
-> That means provider login state and model metadata should survive rebuilds/recreates when stored under files such as:
->
-> - `./home/.pi/agent/auth.json`
-> - `./home/.pi/agent/models.json`
->
-> Mounting directly to `/home/agent` or `/home/agent/.pi/agent` can also work, but `/config` is the canonical documented persistence path for the container image.
-
 > [!WARNING]
-> Never delete `/workspace/.piclaw/store/messages.db`. It contains chat history, media, and task state.
+> Never delete `~/.piclaw/store/messages.db`. It contains chat history, media, and task state.
 
 > [!IMPORTANT]
 > You do **not** need to set provider API keys in piclaw environment variables. PiClaw reuses provider credentials configured in Pi Agent settings.
 
 > [!NOTE]
-> Power users can place workspace-scoped shell environment overrides in `/workspace/.env.sh`. PiClaw sources that file for the embedded terminal and on runtime startup, which is useful for things like `PATH` tweaks or persisting `gh auth login` with `GH_CONFIG_DIR=/workspace/.config/gh`. This hook is user-controlled: if its contents break PiClaw startup, shell behavior, or tool resolution, that breakage is the user's responsibility.
+> Power users can place shell environment overrides in `~/.piclaw/.env.sh`. PiClaw sources that file for the embedded terminal and on runtime startup, which is useful for things like `PATH` tweaks or persisting `gh auth login` with `GH_CONFIG_DIR=~/.piclaw/.config/gh`. This hook is user-controlled: if its contents break PiClaw startup, shell behavior, or tool resolution, that breakage is the user's responsibility.
 
 ## Web UI at a glance
 
@@ -98,13 +75,13 @@ For the full list, auth setup (TOTP/passkeys), session-scoped SSH-backed remote 
 
 ## Other install methods
 
-### Install without Docker
+### Global install
 
 ```bash
 bun add -g github:rcarmo/piclaw
 ```
 
-Experimental. Linux/macOS/Windows. See [docs/install-from-repo.md](docs/install-from-repo.md).
+Set `PICLAW_HOME` if you do not want the default `~/.piclaw` state directory. See [docs/install-from-repo.md](docs/install-from-repo.md).
 
 On Windows, PiClaw remains a secondary / not-officially-supported target. Shell-like child processes now run attached there (`detached=false`) so stdout/stderr remain capturable; Unix-like hosts still use detached process groups for cleaner tree termination on abort/shutdown.
 

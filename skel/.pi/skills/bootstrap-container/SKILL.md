@@ -12,7 +12,7 @@ Use this on a fresh container to ensure required CLI tools and workspace depende
 
 1. Run the bootstrap script:
    ```bash
-   bash /workspace/.pi/skills/bootstrap-container/bootstrap-container.sh
+   bash ~/.piclaw/.pi/skills/bootstrap-container/bootstrap-container.sh
    ```
 
 2. Review the summary output for missing or failed steps.
@@ -20,11 +20,11 @@ Use this on a fresh container to ensure required CLI tools and workspace depende
 ## What it does
 
 - Installs required CLI tools (curl, wget, git, jq, rg, sqlite3, restic, openssh-client, supervisorctl, iproute2, etc.) if missing.
-- Ensures `/workspace/package.json` exists and installs JS deps (`linkedom`, `turndown`, `playwright`).
-- Installs Playwright Chromium + OS deps into `/workspace/.cache/ms-playwright`.
+- Ensures `~/.piclaw/package.json` exists and installs JS deps (`linkedom`, `turndown`, `playwright`).
+- Installs Playwright Chromium + OS deps into `~/.piclaw/.cache/ms-playwright`.
 - Prints a version/status summary at the end.
 
 ## Environment
 
-- `PICLAW_WORKSPACE` (default: `/workspace`)
-- `PLAYWRIGHT_BROWSERS_PATH` (default: `/workspace/.cache/ms-playwright`)
+- `PICLAW_HOME` (default: `~/.piclaw`)
+- `PLAYWRIGHT_BROWSERS_PATH` (default: `~/.piclaw/.cache/ms-playwright`)

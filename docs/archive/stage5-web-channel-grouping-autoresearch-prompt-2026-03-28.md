@@ -40,7 +40,7 @@ Out of scope:
 
 ## Constraints
 
-- use `/workspace/piclaw` as the canonical repo
+- use `~/projects/piclaw` as the canonical repo
 - work from a clean branch based on `origin/main`
 - prefer the obvious grouping tranche first
 - stop and report if the remaining flat files require a second batch rather than forcing the whole root into one pass

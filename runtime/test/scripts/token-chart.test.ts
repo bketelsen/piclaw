@@ -12,11 +12,7 @@ import { join } from "path";
 import { tmpdir } from "os";
 import Database from "bun:sqlite";
 
-function formatDay(d: Date) {
-  const dayNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-  const pad = (n: number) => n.toString().padStart(2, "0");
-  return `${dayNames[d.getDay()]} ${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
-}
+const TOKEN_CHART_SCRIPT = join(import.meta.dir, "..", "..", "skills", "operator", "token-chart", "token-chart.ts");
 
 test("token chart outputs chart first and summary lines", () => {
   const sessionsDir = join(tmpdir(), `piclaw-sessions-${Date.now()}`);
@@ -50,7 +46,7 @@ test("token chart outputs chart first and summary lines", () => {
 
   const proc = Bun.spawnSync([
     "bun",
-    "/workspace/piclaw/runtime/skills/operator/token-chart/token-chart.ts",
+    TOKEN_CHART_SCRIPT,
     "--days",
     "2",
     "--sessions-dir",
@@ -63,8 +59,8 @@ test("token chart outputs chart first and summary lines", () => {
   expect(lines[0].startsWith("![token-chart](data:image/svg+xml;base64,"))
     .toBe(true);
 
-  const todayLine = lines.find((line) => line.includes(formatDay(now)));
-  const yesterdayLine = lines.find((line) => line.includes(formatDay(yesterday)));
+  const todayLine = lines.find((line) => line.includes("1.8K tokens"));
+  const yesterdayLine = lines.find((line) => line.includes("650 tokens"));
 
   expect(todayLine).toContain("1.8K tokens");
   expect(yesterdayLine).toContain("650 tokens");
@@ -78,7 +74,7 @@ test("token chart handles empty sessions directory", () => {
 
   const proc = Bun.spawnSync([
     "bun",
-    "/workspace/piclaw/runtime/skills/operator/token-chart/token-chart.ts",
+    TOKEN_CHART_SCRIPT,
     "--days",
     "1",
     "--sessions-dir",
@@ -136,7 +132,7 @@ test("token chart combines normal and autoresearch into one daily stack when rea
 
   const proc = Bun.spawnSync([
     "bun",
-    "/workspace/piclaw/runtime/skills/operator/token-chart/token-chart.ts",
+    TOKEN_CHART_SCRIPT,
     "--days",
     "1",
     "--source",
@@ -187,7 +183,7 @@ test("token chart ignores malformed JSONL lines", () => {
 
   const proc = Bun.spawnSync([
     "bun",
-    "/workspace/piclaw/runtime/skills/operator/token-chart/token-chart.ts",
+    TOKEN_CHART_SCRIPT,
     "--days",
     "1",
     "--sessions-dir",
@@ -196,4 +192,64 @@ test("token chart ignores malformed JSONL lines", () => {
 
   const output = proc.stdout.toString();
   expect(output).toContain("150 tokens");
+});
+
+test("token chart defaults to HOME/.piclaw for store and data paths", () => {
+  const homeDir = join(tmpdir(), `piclaw-home-${Date.now()}`);
+  const storeDir = join(homeDir, ".piclaw", "store");
+  mkdirSync(storeDir, { recursive: true });
+
+  const db = new Database(join(storeDir, "messages.db"));
+  db.exec(`
+    CREATE TABLE token_usage (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      chat_jid TEXT NOT NULL,
+      run_at TEXT NOT NULL,
+      input_tokens INTEGER DEFAULT 0,
+      output_tokens INTEGER DEFAULT 0,
+      cache_read_tokens INTEGER DEFAULT 0,
+      cache_write_tokens INTEGER DEFAULT 0,
+      total_tokens INTEGER DEFAULT 0,
+      cost_input REAL DEFAULT 0,
+      cost_output REAL DEFAULT 0,
+      cost_cache_read REAL DEFAULT 0,
+      cost_cache_write REAL DEFAULT 0,
+      cost_total REAL DEFAULT 0,
+      model TEXT,
+      provider TEXT,
+      api TEXT,
+      turns INTEGER DEFAULT 0
+    )
+  `);
+  db.prepare(`
+    INSERT INTO token_usage (
+      chat_jid, run_at, input_tokens, output_tokens, cache_read_tokens,
+      cache_write_tokens, total_tokens, cost_input, cost_output,
+      cost_cache_read, cost_cache_write, cost_total, model, provider, api, turns
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run("web:default", new Date().toISOString(), 100, 25, 15, 10, 150, 0, 0, 0, 0, 0, "model-a", "provider-a", null, 1);
+  db.close();
+
+  const proc = Bun.spawnSync([
+    "bun",
+    TOKEN_CHART_SCRIPT,
+    "--days",
+    "1",
+    "--source",
+    "db",
+  ], {
+    env: {
+      ...process.env,
+      HOME: homeDir,
+      PICLAW_WORKSPACE: undefined,
+      PICLAW_STORE: undefined,
+      PICLAW_DATA: undefined,
+    },
+  });
+
+  const output = proc.stdout.toString();
+  expect(proc.exitCode).toBe(0);
+  expect(output).toContain("150 tokens");
+
+  rmSync(homeDir, { recursive: true, force: true });
 });

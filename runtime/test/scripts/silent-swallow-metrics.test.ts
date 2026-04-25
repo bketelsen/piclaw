@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { mkdtempSync, mkdirSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 
 import {
   buildSilentSwallowRemediationHint,
@@ -10,6 +10,9 @@ import {
   findSilentPromiseCatches,
   getSilentSwallowMetrics,
 } from "../../scripts/silent-swallow-metrics.ts";
+
+const REPO_ROOT = resolve(import.meta.dir, "../../..");
+const BUN_PATH = process.execPath;
 
 async function withTempDir(prefix: string, run: (dir: string) => Promise<void> | void): Promise<void> {
   const dir = mkdtempSync(join(tmpdir(), prefix));
@@ -152,8 +155,8 @@ describe("silent-swallow-metrics", () => {
       ].join("\n"));
 
       const proc = Bun.spawnSync({
-        cmd: ["bun", "run", "runtime/scripts/silent-swallow-metrics.ts", "--check"],
-        cwd: "/workspace/piclaw",
+        cmd: [BUN_PATH, "run", "runtime/scripts/silent-swallow-metrics.ts", "--check"],
+        cwd: REPO_ROOT,
         env: {
           ...process.env,
           PICLAW_SILENT_SWALLOW_SCAN_ROOTS: join(dir, "src"),

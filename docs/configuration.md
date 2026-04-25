@@ -24,10 +24,10 @@ config files, secrets, authentication, and notifications.
 
 | Variable | Default | Purpose |
 |----------|---------|---------|
-| `PICLAW_WORKSPACE` | `/workspace` | Working directory for `pi` + `piclaw` |
-| `PICLAW_STORE` | `/workspace/.piclaw/store` | SQLite database location |
-| `PICLAW_DATA` | `/workspace/.piclaw/data` | Sessions, IPC, chats.json |
-| `SUPERVISOR_CONF` | `/workspace/.piclaw/supervisor/supervisord.conf` | Supervisor config path (falls back to `/etc/supervisor/supervisord.conf`) |
+| `PICLAW_HOME` | `~/.piclaw` | PiClaw home directory for native state, notes, skills, and environment hooks |
+| `PICLAW_STORE` | `~/.piclaw/store` | SQLite database location |
+| `PICLAW_DATA` | `~/.piclaw/data` | Sessions, IPC, chats.json |
+| `SUPERVISOR_CONF` | `~/.piclaw/supervisor/supervisord.conf` | Supervisor config path (falls back to `/etc/supervisor/supervisord.conf`) |
 
 ## Web server
 
@@ -149,20 +149,20 @@ Once enabled:
 3. Choose **Open terminal in tab** or **Show terminal dock**.
 4. Run `pi /login` to configure providers if needed.
 
-## Workspace environment hook (`/workspace/.env.sh`)
+## Workspace environment hook (`~/.piclaw/.env.sh`)
 
-PiClaw supports a workspace-scoped shell hook at `/workspace/.env.sh`.
+PiClaw supports a workspace-scoped shell hook at `~/.piclaw/.env.sh`.
 
 For managed non-secret variables, prefer the built-in `env` tool first. It
-writes a managed block into `/workspace/.env.sh`, persists the source of truth
-under `/workspace/.piclaw/env-tool.json`, and updates `process.env`
+writes a managed block into `~/.piclaw/.env.sh`, persists the source of truth
+under `~/.piclaw/env-tool.json`, and updates `process.env`
 immediately for later tool calls in the same runtime.
 
 This file is still a **power-user feature** for intentionally customizing the
 environment seen by:
 
 - the embedded web terminal
-- interactive shells in the container/workspace
+- interactive shells in the native PiClaw home
 - the supervisor-managed PiClaw runtime startup path
 
 Typical uses include:
@@ -175,12 +175,12 @@ Typical uses include:
 Example:
 
 ```bash
-export PATH="/workspace/.local/bin:$PATH"
-export GH_CONFIG_DIR=/workspace/.config/gh
-mkdir -p /workspace/.config/gh
+export PATH="$HOME/.piclaw/.local/bin:$PATH"
+export GH_CONFIG_DIR="$HOME/.piclaw/.config/gh"
+mkdir -p "$HOME/.piclaw/.config/gh"
 ```
 
-With that in place, you can install `gh` into `/workspace/.local/bin`, open the embedded terminal, run `gh auth login`, and keep the GitHub CLI auth state under the mounted workspace instead of ephemeral container-local config.
+With that in place, you can install `gh` into `~/.piclaw/.local/bin`, open the embedded terminal, run `gh auth login`, and keep the GitHub CLI auth state under the native PiClaw home instead of ephemeral shell-local config.
 
 If you want a ready-made helper, PiClaw ships an example installer script here:
 
@@ -188,29 +188,29 @@ If you want a ready-made helper, PiClaw ships an example installer script here:
 docs/helpers/install-gh.sh
 ```
 
-Usage from inside the container / embedded terminal:
+Usage from the embedded terminal:
 
 ```bash
 chmod +x docs/helpers/install-gh.sh
 ./docs/helpers/install-gh.sh
-source /workspace/.env.sh
+source ~/.piclaw/.env.sh
 gh --version
 gh auth login
 ```
 
-That helper installs the latest GitHub CLI release into `/workspace/.local/bin/gh` and relies on `/workspace/.env.sh` to make it available in future shells and embedded terminal sessions.
+That helper installs the latest GitHub CLI release into `~/.piclaw/.local/bin/gh` and relies on `~/.piclaw/.env.sh` to make it available in future shells and embedded terminal sessions.
 
 ### Behavior
 
-- missing `/workspace/.env.sh` is a no-op
+- missing `~/.piclaw/.env.sh` is a no-op
 - new containers pick it up automatically on startup
 - existing containers may need a one-time `.bashrc` regeneration if they were initialized before this feature existed
-- the `env` tool manages only its own marked block inside `/workspace/.env.sh`
+- the `env` tool manages only its own marked block inside `~/.piclaw/.env.sh`
 - the default workspace skeleton ignores `.env.sh` so local secrets and machine-specific paths are less likely to be committed accidentally
 
 ### Responsibility boundary
 
-`/workspace/.env.sh` is user-controlled. If you put incompatible shell logic, exports, or PATH overrides in that file and PiClaw stops working correctly, that breakage is considered the user's responsibility rather than a PiClaw bug.
+`~/.piclaw/.env.sh` is user-controlled. If you put incompatible shell logic, exports, or PATH overrides in that file and PiClaw stops working correctly, that breakage is considered the user's responsibility rather than a PiClaw bug.
 
 ## Provider setup via `/login`
 
@@ -360,21 +360,21 @@ PiClaw ships the `pi-mcp-adapter` extension for token-efficient MCP access.
 Preferred shared project config:
 
 ```text
-/workspace/.mcp.json
+~/.piclaw/.mcp.json
 ```
 
 Starter examples seeded on first startup:
 
 ```text
-/workspace/.mcp.json.example
-/workspace/.pi/mcp.json.example
+~/.piclaw/.mcp.json.example
+~/.piclaw/.pi/mcp.json.example
 ```
 
 Pi-specific override layers also work:
 
 ```text
 ~/.pi/agent/mcp.json
-/workspace/.pi/mcp.json
+~/.piclaw/.pi/mcp.json
 ```
 
 In the container image that Pi home is typically bind-mounted under:
@@ -700,9 +700,9 @@ PGID=1000
 Notes:
 
 - Remapping applies to piclaw-managed paths such as `/home/agent`, `/config`,
-  `/workspace/.piclaw`, and `/workspace/.pi`.
+  `~/.piclaw`, and `~/.piclaw/.pi`.
 - The entrypoint intentionally does **not** recursively chown the entire
-  `/workspace` bind mount, so existing project files outside piclaw-managed
+  PiClaw state mount, so existing project files outside piclaw-managed
   state keep their host ownership.
 - If the requested uid/gid is already claimed by a different user/group inside
   the container, startup aborts with a clear error instead of silently picking a

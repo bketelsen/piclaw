@@ -11,6 +11,8 @@ import { mkdirSync, writeFileSync, readdirSync, readFileSync, rmSync } from "fs"
 import { join } from "path";
 import { tmpdir } from "os";
 
+const TOKEN_CHART_SCRIPT = join(import.meta.dir, "..", "..", "skills", "operator", "token-chart", "token-chart.ts");
+
 test("token chart --ipc writes JSON message safely", () => {
   const base = join(tmpdir(), `piclaw-ipc-${Date.now()}`);
   const sessionsDir = join(base, "sessions");
@@ -33,7 +35,7 @@ test("token chart --ipc writes JSON message safely", () => {
 
   const proc = Bun.spawnSync([
     "bun",
-    "/workspace/piclaw/runtime/skills/operator/token-chart/token-chart.ts",
+    TOKEN_CHART_SCRIPT,
     "--days",
     "1",
     "--sessions-dir",

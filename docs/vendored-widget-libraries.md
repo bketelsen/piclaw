@@ -173,7 +173,7 @@ handles all required fixups:
 
 ```html
 <script src="/static/js/vendor/beautiful-mermaid.js"></script>
-<script src="/workspace/.pi/skills/visual-artifact-generator/scripts/mermaid-fixup.js"></script>
+<script src="~/.piclaw/.pi/skills/visual-artifact-generator/scripts/mermaid-fixup.js"></script>
 <script>
   const isDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
   beautifulMermaid.renderMermaidSVGAsync(source, { /* colors */ }).then(svg => {

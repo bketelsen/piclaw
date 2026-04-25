@@ -46,7 +46,7 @@ Out of scope:
 
 ## Constraints
 
-- use `/workspace/piclaw` as the canonical repo
+- use `~/projects/piclaw` as the canonical repo
 - work from a clean branch based on `origin/main`
 - preserve behavior and avoid unrelated changes
 - prefer `git mv` for directory renames

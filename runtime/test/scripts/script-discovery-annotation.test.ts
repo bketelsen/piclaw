@@ -1,10 +1,12 @@
 import { expect, test } from "bun:test";
 import "../helpers.js";
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import { tmpdir } from "node:os";
 
-const SKILL_SCRIPT = "/workspace/piclaw/runtime/skills/builtin/script-discovery-annotation/annotate-script-jdoc.ts";
+const REPO_ROOT = resolve(import.meta.dir, "../../..");
+const SKILL_SCRIPT = join(REPO_ROOT, "runtime/skills/builtin/script-discovery-annotation/annotate-script-jdoc.ts");
+const BUN_PATH = process.execPath;
 
 test("script-discovery-annotation annotates entrypoints and passes --check", () => {
   const base = mkdtempSync(join(tmpdir(), "piclaw-script-jdoc-"));
@@ -12,8 +14,8 @@ test("script-discovery-annotation annotates entrypoints and passes --check", () 
     const target = join(base, "token-chart.ts");
     writeFileSync(target, '#!/usr/bin/env bun\nconsole.log("ok");\n');
 
-    const annotate = Bun.spawnSync(["bun", SKILL_SCRIPT, "--path", target, "--write"], {
-      cwd: "/workspace/piclaw",
+    const annotate = Bun.spawnSync([BUN_PATH, SKILL_SCRIPT, "--path", target, "--write"], {
+      cwd: REPO_ROOT,
       stdout: "pipe",
       stderr: "pipe",
     });
@@ -23,8 +25,8 @@ test("script-discovery-annotation annotates entrypoints and passes --check", () 
     expect(content).toContain("SCRIPT_JDOC:");
     expect(content).toContain('"role": "entrypoint"');
 
-    const check = Bun.spawnSync(["bun", SKILL_SCRIPT, "--path", target, "--check"], {
-      cwd: "/workspace/piclaw",
+    const check = Bun.spawnSync([BUN_PATH, SKILL_SCRIPT, "--path", target, "--check"], {
+      cwd: REPO_ROOT,
       stdout: "pipe",
       stderr: "pipe",
     });
@@ -39,10 +41,10 @@ test("script-discovery-annotation supports module role override", () => {
   const base = mkdtempSync(join(tmpdir(), "piclaw-script-jdoc-module-"));
   try {
     const target = join(base, "helpers.ts");
-    writeFileSync(target, 'export function helper() { return 1; }\n');
+    writeFileSync(target, "export function helper() { return 1; }\n");
 
-    const annotate = Bun.spawnSync(["bun", SKILL_SCRIPT, "--path", target, "--write", "--role", "module"], {
-      cwd: "/workspace/piclaw",
+    const annotate = Bun.spawnSync([BUN_PATH, SKILL_SCRIPT, "--path", target, "--write", "--role", "module"], {
+      cwd: REPO_ROOT,
       stdout: "pipe",
       stderr: "pipe",
     });

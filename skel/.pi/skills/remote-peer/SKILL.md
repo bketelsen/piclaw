@@ -14,7 +14,7 @@ Send signed prompts to paired remote piclaw peers and manage incoming proposals.
 ## Usage
 
 ```bash
-bun /workspace/piclaw/runtime/skills/builtin/remote-peer/peer.ts <command> [args]
+bun ~/projects/piclaw/runtime/skills/builtin/remote-peer/peer.ts <command> [args]
 ```
 
 ## Commands

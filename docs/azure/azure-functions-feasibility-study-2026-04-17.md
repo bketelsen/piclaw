@@ -28,8 +28,8 @@ Interpretation used here:
 From the current repo/docs, Piclaw is explicitly designed as a **stateful self-hosted workspace runtime**:
 
 - long-lived Bun runtime with one warm session per chat JID
-- SQLite source of truth at `/workspace/.piclaw/store/messages.db`
-- persistent `/workspace` for notes, files, uploads, generated artifacts, media, task state, and search indexes
+- SQLite source of truth at `~/.piclaw/store/messages.db`
+- persistent `~/.piclaw` for notes, files, uploads, generated artifacts, media, task state, and search indexes
 - streaming web UI over SSE
 - scheduled task loop and IPC watcher running in-process
 - authenticated terminal via `GET /terminal/ws` WebSocket upgrades
@@ -109,7 +109,7 @@ It does **not** solve:
 | Chat API + basic HTTP endpoints | Bun HTTP server | **Partial** | HTTP routes are fine in principle. |
 | SSE chat streaming | Long-lived `text/event-stream` | **Weak** | Technically streamable, but the 230-second HTTP cap is a bad fit for long/interactive sessions. |
 | Warm per-chat agent sessions | In-memory long-lived sessions | **Poor** | Functions are request-driven and elastically scaled; warm, stateful session ownership becomes fragile. |
-| SQLite store | `/workspace/.piclaw/store/messages.db` | **Poor** | Azure Functions scaling + shared network storage is a bad match for SQLite locking/performance. |
+| SQLite store | `~/.piclaw/store/messages.db` | **Poor** | Azure Functions scaling + shared network storage is a bad match for SQLite locking/performance. |
 | Persistent workspace | Real writable filesystem | **Poor** | Requires a replatform to Blob/Files/DB semantics; current workspace-native behavior assumes POSIX-like storage. |
 | Scheduled task loop | In-process scheduler polling DB | **Partial** | Could be redesigned around Timer triggers/Durable Functions, but not reused as-is. |
 | IPC file watcher | Polling `DATA_DIR/ipc/*` | **Poor** | File-based IPC is not a natural Functions pattern. |
@@ -173,7 +173,7 @@ At that point, Functions is no longer the whole runtime.
 
 ## 4. Workspace-native behavior would need redesign
 
-The current product assumes a writable `/workspace` that can hold:
+The current product assumes a writable `~/.piclaw` that can hold:
 
 - notes
 - projects

@@ -18,14 +18,14 @@ immediately. The new process takes over on the same port.
 Use the repo's canonical Makefile path:
 
 ```bash
-cd /workspace/piclaw && make local-install
+cd ~/projects/piclaw && make local-install
 ```
 
 This is the authoritative reload/install workflow for this project in the container.
 It already does the right thing for this environment:
 
 1. `make build-piclaw` — builds vendor assets, web bundles, and TypeScript
-2. `bun pm pack` — creates a tarball from `/workspace/piclaw/runtime`
+2. `bun pm pack` — creates a tarball from `~/projects/piclaw/runtime`
 3. installs the package into the active global Bun runtime under `/usr/local/lib/bun`
 4. restarts piclaw using the detected local service manager
 
@@ -34,19 +34,19 @@ It already does the right thing for this environment:
 Build only:
 
 ```bash
-cd /workspace/piclaw && make build-piclaw
+cd ~/projects/piclaw && make build-piclaw
 ```
 
 Build vendor bundle only:
 
 ```bash
-cd /workspace/piclaw && make vendor
+cd ~/projects/piclaw && make vendor
 ```
 
 Restart only (after install is already done):
 
 ```bash
-cd /workspace/piclaw && make restart
+cd ~/projects/piclaw && make restart
 ```
 
 ## How It Works
@@ -70,7 +70,7 @@ This recovery path is intended to work the same under Supervisor and `systemd --
 ### Supervisor path (default in Docker containers)
 
 Uses `supervisorctl -c <config> restart piclaw`. The config path is auto-detected:
-- `/workspace/.piclaw/supervisor/supervisord.conf` (preferred)
+- `~/.piclaw/supervisor/supervisord.conf` (preferred)
 - `/etc/supervisor/supervisord.conf` (fallback)
 - Override with `PICLAW_SUPERVISORCTL_CONFIG`
 

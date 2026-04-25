@@ -28,7 +28,7 @@ The service unit itself had no explicit `MemoryMax`; the kill came from the surr
 
 Archived file:
 
-- `/workspace/.piclaw/data/sessions/web_default/archive/2026-04-06T19-04-37-583Z_c1418a66-90b0-46a9-9aeb-b5d4fbde8e17.jsonl`
+- `~/.piclaw/data/sessions/web_default/archive/2026-04-06T19-04-37-583Z_c1418a66-90b0-46a9-9aeb-b5d4fbde8e17.jsonl`
 
 Observed properties:
 

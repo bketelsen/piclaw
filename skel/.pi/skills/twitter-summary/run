@@ -25,10 +25,10 @@ if ! printf '%s' "$HANDLE" | grep -Eq '^[A-Za-z0-9_]{1,15}$'; then
   exit 64
 fi
 
-cd /workspace
+cd ~/.piclaw
 
 ensure_playwright() {
-  if [ -d /workspace/node_modules/playwright ]; then
+  if [ -d ~/.piclaw/node_modules/playwright ]; then
     return 0
   fi
   bun add -d playwright >"$INSTALL_LOG" 2>&1 || {

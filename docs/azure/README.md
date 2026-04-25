@@ -25,14 +25,13 @@ sudo ln -sf "$BUN_INSTALL/bin/bun"  /usr/local/bin/bun
 sudo ln -sf "$BUN_INSTALL/bin/bunx" /usr/local/bin/bunx
 ```
 
-## 3) Prepare workspace
+## 3) Prepare PiClaw home
 
 ```bash
-sudo mkdir -p /workspace
-sudo chown -R $USER:$USER /workspace
+mkdir -p ~/.piclaw
 ```
 
-Clone your Piclaw repo into `/workspace/piclaw`.
+Clone your Piclaw repo into `~/projects/piclaw`.
 
 ## 4) Build + install Piclaw globally
 
@@ -40,8 +39,8 @@ The repo root is the package/install boundary. The nested `runtime/` directory
 contains the implementation tree, but it is not installed separately.
 
 ```bash
-cd /workspace/piclaw && make build-piclaw
-cd /workspace/piclaw
+cd ~/projects/piclaw && make build-piclaw
+cd ~/projects/piclaw
 bun pm pack --destination /tmp
 TARBALL=$(ls -t /tmp/piclaw-*.tgz | head -1)
 sudo BUN_INSTALL=/usr/local/lib/bun bun add -g "$TARBALL"
@@ -63,13 +62,13 @@ After=network.target
 
 [Service]
 Type=simple
-WorkingDirectory=/workspace
+WorkingDirectory=%h/.piclaw
 Environment=HOME=/home/agent
 Environment=BUN_INSTALL=/usr/local/lib/bun
 Environment=PATH=/usr/local/lib/bun/bin:/home/linuxbrew/.linuxbrew/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
-Environment=PICLAW_WORKSPACE=/workspace
-Environment=PICLAW_STORE=/workspace/.piclaw/store
-Environment=PICLAW_DATA=/workspace/.piclaw/data
+Environment=PICLAW_HOME=%h/.piclaw
+Environment=PICLAW_STORE=~/.piclaw/store
+Environment=PICLAW_DATA=~/.piclaw/data
 Environment=PICLAW_AGENT_TIMEOUT=1800000
 ExecStart=/usr/local/bin/piclaw --port 3000
 Restart=always
@@ -88,7 +87,7 @@ systemctl --user enable --now piclaw.service
 ```
 
 Systemd notes for restart recovery:
-- Keep `WorkingDirectory=/workspace` and set `PICLAW_WORKSPACE`, `PICLAW_STORE`, and `PICLAW_DATA` explicitly as above.
+- Keep `WorkingDirectory=%h/.piclaw` and set `PICLAW_HOME`, `PICLAW_STORE`, and `PICLAW_DATA` explicitly as above.
 - `PICLAW_DATA` must live on persistent storage and remain writable across restarts because startup recovery uses `PICLAW_DATA/ipc/tasks` for self-queued `resume_pending` IPC files.
 - Restart recovery is service-manager agnostic once piclaw is running: the same inflight rollback + `resume_pending` IPC flow is used for Supervisor, `systemd --user`, and manual starts.
 - If you wrap piclaw in another launcher, make sure it preserves the same environment and does not redirect IPC/data paths to ephemeral storage.
@@ -135,7 +134,7 @@ The extension uses **custom API names** (`azure-openai-responses-mi`, `azure-fou
   - systemd --user → `systemctl --user restart piclaw.service`
   - Neither → manual kill/start fallback
 - Override with `PICLAW_SERVICE_MANAGER=supervisor|systemd|manual`.
-- Keep `/workspace/.piclaw` on persistent storage if possible.
+- Keep `~/.piclaw` on persistent storage if possible.
 - See `docs/azure/azurevm-ops.md` for ops notes.
 
 ## Known issues

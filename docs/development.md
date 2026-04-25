@@ -19,7 +19,7 @@ The default compose container name is `pibox`:
 
 ```bash
 docker exec -u agent -it pibox bash
-cd /workspace && pi
+cd ~/.piclaw && pi
 ```
 
 ## Build targets
@@ -113,7 +113,7 @@ AOAI_EXPERIMENT_AZURE_CLIENT_REQUEST_ID=1 bun run scripts/azure-openai-harness.t
 
 Notes:
 
-- the harness bundles to `/workspace/piclaw/.tmp/azure-openai.harness.bundle.mjs` so Bun resolves this repo's dependencies correctly
+- the harness bundles to `~/projects/piclaw/.tmp/azure-openai.harness.bundle.mjs` so Bun resolves this repo's dependencies correctly
 - the live Azure extension now aligns `prompt_cache_key`, `session_id`, and `x-client-request-id` from the active session id on the Azure Responses path
 - the harness now checks those correlation fields automatically and fails if they drift
 - the harness also fails if replayed request payloads still contain leaked `partialJson` scratch buffers
@@ -239,8 +239,8 @@ pi.registerTool({ name, description, parameters, execute });
 
 For visual artifacts, always load and follow:
 
-- `/workspace/.pi/skills/visual-artifact-generator/SKILL.md`
-- `/workspace/.pi/skills/visual-design/SKILL.md`
+- `~/.piclaw/.pi/skills/visual-artifact-generator/SKILL.md`
+- `~/.piclaw/.pi/skills/visual-design/SKILL.md`
 
 Use the `mermaid-fixup.js` helper for any artifact that renders Mermaid diagrams.
 

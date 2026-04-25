@@ -26,6 +26,7 @@
  */
 
 import { accessSync, existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from "fs";
+import { homedir } from "os";
 import { join } from "path";
 import { spawnSync } from "node:child_process";
 
@@ -69,7 +70,8 @@ const fromRow = getArg("--from-row") || "";
 const toRow = getArg("--to-row") || "";
 const lastN = getArg("--last") || "";
 const theme = (getArg("--theme") || "light").toLowerCase();
-const outPath = getArg("--out") || `/workspace/exports/timeline-${chatJid.replace(/[^a-z0-9]+/gi, "_")}.pdf`;
+const piclawHome = process.env.PICLAW_HOME || join(homedir(), ".piclaw");
+const outPath = getArg("--out") || join(piclawHome, "exports", `timeline-${chatJid.replace(/[^a-z0-9]+/gi, "_")}.pdf`);
 const portArg = getArg("--port");
 const htmlOnly = hasFlag("--html-only");
 const authKeyArg = getArg("--auth-key") || "";
@@ -91,7 +93,7 @@ async function detectPort(): Promise<number> {
 
 function loadConfigAuthKey(): string {
   try {
-    const config = JSON.parse(readFileSync("/workspace/.piclaw/config.json", "utf8"));
+    const config = JSON.parse(readFileSync(join(piclawHome, "config.json"), "utf8"));
     return String(config?.web?.internalSecret || "").trim();
   } catch {
     return "";

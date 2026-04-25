@@ -393,7 +393,7 @@ When refining a ticket, use this structure:
 
 Primary board renderer for this skill lives alongside this `SKILL.md` file in the same skill directory:
 
-- `/workspace/.pi/skills/kanban-management/kanban-board-svg.ts`
+- `~/.piclaw/.pi/skills/kanban-management/kanban-board-svg.ts`
 
 When following relative-path references for this skill, resolve them against the skill directory and use the co-located renderer as the single authoritative copy. Do not keep or invoke a separate workspace-level duplicate.
 
@@ -409,7 +409,7 @@ Theme policy:
 Recommended command:
 
 ```bash
-bun run /workspace/.pi/skills/kanban-management/kanban-board-svg.ts --post
+bun run ~/.piclaw/.pi/skills/kanban-management/kanban-board-svg.ts --post
 ```
 
 Mermaid remains available as a fallback, but the default should be the SVG script.

@@ -9,6 +9,8 @@ import { join } from "path";
 import { tmpdir } from "os";
 import Database from "bun:sqlite";
 
+const TOKEN_CHART_SCRIPT = join(import.meta.dir, "..", "..", "skills", "operator", "token-chart", "token-chart.ts");
+
 test("token-chart --mode provider-model renders an alternative chart", () => {
   const base = join(tmpdir(), `piclaw-tokenchart-provider-model-${Date.now()}`);
   const storeDir = join(base, "store");
@@ -89,7 +91,7 @@ test("token-chart --mode provider-model renders an alternative chart", () => {
   const proc = Bun.spawnSync(
     [
       "bun",
-      "/workspace/piclaw/runtime/skills/operator/token-chart/token-chart.ts",
+      TOKEN_CHART_SCRIPT,
       "--days",
       "2",
       "--source",

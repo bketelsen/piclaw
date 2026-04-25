@@ -210,7 +210,7 @@ You can extend that baseline with `.piclaw/config.json`:
 - `switch_model` — switch to a different model
 - `switch_thinking` — change thinking level (off → xhigh)
 - `keychain` — list, get, set, and delete encrypted keychain entries
-- `env` — get, set, or clear persistent workspace-scoped environment variables (managed block in `/workspace/.env.sh`, with immediate `process.env` updates for later tool calls; `set` also accepts `$NAME`/`${NAME}` copies)
+- `env` — get, set, or clear persistent workspace-scoped environment variables (managed block in `~/.piclaw/.env.sh`, with immediate `process.env` updates for later tool calls; `set` also accepts `$NAME`/`${NAME}` copies)
 - `schedule_task` — schedule agent prompts or shell commands (cron, interval, or one-shot)
 - `scheduled_tasks` — inspect scheduled-task records via a shared query surface (`list` / `get`, optional latest-run summaries)
 - `introspect_sql` — run read-only SQL queries against the messages database
@@ -475,7 +475,7 @@ The workspace index is **aggressively cleaned** on each refresh:
 
 Skills live under:
 
-- Project scope: `/workspace/.pi/skills`
+- Project scope: `~/.piclaw/.pi/skills`
 - Global scope: `/home/agent/.pi/agent/skills`
 
 Each skill keeps its script alongside its `SKILL.md` for portability. Current set:

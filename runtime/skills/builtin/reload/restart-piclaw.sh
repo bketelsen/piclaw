@@ -31,13 +31,14 @@ export PATH="$BUN_INSTALL/bin:/home/linuxbrew/.linuxbrew/bin:/usr/local/sbin:/us
 LOG_PATH="${PICLAW_RELOAD_LOG:-/tmp/restart-piclaw-force.log}"
 DETACH_DEFAULT="${PICLAW_RELOAD_ASYNC:-1}"
 DETACH_MODE="$DETACH_DEFAULT"
+PICLAW_HOME="${PICLAW_HOME:-$HOME/.piclaw}"
 
 # Supervisor settings
 SUPERVISOR_SERVICE="${PICLAW_SUPERVISOR_SERVICE:-piclaw}"
 SUPERVISORCTL_BIN="${PICLAW_SUPERVISORCTL_BIN:-supervisorctl}"
 # Try workspace config first, fall back to /etc
-if [ -f "/workspace/.piclaw/supervisor/supervisord.conf" ]; then
-  SUPERVISORCTL_CONFIG="${PICLAW_SUPERVISORCTL_CONFIG:-/workspace/.piclaw/supervisor/supervisord.conf}"
+if [ -f "$PICLAW_HOME/supervisor/supervisord.conf" ]; then
+  SUPERVISORCTL_CONFIG="${PICLAW_SUPERVISORCTL_CONFIG:-$PICLAW_HOME/supervisor/supervisord.conf}"
 else
   SUPERVISORCTL_CONFIG="${PICLAW_SUPERVISORCTL_CONFIG:-/etc/supervisor/supervisord.conf}"
 fi
@@ -116,7 +117,7 @@ for ((i=1;i<=$#;i++)); do
   fi
 done
 
-DATA_DIR="${PICLAW_DATA:-/workspace/.piclaw/data}"
+DATA_DIR="${PICLAW_DATA:-$PICLAW_HOME/data}"
 IPC_MESSAGES_DIR="$DATA_DIR/ipc/messages"
 IPC_TASKS_DIR="$DATA_DIR/ipc/tasks"
 NOTIFY_SENT_FILE="/tmp/piclaw-reload-notified"

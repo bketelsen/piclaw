@@ -1,6 +1,6 @@
 # Storage model
 
-`piclaw` stores state in SQLite at `/workspace/.piclaw/store/messages.db`. The database is the source of truth for chat history, media, tasks, and token usage.
+`piclaw` stores state in SQLite at `~/.piclaw/store/messages.db`. The database is the source of truth for chat history, media, tasks, and token usage.
 
 **Never delete this file.** Only repair or migrate it.
 
@@ -239,17 +239,17 @@ erDiagram
 
 ## Data paths
 
-- `/workspace/.piclaw/store/messages.db` — SQLite database
-- `/workspace/.piclaw/data/sessions/` — `pi` session JSONL history
-- `/workspace/.piclaw/data/ipc/` — IPC messages and scheduled task files
-- `/workspace/.piclaw/data/chats.json` — Known chat JIDs
+- `~/.piclaw/store/messages.db` — SQLite database
+- `~/.piclaw/data/sessions/` — `pi` session JSONL history
+- `~/.piclaw/data/ipc/` — IPC messages and scheduled task files
+- `~/.piclaw/data/chats.json` — Known chat JIDs
 
 ## Backups
 
 Restic snapshots are stored in the configured repository. The backup script lives at:
 
 ```
-/workspace/.piclaw/restic/backup.sh
+~/.piclaw/restic/backup.sh
 ```
 
 The container image ships a pinned official `restic` binary with Azure backend support. The pinned version is tracked in the repo root at:

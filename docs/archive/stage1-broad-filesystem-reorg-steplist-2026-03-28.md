@@ -67,7 +67,7 @@ Search candidate locations:
 - `runtime/`
 - `scripts/`
 - `skel/`
-- `/workspace/.pi/skills/kanban-management/` references checked from repo docs/tickets if mirrored here
+- `~/.piclaw/.pi/skills/kanban-management/` references checked from repo docs/tickets if mirrored here
 
 ### Step 2 — decide compatibility policy before moving
 
