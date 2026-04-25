@@ -96,6 +96,101 @@ describe("runtime startup helpers", () => {
     }
   });
 
+  test("initializeRuntimeEnvironment seeds default COG scheduled tasks", async () => {
+    const ws = createTempWorkspace("piclaw-startup-");
+    const restoreEnv = setEnv({
+      PICLAW_WORKSPACE: ws.workspace,
+      PICLAW_STORE: ws.store,
+      PICLAW_DATA: ws.data,
+      PICLAW_DISABLE_BACKGROUND_WORKSPACE_INDEX: "1",
+    });
+
+    let dbMod: any = null;
+    try {
+      dbMod = await importFresh("../src/db.js");
+      const startupMod = await importFresh<typeof import("../../src/runtime/startup.js")>("../src/runtime/startup.js");
+
+      startupMod.initializeRuntimeEnvironment({ loadTimestamps() {}, loadChats() {} } as any);
+
+      const rows = dbMod.getDb().prepare(
+        "SELECT id, chat_jid, prompt, task_kind, schedule_type, schedule_value, next_run, status FROM scheduled_tasks WHERE id LIKE 'cog-%' ORDER BY id"
+      ).all() as Array<{
+        id: string;
+        chat_jid: string;
+        prompt: string;
+        task_kind: string;
+        schedule_type: string;
+        schedule_value: string;
+        next_run: string | null;
+        status: string;
+      }>;
+
+      expect(rows.map(({ next_run: _nextRun, ...row }) => row)).toEqual([
+        {
+          id: "cog-foresight",
+          chat_jid: "web:default",
+          prompt: "Run the cog-foresight skill now. Read across all domains and synthesize one concrete strategic nudge into cog-meta/foresight-nudge.md.",
+          task_kind: "agent",
+          schedule_type: "cron",
+          schedule_value: "0 7 * * *",
+          status: "active",
+        },
+        {
+          id: "cog-housekeeping",
+          chat_jid: "web:default",
+          prompt: "Run the cog-housekeeping skill now. Archive old observations to glacier, prune hot-memory files to <50 lines, rebuild link-index.md, regenerate glacier/index.md.",
+          task_kind: "agent",
+          schedule_type: "cron",
+          schedule_value: "0 3 * * 0",
+          status: "active",
+        },
+        {
+          id: "cog-reflect",
+          chat_jid: "web:default",
+          prompt: "Run the cog-reflect skill now. Mine recent conversations for patterns, update patterns.md, append to self-observations.md, and update the reflect cursor.",
+          task_kind: "agent",
+          schedule_type: "cron",
+          schedule_value: "0 2 * * *",
+          status: "active",
+        },
+      ]);
+      expect(rows.every((row) => typeof row.next_run === "string" && row.next_run.length > 0)).toBe(true);
+    } finally {
+      closeDbQuietly(dbMod);
+      restoreEnv();
+      ws.cleanup();
+    }
+  });
+
+  test("initializeRuntimeEnvironment does not duplicate default COG scheduled tasks on restart", async () => {
+    const ws = createTempWorkspace("piclaw-startup-");
+    const restoreEnv = setEnv({
+      PICLAW_WORKSPACE: ws.workspace,
+      PICLAW_STORE: ws.store,
+      PICLAW_DATA: ws.data,
+      PICLAW_DISABLE_BACKGROUND_WORKSPACE_INDEX: "1",
+    });
+
+    let dbMod: any = null;
+    try {
+      dbMod = await importFresh("../src/db.js");
+      const startupMod = await importFresh<typeof import("../../src/runtime/startup.js")>("../src/runtime/startup.js");
+
+      startupMod.initializeRuntimeEnvironment({ loadTimestamps() {}, loadChats() {} } as any);
+      startupMod.initializeRuntimeEnvironment({ loadTimestamps() {}, loadChats() {} } as any);
+
+      const taskCount = dbMod.getDb().prepare(
+        "SELECT COUNT(*) AS count FROM scheduled_tasks WHERE id IN ('cog-reflect', 'cog-housekeeping', 'cog-foresight')"
+      ).get() as { count: number };
+
+      expect(taskCount.count).toBe(3);
+    } finally {
+      closeDbQuietly(dbMod);
+      restoreEnv();
+      ws.cleanup();
+    }
+  });
+
   test("queueStartupResumePendingIpc writes a resume_pending task", () => {
     const ws = createTempWorkspace("piclaw-startup-");
 

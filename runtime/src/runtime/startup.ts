@@ -15,8 +15,9 @@ import {
   STORE_DIR,
   getToolOutputConfig,
 } from "../core/config.js";
-import { getDb, initDatabase } from "../db.js";
+import { createTask, getDb, getTaskById, initDatabase } from "../db.js";
 import type { AgentQueue } from "../queue.js";
+import { computeNextRun } from "../task-scheduler-utils.js";
 import { startToolOutputCleanup } from "../tool-output.js";
 import { createUuid } from "../utils/ids.js";
 import { createLogger } from "../utils/logger.js";
@@ -28,6 +29,7 @@ import { SystemMetricsSampler } from "../channels/web/agent/system-metrics.js";
 const log = createLogger("runtime.startup");
 const WORKSPACE_SKEL_DIR = resolve(import.meta.dir, "../../../skel");
 const STARTUP_MEMORY_SNAPSHOT_DIR = join(DATA_DIR, "startup-memory-snapshots");
+const DEFAULT_SCHEDULED_TASK_CHAT_JID = "web:default";
 
 function parseStartupWarmupBoolean(value: string | undefined, fallback = false): boolean {
   const normalized = String(value || "").trim().toLowerCase();
@@ -66,6 +68,24 @@ const BOOTSTRAP_ENTRIES = [
   "notes/daily/.gitkeep",
   "notes/memory/days/.gitkeep",
   "notes/preferences/.gitkeep",
+] as const;
+
+const DEFAULT_COG_SCHEDULED_TASKS = [
+  {
+    id: "cog-reflect",
+    prompt: "Run the cog-reflect skill now. Mine recent conversations for patterns, update patterns.md, append to self-observations.md, and update the reflect cursor.",
+    schedule_value: "0 2 * * *",
+  },
+  {
+    id: "cog-housekeeping",
+    prompt: "Run the cog-housekeeping skill now. Archive old observations to glacier, prune hot-memory files to <50 lines, rebuild link-index.md, regenerate glacier/index.md.",
+    schedule_value: "0 3 * * 0",
+  },
+  {
+    id: "cog-foresight",
+    prompt: "Run the cog-foresight skill now. Read across all domains and synthesize one concrete strategic nudge into cog-meta/foresight-nudge.md.",
+    schedule_value: "0 7 * * *",
+  },
 ] as const;
 
 function sanitizeSessionDirName(chatJid: string): string {
@@ -151,6 +171,26 @@ function bootstrapWorkspaceFromSkel(): void {
   }
 }
 
+function ensureDefaultCogScheduledTasks(): void {
+  const createdAt = new Date().toISOString();
+
+  for (const task of DEFAULT_COG_SCHEDULED_TASKS) {
+    if (getTaskById(task.id)) continue;
+
+    createTask({
+      id: task.id,
+      chat_jid: DEFAULT_SCHEDULED_TASK_CHAT_JID,
+      prompt: task.prompt,
+      task_kind: "agent",
+      schedule_type: "cron",
+      schedule_value: task.schedule_value,
+      next_run: computeNextRun("cron", task.schedule_value, { currentDate: createdAt }),
+      status: "active",
+      created_at: createdAt,
+    });
+  }
+}
+
 /** Initialize directories, database, and persisted runtime state. */
 export function initializeRuntimeEnvironment(state: RuntimeState): void {
   patchConsoleTimestamps();
@@ -160,6 +200,7 @@ export function initializeRuntimeEnvironment(state: RuntimeState): void {
   bootstrapWorkspaceFromSkel();
 
   initDatabase();
+  ensureDefaultCogScheduledTasks();
   const cleanedOrphans = cleanupOrphanedActiveChatArtifacts();
   if (cleanedOrphans > 0) {
     log.info("Cleaned orphaned active chat artifacts at startup", {
@@ -278,7 +319,7 @@ export async function startTelegramChannel(
   queue: AgentQueue,
   agentPool: AgentPool,
 ): Promise<TelegramChannel | null> {
-  if (!TELEGRAM_BOT_TOKEN) return null;
+  if (!(process.env.PICLAW_TELEGRAM_BOT_TOKEN || TELEGRAM_BOT_TOKEN)) return null;
   const telegram = new TelegramChannel({ state, queue, agentPool });
   await telegram.start();
   return telegram;
