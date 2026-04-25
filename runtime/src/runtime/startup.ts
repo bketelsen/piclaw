@@ -9,8 +9,8 @@ import { WebChannel } from "../channels/web.js";
 import { setMessagesPostFn } from "../extensions/messages-crud.js";
 import {
   DATA_DIR,
+  PICLAW_HOME,
   STORE_DIR,
-  WORKSPACE_DIR,
   getToolOutputConfig,
 } from "../core/config.js";
 import { getDb, initDatabase } from "../db.js";
@@ -40,13 +40,13 @@ function parseStartupWarmupLimit(value: string | undefined, fallback = 0): numbe
   if (!Number.isFinite(parsed)) return fallback;
   return Math.max(0, Math.min(8, parsed));
 }
-const WORKSPACE_BOOTSTRAP_ENTRIES = [
+const BOOTSTRAP_ENTRIES = [
   "AGENTS.md",
   ".mcp.json.example",
   ".pi/skills",
   ".pi/mcp.json.example",
-  ".piclaw/README.md",
-  ".piclaw/config.json.example",
+  "README.md",
+  "config.json.example",
   "notes/index.md",
   "notes/memory/README.md",
   "notes/daily/.gitkeep",
@@ -113,10 +113,11 @@ export function cleanupOrphanedActiveChatArtifacts(): number {
 
 function bootstrapWorkspaceFromSkel(): void {
   if (!existsSync(WORKSPACE_SKEL_DIR)) return;
+  mkdirSync(PICLAW_HOME, { recursive: true });
 
-  for (const entry of WORKSPACE_BOOTSTRAP_ENTRIES) {
+  for (const entry of BOOTSTRAP_ENTRIES) {
     const source = join(WORKSPACE_SKEL_DIR, entry);
-    const target = join(WORKSPACE_DIR, entry);
+    const target = join(PICLAW_HOME, entry);
     if (!existsSync(source) || existsSync(target)) continue;
 
     mkdirSync(dirname(target), { recursive: true });
@@ -141,7 +142,7 @@ export function initializeRuntimeEnvironment(state: RuntimeState): void {
   patchConsoleTimestamps();
   mkdirSync(STORE_DIR, { recursive: true });
   mkdirSync(DATA_DIR, { recursive: true });
-  mkdirSync(WORKSPACE_DIR, { recursive: true });
+  mkdirSync(PICLAW_HOME, { recursive: true });
   bootstrapWorkspaceFromSkel();
 
   initDatabase();

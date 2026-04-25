@@ -29,6 +29,8 @@
     "skel/.pi",
     "skel/.piclaw",
     "skel/AGENTS.md",
+    "skel/README.md",
+    "skel/config.json.example",
     "skel/Makefile",
     "skel/notes",
     "skel/scripts",

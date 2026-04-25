@@ -10,6 +10,8 @@ const RUNTIME_DIR = join(import.meta.dir, "../..");
 describe("runtime startup helpers", () => {
   test("initializeRuntimeEnvironment seeds workspace skel files for direct installs", () => {
     const ws = createTempWorkspace("piclaw-startup-");
+    const terminalCwd = join(ws.base, "cwd");
+    mkdirSync(terminalCwd, { recursive: true });
 
     try {
       const run = Bun.spawnSync({
@@ -21,7 +23,8 @@ describe("runtime startup helpers", () => {
         cwd: RUNTIME_DIR,
         env: {
           ...process.env,
-          PICLAW_WORKSPACE: ws.workspace,
+          PICLAW_HOME: ws.workspace,
+          PICLAW_CWD: terminalCwd,
           PICLAW_STORE: ws.store,
           PICLAW_DATA: ws.data,
           PICLAW_DB_IN_MEMORY: "1",
@@ -31,8 +34,8 @@ describe("runtime startup helpers", () => {
       expect(run.exitCode, run.stderr.toString() || run.stdout.toString()).toBe(0);
 
       expect(existsSync(join(ws.workspace, "AGENTS.md"))).toBe(true);
-      expect(existsSync(join(ws.workspace, ".piclaw", "README.md"))).toBe(true);
-      expect(existsSync(join(ws.workspace, ".piclaw", "config.json.example"))).toBe(true);
+      expect(existsSync(join(ws.workspace, "README.md"))).toBe(true);
+      expect(existsSync(join(ws.workspace, "config.json.example"))).toBe(true);
       expect(existsSync(join(ws.workspace, ".mcp.json.example"))).toBe(true);
       expect(existsSync(join(ws.workspace, ".pi", "mcp.json.example"))).toBe(true);
       expect(existsSync(join(ws.workspace, "notes", "index.md"))).toBe(true);

@@ -1,4 +1,6 @@
 import { expect, test } from "bun:test";
+import { homedir } from "os";
+import { join, resolve } from "path";
 import "../helpers.js";
 
 import { getDb, initDatabase, isLikelyTestHarnessProcess, shouldBlockLiveDatabaseOpenInTests } from "../../src/db/connection.js";
@@ -9,17 +11,20 @@ test("isLikelyTestHarnessProcess detects direct test argv values", () => {
 });
 
 test("shouldBlockLiveDatabaseOpenInTests refuses the canonical live db for test processes", () => {
+  const canonicalWorkspaceDir = resolve(join(homedir(), ".piclaw"));
+  const canonicalLiveDbPath = join(canonicalWorkspaceDir, "store", "messages.db");
+
   expect(shouldBlockLiveDatabaseOpenInTests({
     useMemory: false,
-    nextPath: "/workspace/.piclaw/store/messages.db",
-    workspaceDir: "/workspace",
+    nextPath: canonicalLiveDbPath,
+    workspaceDir: canonicalWorkspaceDir,
     argv: ["bun", "test/channels/web/oobe-instance-state.test.ts"],
   })).toBe(true);
 
   expect(shouldBlockLiveDatabaseOpenInTests({
     useMemory: true,
-    nextPath: "/workspace/.piclaw/store/messages.db",
-    workspaceDir: "/workspace",
+    nextPath: canonicalLiveDbPath,
+    workspaceDir: canonicalWorkspaceDir,
     argv: ["bun", "test/channels/web/oobe-instance-state.test.ts"],
   })).toBe(false);
 

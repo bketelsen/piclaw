@@ -13,7 +13,7 @@
  *   - ensureSessionDir() is also used by agent-control/handlers/session.ts.
  */
 
-import { createReadStream, createWriteStream, existsSync, mkdirSync, readdirSync, renameSync, rmSync, statSync } from "fs";
+import { createReadStream, createWriteStream, existsSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync, statSync } from "fs";
 import { join, resolve, dirname } from "path";
 import { fileURLToPath } from "url";
 import { createInterface } from "readline";
@@ -33,7 +33,7 @@ import {
   type SettingsManager,
 } from "@mariozechner/pi-coding-agent";
 
-import { SESSIONS_DIR, WORKSPACE_DIR } from "../core/config.js";
+import { PICLAW_HOME, SESSIONS_DIR, WORKSPACE_DIR } from "../core/config.js";
 import { buildChannelSystemPromptAppendix } from "../channels/formatting.js";
 import { detectChannel } from "../router.js";
 import { builtinExtensionFactories } from "../extensions/index.js";
@@ -470,6 +470,19 @@ export async function createSessionInDir(
       cwd,
       agentDir,
       settingsManager: options.settingsManager,
+      agentsFilesOverride: (base) => {
+        const piclawAgentsPath = join(PICLAW_HOME, "AGENTS.md");
+        if (existsSync(piclawAgentsPath)) {
+          const projectFiles = base.agentsFiles.filter((file) => file.path !== piclawAgentsPath);
+          return {
+            agentsFiles: [
+              { path: piclawAgentsPath, content: readFileSync(piclawAgentsPath, "utf-8") },
+              ...projectFiles,
+            ],
+          };
+        }
+        return base;
+      },
       extensionFactories: options.extensionFactories?.length
         ? [...builtinExtensionFactories, ...options.extensionFactories]
         : builtinExtensionFactories,

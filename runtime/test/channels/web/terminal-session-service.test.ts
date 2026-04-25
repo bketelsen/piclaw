@@ -1,7 +1,10 @@
 import { beforeEach, expect, test } from "bun:test";
+import { mkdirSync } from "fs";
+import { join } from "path";
 
 import { createWebSession, deleteExpiredWebSessions, getDb, initDatabase } from "../../../src/db.js";
 import { TerminalSessionService } from "../../../src/channels/web/terminal/terminal-session-service.js";
+import { createTempWorkspace } from "../../helpers.js";
 
 class FakeStream {
   listeners: Array<(chunk: string) => void> = [];
@@ -222,4 +225,61 @@ test("terminal session shutdown kills live shells", () => {
   service.attachClient(ws);
   service.shutdown();
   expect(proc.killed).toBe(true);
+});
+
+test("terminal session service uses PICLAW_CWD for session metadata and spawned cwd", async () => {
+  const ws = createTempWorkspace("piclaw-terminal-cwd-");
+  const terminalCwd = join(ws.base, "shell-home");
+  mkdirSync(terminalCwd, { recursive: true });
+
+  try {
+    const run = Bun.spawnSync({
+      cmd: [
+        "bun",
+        "-e",
+        [
+          "import { TerminalSessionService } from './src/channels/web/terminal/terminal-session-service.js';",
+          "class FakeStream { on() {} }",
+          "class FakeProcess {",
+          "  stdin = { write() {}, end() {} };",
+          "  stdout = new FakeStream();",
+          "  stderr = new FakeStream();",
+          "  on() {}",
+          "  kill() { return true; }",
+          "}",
+          "const spawned = [];",
+          "const service = new TerminalSessionService({",
+          "  spawnProcess: (cwd) => { spawned.push(cwd); return new FakeProcess(); },",
+          "});",
+          "const owner = { token: 'terminal-cwd', userId: 'user-cwd' };",
+          "const infoBefore = service.getSessionInfo(owner);",
+          "service.attachClient({ data: { ...owner, kind: 'terminal', handoffToken: null }, send() {} });",
+          "const infoAfter = service.getSessionInfo(owner);",
+          "console.log(JSON.stringify({ infoBefore, infoAfter, spawned }));",
+        ].join(" "),
+      ],
+      cwd: join(import.meta.dir, "../../.."),
+      env: {
+        ...process.env,
+        PICLAW_HOME: ws.workspace,
+        PICLAW_CWD: terminalCwd,
+        PICLAW_STORE: ws.store,
+        PICLAW_DATA: ws.data,
+        PICLAW_DB_IN_MEMORY: "1",
+      },
+    });
+    expect(run.exitCode, run.stderr.toString() || run.stdout.toString()).toBe(0);
+
+    const payload = JSON.parse(run.stdout.toString()) as {
+      infoBefore: { cwd: string };
+      infoAfter: { cwd: string };
+      spawned: string[];
+    };
+
+    expect(payload.infoBefore.cwd).toBe(terminalCwd);
+    expect(payload.spawned).toEqual([terminalCwd]);
+    expect(payload.infoAfter.cwd).toBe(terminalCwd);
+  } finally {
+    ws.cleanup();
+  }
 });

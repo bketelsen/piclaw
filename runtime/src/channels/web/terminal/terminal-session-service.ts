@@ -3,7 +3,7 @@ import { openSync, closeSync, readlinkSync, readdirSync, readFileSync, accessSyn
 import { FFIType, dlopen } from "bun:ffi";
 import type { ServerWebSocket } from "bun";
 
-import { WORKSPACE_DIR } from "../../../core/config.js";
+import { PICLAW_CWD } from "../../../core/config.js";
 import { DEFAULT_WEB_USER_ID, getWebSession } from "../../../db.js";
 import { createLogger, debugSuppressedError } from "../../../utils/logger.js";
 import { getSessionTokenFromRequest } from "../auth/session-auth.js";
@@ -295,7 +295,7 @@ export class TerminalSessionService {
       enabled: true,
       transport: "websocket",
       ws_path: "/terminal/ws",
-      cwd: WORKSPACE_DIR,
+      cwd: PICLAW_CWD,
       shell: "/usr/bin/bash -i",
       font_family: TERMINAL_FONT_FAMILY,
       active: Boolean(session),
@@ -503,14 +503,14 @@ export class TerminalSessionService {
     const existing = this.sessions.get(owner.token);
     if (existing) return existing;
 
-    const proc = this.spawnProcess(WORKSPACE_DIR);
+    const proc = this.spawnProcess(PICLAW_CWD);
     const session: TerminalSessionRecord = {
       id: createTerminalSessionId(),
       owner,
       process: proc,
       clients: new Set(),
       createdAt: new Date().toISOString(),
-      cwd: WORKSPACE_DIR,
+      cwd: PICLAW_CWD,
       cols: DEFAULT_COLS,
       rows: DEFAULT_ROWS,
       ptsPath: null,

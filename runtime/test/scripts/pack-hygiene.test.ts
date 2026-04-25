@@ -46,12 +46,12 @@ describe("pack-hygiene", () => {
 
   test("findMissingRequiredPackEntries flags missing required packaged entries", () => {
     const files = REQUIRED_PACK_ENTRIES.filter((entry) =>
-      entry !== "skel/.piclaw/config.json.example"
+      entry !== "skel/config.json.example"
       && entry !== "skel/notes/index.md"
     );
 
     expect(findMissingRequiredPackEntries(files)).toEqual([
-      "skel/.piclaw/config.json.example",
+      "skel/config.json.example",
       "skel/notes/index.md",
     ]);
   });

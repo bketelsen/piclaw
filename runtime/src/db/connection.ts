@@ -18,6 +18,7 @@
 
 import Database from "bun:sqlite";
 import fs from "fs";
+import { homedir } from "os";
 import path from "path";
 
 import { STORE_DIR, WORKSPACE_DIR } from "../core/config.js";
@@ -31,8 +32,8 @@ let dbMode: "memory" | "file" | null = null;
 /** Cache key for the currently-open database target or in-memory test identity. */
 let dbPathCache: string | null = null;
 
-const CANONICAL_WORKSPACE_DIR = path.resolve("/workspace");
-const CANONICAL_LIVE_DB_PATH = path.join(CANONICAL_WORKSPACE_DIR, ".piclaw", "store", "messages.db");
+const CANONICAL_PICLAW_HOME = path.resolve(path.join(homedir(), ".piclaw"));
+const CANONICAL_LIVE_DB_PATH = path.join(CANONICAL_PICLAW_HOME, "store", "messages.db");
 
 export function isLikelyTestHarnessProcess(argv: string[] = [...process.argv, ...(globalThis.Bun?.argv ?? [])]): boolean {
   return argv.some((value) => {
@@ -58,7 +59,7 @@ export function shouldBlockLiveDatabaseOpenInTests(options: {
 
   if (useMemory || allowLiveDbInTests) return false;
   if (!isLikelyTestHarnessProcess(argv)) return false;
-  return path.resolve(workspaceDir) === CANONICAL_WORKSPACE_DIR && path.resolve(nextPath) === CANONICAL_LIVE_DB_PATH;
+  return path.resolve(workspaceDir) === CANONICAL_PICLAW_HOME && path.resolve(nextPath) === CANONICAL_LIVE_DB_PATH;
 }
 
 /**
