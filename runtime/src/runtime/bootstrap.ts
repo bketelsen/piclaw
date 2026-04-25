@@ -20,6 +20,7 @@ import { registerShutdownHandler } from "./shutdown-registry.js";
 import {
   initializeRuntimeEnvironment,
   queueStartupResumePendingIpc,
+  startTelegramChannel,
   startWebChannel,
 } from "./startup.js";
 import {
@@ -27,6 +28,7 @@ import {
   startRuntimeWorkers,
   type RuntimeModelResolver,
   type RuntimeSenders,
+  type RuntimeTelegramWorkerChannel,
   type RuntimeWebWorkerChannel,
 } from "./wiring.js";
 
@@ -50,6 +52,7 @@ export type RuntimeBootstrapState = StartRuntimeLoopDeps["state"];
 
 /** Web channel contract required by runtime bootstrap orchestration. */
 export type RuntimeBootstrapWeb = RuntimeWebWorkerChannel & ShutdownDeps["web"];
+export type RuntimeBootstrapTelegram = RuntimeTelegramWorkerChannel & NonNullable<ShutdownDeps["telegram"]>;
 
 /** Runtime core services contract consumed by bootstrap orchestration. */
 export interface RuntimeBootstrapCoreServices {
@@ -75,13 +78,19 @@ export interface RuntimeBootstrapDeps {
   initializeRuntimeEnvironment(state: RuntimeBootstrapState): void;
   registerOptionalProviders(agentPool: RuntimeBootstrapAgentPool): void | Promise<void>;
   startWebChannel(queue: RuntimeBootstrapQueue, agentPool: RuntimeBootstrapAgentPool): Promise<RuntimeBootstrapWeb>;
+  startTelegramChannel(
+    state: RuntimeBootstrapState,
+    queue: RuntimeBootstrapQueue,
+    agentPool: RuntimeBootstrapAgentPool,
+  ): Promise<RuntimeBootstrapTelegram | null>;
   createShutdownHandler(deps: ShutdownDeps): (signal: string) => Promise<void>;
   registerRuntimeShutdownSignals(
     registrar: RuntimeSignalRegistrar,
     shutdown: (signal: string) => Promise<void>
   ): void;
   createRuntimeSenders(
-    web: RuntimeBootstrapWeb
+    web: RuntimeBootstrapWeb,
+    telegram?: RuntimeBootstrapTelegram | null,
   ): RuntimeSenders;
   startRuntimeWorkers(
     queue: RuntimeBootstrapQueue,
@@ -109,9 +118,10 @@ export function createDefaultRuntimeBootstrapDeps(core: RuntimeBootstrapDefaultC
     initializeRuntimeEnvironment: () => initializeRuntimeEnvironment(core.state),
     registerOptionalProviders: () => registerOptionalProviders(core.agentPool),
     startWebChannel: () => startWebChannel(core.queue, core.agentPool),
+    startTelegramChannel: () => startTelegramChannel(core.state, core.queue, core.agentPool),
     createShutdownHandler,
     registerRuntimeShutdownSignals,
-    createRuntimeSenders,
+    createRuntimeSenders: (web, telegram) => createRuntimeSenders({ web, telegram }),
     startRuntimeWorkers,
     queueStartupResumePendingIpc,
     startRuntimeLoop,
@@ -132,18 +142,20 @@ export async function bootstrapRuntime(deps: RuntimeBootstrapDeps): Promise<void
   deps.log("=== Piclaw - Pi Coding Agent Assistant ===");
 
   const web = await deps.startWebChannel(queue, agentPool);
+  const telegram = await deps.startTelegramChannel(state, queue, agentPool);
 
   const shutdown = deps.createShutdownHandler({
     queue,
     agentPool,
     web,
+    telegram,
     stopIpcWatcher: deps.stopIpcWatcher,
     stopSchedulerLoop: deps.stopSchedulerLoop,
   });
   registerShutdownHandler(shutdown);
   deps.registerRuntimeShutdownSignals(deps.signalRegistrar, shutdown);
 
-  const senders = deps.createRuntimeSenders(web);
+  const senders = deps.createRuntimeSenders(web, telegram);
   deps.startRuntimeWorkers(queue, agentPool, web, senders);
 
   await deps.startRuntimeLoop({

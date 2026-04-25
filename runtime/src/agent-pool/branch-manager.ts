@@ -83,7 +83,9 @@ function deriveAgentHandle(chatJid: string, sessionName?: string | null): string
 }
 
 function buildForkedChatJid(sourceChatJid: string): string {
-  const root = sourceChatJid.startsWith("web:") ? sourceChatJid : `web:${sourceChatJid}`;
+  const root = sourceChatJid.includes(":") || sourceChatJid.includes("@")
+    ? sourceChatJid
+    : `web:${sourceChatJid}`;
   return `${root}:branch:${createUuid("chat").split("-").pop()}`;
 }
 

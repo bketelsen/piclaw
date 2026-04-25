@@ -27,6 +27,11 @@ describe("router", () => {
     expect(detectChannel("group@g.us")).toBe("whatsapp");
   });
 
+  test("detectChannel identifies telegram", () => {
+    expect(detectChannel("telegram:1234")).toBe("telegram");
+    expect(detectChannel("telegram:-100987654321")).toBe("telegram");
+  });
+
   test("detectChannel handles edge cases", () => {
     expect(detectChannel(null)).toBe("unknown");
     expect(detectChannel(undefined)).toBe("unknown");

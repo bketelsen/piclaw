@@ -17,8 +17,10 @@
  */
 
 import type { AgentPool } from "../agent-pool.js";
+import type { AttachmentInfo } from "../agent-pool/attachments.js";
 import { formatRecoverySummary } from "../agent-pool/automatic-recovery.js";
 import { parseControlCommand, type AgentControlCommand } from "../agent-control/index.js";
+import { buildAttachmentMessageOptions, type ChannelMessageOptions } from "../channels/delivery.js";
 import { getMessagesSince, getNewMessages } from "../db.js";
 import type { AgentQueue } from "../queue.js";
 import { detectChannel, formatMessages, formatOutbound } from "../router.js";
@@ -36,7 +38,7 @@ export interface MessageProcessingDeps {
   state: RuntimeState;
   assistantName: string;
   triggerPattern: RegExp;
-  sendMessage?: (chatJid: string, text: string) => Promise<void>;
+  sendMessage?: (chatJid: string, text: string, options?: ChannelMessageOptions) => Promise<void>;
   setTyping?: (chatJid: string, active: boolean) => Promise<void>;
 }
 
@@ -128,9 +130,11 @@ export async function processMessages(chatJid: string, deps: MessageProcessingDe
 
   const output = await deps.agentPool.runAgent(prompt, chatJid, {
     onTurnComplete: async (turn) => {
-      if (turn.text) {
+      if (turn.text || turn.attachments.length > 0) {
         const text = formatOutbound(turn.text, channel);
-        if (text) await deps.sendMessage?.(chatJid, text);
+        if (text || turn.attachments.length > 0) {
+          await deps.sendMessage?.(chatJid, text, buildAttachmentMessageOptions(turn.attachments as AttachmentInfo[]));
+        }
       }
     },
   });
@@ -159,9 +163,15 @@ export async function processMessages(chatJid: string, deps: MessageProcessingDe
     return true;
   }
 
-  if (output.result) {
-    const text = formatOutbound(output.result, channel);
-    if (text) await deps.sendMessage?.(chatJid, text);
+  if (output.result || output.attachments?.length) {
+    const text = formatOutbound(output.result || "", channel);
+    if (text || output.attachments?.length) {
+      await deps.sendMessage?.(
+        chatJid,
+        text,
+        buildAttachmentMessageOptions((output.attachments ?? []) as AttachmentInfo[]),
+      );
+    }
   }
 
   commitLastAgentTimestamp();

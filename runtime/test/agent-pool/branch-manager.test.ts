@@ -163,6 +163,34 @@ test("AgentBranchManager writes a deferred fork seed and schedules branch warmup
   ws.cleanup();
 });
 
+test("AgentBranchManager preserves non-web channel prefixes when forking chats", async () => {
+  const ws = createTempWorkspace("piclaw-branch-seed-telegram-");
+  restoreEnv = setEnv({ PICLAW_WORKSPACE: ws.workspace, PICLAW_STORE: ws.store, PICLAW_DATA: ws.data });
+
+  const db = await importFresh<typeof import("../src/db.js")>("../src/db.js");
+  db.initDatabase();
+
+  const fixture = createManager();
+  fixture.pool.set("telegram:42", {
+    runtime: createRuntime({
+      sessionName: "Telegram Bot",
+      sessionManager: {
+        buildSessionContext: () => ({ messages: [] }),
+      },
+      isStreaming: false,
+      isCompacting: false,
+      isRetrying: false,
+      isBashRunning: false,
+    }),
+    lastUsed: Date.now(),
+  });
+
+  const branch = await fixture.manager.createForkedChatBranch("telegram:42");
+  expect(branch.chat_jid).toStartWith("telegram:42:branch:");
+
+  ws.cleanup();
+});
+
 test("AgentBranchManager prunes inactive branches and disposes cached sessions", async () => {
   const ws = createTempWorkspace("piclaw-branch-prune-");
   restoreEnv = setEnv({ PICLAW_WORKSPACE: ws.workspace, PICLAW_STORE: ws.store, PICLAW_DATA: ws.data });

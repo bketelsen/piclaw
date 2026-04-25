@@ -11,5 +11,9 @@
       "docs",
       "workitems"
     ]
+  },
+  "telegram": {
+    "botTokenEnv": "PICLAW_TELEGRAM_BOT_TOKEN",
+    "allowedUsersEnv": "PICLAW_TELEGRAM_ALLOWED_USERS"
   }
 }

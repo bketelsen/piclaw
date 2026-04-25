@@ -4,18 +4,24 @@
 
 import { startIpcWatcher, type IpcDeps } from "../ipc.js";
 import { startSchedulerLoop, type SchedulerDeps } from "../task-scheduler.js";
+import type { ChannelMessageOptions } from "../channels/delivery.js";
 
 /** Minimal sender contract exposed to runtime worker wiring. */
 export type RuntimeSenders = Pick<IpcDeps, "sendMessage" | "sendNudge">;
 
 /** Optional sendMessage options accepted by web message dispatch. */
-export type RuntimeSendMessageOptions = Parameters<RuntimeSenders["sendMessage"]>[2];
+export type RuntimeSendMessageOptions = ChannelMessageOptions;
 
 /** Web-channel capabilities required by runtime worker startup. */
 export interface RuntimeWebWorkerChannel {
   sendMessage: RuntimeSenders["sendMessage"];
   resumeChat: (chatJid: string, threadRootId?: number | null) => void;
   resumePendingChats: (chatJid?: string) => void;
+}
+
+/** Telegram-channel capabilities required by runtime worker startup. */
+export interface RuntimeTelegramWorkerChannel {
+  sendMessage: RuntimeSenders["sendMessage"];
 }
 
 /** Agent-pool model resolution capability required by IPC update_task handling. */
@@ -25,11 +31,18 @@ export interface RuntimeModelResolver {
 
 /** Build sendMessage/sendNudge closures for runtime workers. */
 export function createRuntimeSenders(
-  web: RuntimeWebWorkerChannel
+  channels: {
+    web: RuntimeWebWorkerChannel;
+    telegram?: RuntimeTelegramWorkerChannel | null;
+  }
 ): RuntimeSenders {
   const sendMessage = async (jid: string, text: string, options?: RuntimeSendMessageOptions) => {
     if (jid.startsWith("web:")) {
-      await web.sendMessage(jid, text, options);
+      await channels.web.sendMessage(jid, text, options);
+      return;
+    }
+    if (jid.startsWith("telegram:") && channels.telegram) {
+      await channels.telegram.sendMessage(jid, text, options);
     }
   };
 

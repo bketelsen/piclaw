@@ -320,6 +320,12 @@ const groupDefinitions: GroupDefinition[] = [
       ]),
   },
   {
+    id: "channels-telegram",
+    label: "channels telegram",
+    notes: "Telegram channel delivery, auth gating, inbound persistence, and attachment handling.",
+    match: (relativePath) => relativePath === "channels/telegram.test.ts",
+  },
+  {
     id: "config-core-db-system",
     label: "config, core, db, and system helpers",
     notes: "Config/env handling plus persistence, IPC, queue, remote, router, tools, and utility helpers.",

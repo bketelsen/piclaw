@@ -20,9 +20,11 @@
  */
 
 import { WORKSPACE_DIR, getRuntimeTimingConfig } from "./core/config.js";
+import type { AttachmentInfo } from "./agent-pool/attachments.js";
 import { formatRecoverySummary } from "./agent-pool/automatic-recovery.js";
 import { computeNextRun } from "./task-scheduler-utils.js";
 import type { AgentPool } from "./agent-pool.js";
+import { buildAttachmentMessageOptions, type ChannelMessageOptions } from "./channels/delivery.js";
 import { getDueTasks, getTaskById, logTaskRun, updateTaskAfterRun } from "./db.js";
 import { AgentQueue } from "./queue.js";
 import { detectChannel, formatOutbound } from "./router.js";
@@ -43,13 +45,7 @@ export interface SchedulerDeps {
   /** The agent pool for running agent turns. */
   agentPool: AgentPool;
   /** Send a text message to a chat. */
-  sendMessage: (jid: string, text: string, options?: {
-    forceRoot?: boolean;
-    threadId?: number | null;
-    source?: string;
-    mediaIds?: number[];
-    contentBlocks?: Array<Record<string, unknown>>;
-  }) => Promise<void>;
+  sendMessage: (jid: string, text: string, options?: ChannelMessageOptions) => Promise<void>;
   /** Send a push notification nudge (optional). */
   sendNudge?: (text: string) => Promise<void>;
 }
@@ -290,11 +286,16 @@ export async function runScheduledTask(task: ScheduledTask, deps: SchedulerDeps)
             loggedError = appendRecoverySummary(error, recoverySummary);
           } else {
             loggedResult = appendRecoverySummary(out.result, recoverySummary);
-            if (out.result) {
+            if (out.result || out.attachments?.length) {
               result = out.result;
-              const t = formatOutbound(result, detectChannel(task.chat_jid));
-              if (t) {
-                await deps.sendMessage(task.chat_jid, t, { forceRoot: true, source: "scheduled" });
+              const t = formatOutbound(result || "", detectChannel(task.chat_jid));
+              const attachmentOptions = buildAttachmentMessageOptions((out.attachments ?? []) as AttachmentInfo[]);
+              if (t || attachmentOptions?.mediaIds?.length) {
+                await deps.sendMessage(task.chat_jid, t, {
+                  forceRoot: true,
+                  source: "scheduled",
+                  ...attachmentOptions,
+                });
                 await deps.sendNudge?.(t);
               }
             }

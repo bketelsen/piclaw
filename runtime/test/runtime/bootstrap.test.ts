@@ -44,6 +44,10 @@ describe("runtime bootstrap", () => {
         events.push("start-web");
         return web;
       },
+      startTelegramChannel: async () => {
+        events.push("start-telegram");
+        return null;
+      },
       createShutdownHandler: (shutdownDeps) => {
         events.push("create-shutdown");
         capturedShutdownDeps = {
@@ -53,8 +57,9 @@ describe("runtime bootstrap", () => {
         return async () => {};
       },
       registerRuntimeShutdownSignals: () => events.push("register-shutdown-signals"),
-      createRuntimeSenders: () => {
+      createRuntimeSenders: (_web, telegram) => {
         events.push("create-senders");
+        expect(telegram).toBeNull();
         return senders;
       },
       startRuntimeWorkers: (_queue, _agentPool, _web, runtimeSenders) => {
@@ -82,6 +87,7 @@ describe("runtime bootstrap", () => {
       "register-providers",
       "log-banner",
       "start-web",
+      "start-telegram",
       "create-shutdown",
       "register-shutdown-signals",
       "create-senders",

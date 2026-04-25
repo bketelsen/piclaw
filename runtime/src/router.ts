@@ -2,7 +2,7 @@
  * router.ts – Message routing and formatting for the agent pipeline.
  *
  * Responsible for:
- *   - Detecting the channel type (web, whatsapp) from a chat JID.
+ *   - Detecting the channel type (web, whatsapp, telegram) from a chat JID.
  *   - Formatting arrays of NewMessage objects into a compact transcript for the agent prompt.
  *   - Stripping `<internal>…</internal>` tags from agent output before delivery.
  *   - Applying channel-specific output escaping (HTML entities for web).
@@ -12,7 +12,7 @@
  *     content for the agent.
  *   - agent-pool.ts calls formatOutbound() / stripInternalTags() when
  *     delivering the agent's response to channels.
- *   - channels/web.ts and channels/whatsapp.ts use detectChannel() to
+ *   - channels/web.ts and channels/telegram.ts use detectChannel() to
  *     determine formatting rules.
  *   - agent-control uses detectChannel() to scope command execution.
  */
@@ -20,12 +20,13 @@
 import type { NewMessage } from "./types.js";
 
 /** Recognised channel types. */
-export type ChatChannel = "web" | "whatsapp" | "unknown";
+export type ChatChannel = "web" | "whatsapp" | "telegram" | "unknown";
 
 /** Infer the channel from a chat JID string (web: prefix → web, else whatsapp). */
 export function detectChannel(chatJid: string | null | undefined): ChatChannel {
   if (!chatJid) return "unknown";
   if (chatJid.startsWith("web:")) return "web";
+  if (chatJid.startsWith("telegram:")) return "telegram";
   if (chatJid.includes("@s.whatsapp.net") || chatJid.endsWith("@g.us")) return "whatsapp";
   return "unknown";
 }

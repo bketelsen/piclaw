@@ -7,11 +7,13 @@ describe("runtime wiring", () => {
     const webCalls: Array<{ jid: string; text: string; source?: string }> = [];
 
     const senders = createRuntimeSenders({
-      sendMessage: async (jid, text, options) => {
-        webCalls.push({ jid, text, source: options?.source });
+      web: {
+        sendMessage: async (jid, text, options) => {
+          webCalls.push({ jid, text, source: options?.source });
+        },
+        resumeChat: () => {},
+        resumePendingChats: () => {},
       },
-      resumeChat: () => {},
-      resumePendingChats: () => {},
     });
 
     await senders.sendMessage("web:default", "hello", { source: "scheduled" });
@@ -24,16 +26,39 @@ describe("runtime wiring", () => {
     const webCalls: Array<{ jid: string; text: string }> = [];
 
     const senders = createRuntimeSenders({
-      sendMessage: async (jid, text) => {
-        webCalls.push({ jid, text });
+      web: {
+        sendMessage: async (jid, text) => {
+          webCalls.push({ jid, text });
+        },
+        resumeChat: () => {},
+        resumePendingChats: () => {},
       },
-      resumeChat: () => {},
-      resumePendingChats: () => {},
     });
 
     await senders.sendMessage("12345@s.whatsapp.net", "hi");
 
     expect(webCalls).toHaveLength(0);
     expect(senders.sendNudge).toBeUndefined();
+  });
+
+  test("createRuntimeSenders routes telegram chat messages to telegram channel", async () => {
+    const telegramCalls: Array<{ jid: string; text: string; source?: string }> = [];
+
+    const senders = createRuntimeSenders({
+      web: {
+        sendMessage: async () => {},
+        resumeChat: () => {},
+        resumePendingChats: () => {},
+      },
+      telegram: {
+        sendMessage: async (jid, text, options) => {
+          telegramCalls.push({ jid, text, source: options?.source });
+        },
+      },
+    });
+
+    await senders.sendMessage("telegram:12345", "hello", { source: "scheduled" });
+
+    expect(telegramCalls).toEqual([{ jid: "telegram:12345", text: "hello", source: "scheduled" }]);
   });
 });
