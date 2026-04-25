@@ -3,11 +3,11 @@
  *
  * All runtime settings are resolved here from three sources (in priority
  * order): CLI arguments, environment variables / `.env` file, and the JSON
- * config file at `<workspace>/.piclaw/config.json`.
+ * config file at `<PICLAW_HOME>/config.json`.
  *
  * The exported constants and mutable variables are consumed throughout the
  * application:
- *   - WORKSPACE_DIR / STORE_DIR / DATA_DIR → db/, ipc.ts, task-scheduler.ts
+ *   - PICLAW_HOME / PICLAW_CWD / WORKSPACE_DIR / STORE_DIR / DATA_DIR → db/, ipc.ts, task-scheduler.ts
  *   - WEB_* → channels/web.ts (HTTP/TLS server setup, auth)
  *   - ASSISTANT_NAME / ASSISTANT_AVATAR → agent-pool.ts, channels/formatting.ts
  *   - AGENT_TIMEOUT / BACKGROUND_AGENT_TIMEOUT → agent-pool.ts, runtime.ts
@@ -18,7 +18,8 @@
  * update identity settings at runtime without a restart.
  */
 
-import { resolve } from "path";
+import { homedir } from "os";
+import { resolve, join } from "path";
 import { existsSync } from "fs";
 import { readEnvFile } from "./env.js";
 import { readJsonConfig, writeJsonConfig } from "./config-store.js";
@@ -49,6 +50,7 @@ function readCliArg(name: string, alias?: string): string | undefined {
 }
 
 const CLI_WORKSPACE = readCliArg("--workspace", "-w");
+const CLI_HOME = readCliArg("--home");
 
 // ---------------------------------------------------------------------------
 // .env file – loaded once at module init and merged with process.env below.
@@ -118,27 +120,39 @@ export function getRuntimeTimingConfig(): Readonly<RuntimeTimingConfig> {
 }
 
 // ---------------------------------------------------------------------------
-// Filesystem paths – all env-configurable for flexible volume layouts.
-// Defaults assume /workspace is the persistent external volume.
+// Filesystem paths – configurable for flexible layouts.
+// PICLAW_HOME stores all persistent state. Defaults to ~/.piclaw.
 // ---------------------------------------------------------------------------
 
-/** Root of the persistent workspace (bind-mounted volume). */
-export const WORKSPACE_DIR = resolve(CLI_WORKSPACE || process.env.PICLAW_WORKSPACE || "/workspace");
+/** Root of PiClaw's persistent state and configuration. */
+export const PICLAW_HOME = resolve(
+  CLI_HOME || process.env.PICLAW_HOME || CLI_WORKSPACE || process.env.PICLAW_WORKSPACE || join(homedir(), ".piclaw")
+);
+
+/** Working directory for terminal sessions and file operations. */
+export const PICLAW_CWD = resolve(
+  process.env.PICLAW_CWD || homedir()
+);
+
+/**
+ * @deprecated Use PICLAW_HOME instead. Kept as alias during migration.
+ */
+export const WORKSPACE_DIR = PICLAW_HOME;
 /** Directory for the SQLite database and related state. */
 export const STORE_DIR = resolve(
-  CLI_WORKSPACE ? `${WORKSPACE_DIR}/.piclaw/store` : (process.env.PICLAW_STORE || `${WORKSPACE_DIR}/.piclaw/store`)
+  process.env.PICLAW_STORE || join(PICLAW_HOME, "store")
 );
 /** Directory for runtime data (sessions, IPC files, etc.). */
 export const DATA_DIR = resolve(
-  CLI_WORKSPACE ? `${WORKSPACE_DIR}/.piclaw/data` : (process.env.PICLAW_DATA || `${WORKSPACE_DIR}/.piclaw/data`)
+  process.env.PICLAW_DATA || join(PICLAW_HOME, "data")
 );
 
 // ---------------------------------------------------------------------------
 // TLS – optional HTTPS support for the web channel.
 // ---------------------------------------------------------------------------
 
-const DEFAULT_TLS_CERT_PATH = resolve(WORKSPACE_DIR, ".piclaw", "certs", "sandbox.local.crt");
-const DEFAULT_TLS_KEY_PATH = resolve(WORKSPACE_DIR, ".piclaw", "certs", "sandbox.local.key");
+const DEFAULT_TLS_CERT_PATH = resolve(PICLAW_HOME, "certs", "sandbox.local.crt");
+const DEFAULT_TLS_KEY_PATH = resolve(PICLAW_HOME, "certs", "sandbox.local.key");
 /** True when default self-signed TLS certificates exist on disk. */
 const HAS_DEFAULT_TLS = existsSync(DEFAULT_TLS_CERT_PATH) && existsSync(DEFAULT_TLS_KEY_PATH);
 
@@ -147,7 +161,7 @@ const HAS_DEFAULT_TLS = existsSync(DEFAULT_TLS_CERT_PATH) && existsSync(DEFAULT_
 // ---------------------------------------------------------------------------
 
 /** Absolute path to the JSON config file. */
-export const PICLAW_CONFIG_PATH = resolve(WORKSPACE_DIR, ".piclaw", "config.json");
+export const PICLAW_CONFIG_PATH = resolve(PICLAW_HOME, "config.json");
 const piclawConfig = readJsonConfig(PICLAW_CONFIG_PATH);
 
 // Sub-objects inside the config file for namespaced settings.
