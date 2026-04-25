@@ -244,6 +244,31 @@ erDiagram
 - `~/.piclaw/data/ipc/` — IPC messages and scheduled task files
 - `~/.piclaw/data/chats.json` — Known chat JIDs
 
+## COG memory storage
+
+COG memory is filesystem-resident and lives outside SQLite under `~/.piclaw/cog/`.
+
+| Path | Purpose |
+|---|---|
+| `~/.piclaw/cog/memory/` | Active COG tree (`COG_MEMORY_DIR` in runtime config) |
+| `~/.piclaw/cog/memory/hot-memory.md` | Global hot memory loaded every session |
+| `~/.piclaw/cog/memory/domains.yml` | Domain registry used by COG skills |
+| `~/.piclaw/cog/memory/cog-meta/` | Shared patterns, reflections, foresight, and scenario outputs |
+| `~/.piclaw/cog/memory/<domain>/` | Domain-specific warm files such as `entities.md`, `action-items.md`, and `observations.md` |
+| `~/.piclaw/cog/memory/glacier/` | Archived observation blocks plus `glacier/index.md` |
+
+`COG_MEMORY_DIR` resolves to `${PICLAW_HOME}/cog/memory`, so changing `PICLAW_HOME` relocates the whole tree.
+
+### Glacier archives
+
+Housekeeping writes glacier archives as markdown files with YAML frontmatter that records:
+
+- the source file
+- the archived date range
+- the archive date
+
+`glacier/index.md` links to the current archive files and the spans they cover.
+
 ## Backups
 
 Restic snapshots are stored in the configured repository. The backup script lives at:

@@ -38,10 +38,7 @@ With that in `~/.piclaw/.env.sh`, you can install `gh` into `~/.piclaw/.local/bi
 
 `search_workspace` indexes a configurable set of workspace roots.
 
-Default roots:
-
-- `notes`
-- `.pi/skills`
+To make COG memory searchable, include `cog/memory` alongside the usual note and skill roots.
 
 Override them in `.piclaw/config.json`:
 
@@ -51,6 +48,7 @@ Override them in `.piclaw/config.json`:
     "workspaceSearchRoots": [
       "notes",
       ".pi/skills",
+      "cog/memory",
       "docs",
       "workitems"
     ]
@@ -75,44 +73,23 @@ Rules:
 - relative paths are resolved from the workspace root
 - absolute paths are allowed
 - configured roots are indexed automatically at session start
-- `scope: notes` and `scope: skills` remain the built-in convenience filters
+- `scope: notes`, `scope: skills`, and `scope: memory` remain the built-in convenience filters
 - `scope: all` searches across the configured root set
 
-## Dream and AutoDream
+## COG memory system
 
-PiClaw has two memory-maintenance modes:
+PiClaw keeps durable memory under `~/.piclaw/cog/memory/`.
 
-- `Dream` — manual `/dream [days]`
-- `AutoDream` — the built-in nightly task
+- **Hot**: `hot-memory.md` and per-domain hot files loaded every session
+- **Warm**: domain files read on demand by COG skills
+- **Glacier**: archived observation files plus `glacier/index.md`
 
-Both run as out-of-band model turns on a temporary `dream:` channel.
-That temporary Dream channel is removed after the cycle ends.
+`cogMemoryBootstrap` injects the current hot memory, shared patterns, foresight nudge, and domain registry into agent sessions automatically.
 
-Dream uses a 4-step model-driven process:
+Built-in maintenance tasks:
 
-1. merge
-2. fix relative dates
-3. delete contradictions
-4. prune stale pointers and re-index
+- `cog-reflect` nightly
+- `cog-housekeeping` weekly
+- `cog-foresight` daily
 
-Search collection should stay narrow:
-
-- inspect daily/memory files first
-- inspect drifted memories
-- use narrow searches only for already suspected terms
-- avoid exhaustive transcript sweeps
-
-Main files touched:
-
-- `notes/daily/*.md`
-- `notes/daily/*.agent.json`
-- `notes/memory/days/*.md`
-- `notes/memory/user.md`
-- `notes/memory/feedback.md`
-- `notes/memory/project.md`
-- `notes/memory/reference.md`
-- `notes/memory/current-state.json`
-- `notes/memory/recent-context.md`
-- `notes/memory/MEMORY.md`
-
-See also: `.piclaw/config.json.example`
+Use `cog-setup` to add new domains. See also: `.piclaw/config.json.example`

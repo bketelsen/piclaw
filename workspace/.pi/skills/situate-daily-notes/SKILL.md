@@ -28,23 +28,19 @@ This:
    - for `web:*`, this means all web session trees (root chats plus branches)
    - message previews are labelled so parallel branches stay distinguishable
 3. Generates daily note skeletons for any days that don't have one yet
-4. Refreshes rolling memory/context files derived from the daily notes
-5. Reads the rolling memory outputs first and includes them in the situation report
+4. Refreshes compatibility note outputs derived from the daily notes
+5. Reads any compatibility note outputs first and includes them in the situation report
 6. Lists any notes that need summaries or partial updates
 
 **After running, check for unsummarized notes and write them** (see below).
 
 ## Daily note format
 
-Rolling memory outputs live under `notes/memory/`.
+Daily notes live under `notes/daily/`.
 
-`situate.ts` consumes those rolling outputs first when building the report, so the memory layer is actually read back during catch-up flows.
+This skill may also refresh compatibility outputs under `notes/memory/`, but those files are not PiClaw's primary durable memory anymore. COG memory lives separately under `~/.piclaw/cog/memory/`.
 
-- `notes/memory/current-state.md` — compact Dream state snapshot for recent days
-- `notes/memory/recent-context.md` — concise markdown digest for quick reload
-- `notes/memory/MEMORY.md` — startup memory index
-
-The narrative markdown note remains the human-readable source; the rolling memory files are the compact agent-facing layer.
+The narrative markdown note remains the human-readable source; any `notes/memory/` outputs are just compact compatibility artifacts for note catch-up flows.
 
 
 Notes live in `notes/daily/YYYY-MM-DD.md` and start with YAML front matter:
@@ -117,7 +113,7 @@ Then:
 - **Never overwrite** a note that already has a real summary.
 - **Today's note** gets refreshed (metadata update) but its summary is preserved.
 - Keep summaries **short and dense** — this is for quick context recovery, not documentation.
-- After summaries are updated, rerun `situate.ts` or `daily-notes.ts` so the rolling `notes/memory/` outputs stay in sync.
+- After summaries are updated, rerun `situate.ts` or `daily-notes.ts` so any compatibility `notes/memory/` outputs stay in sync.
 
 ## Options
 

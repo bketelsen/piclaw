@@ -83,10 +83,9 @@ After install, the goal is that:
 - the vendored Draw.io editor ships in the repo/package and does not rely on a Windows-time download
 - bundled automation extensions such as `cdp_browser` are available after install
 - Windows-only `win_*` desktop automation extensions are included but remain inert on non-Windows hosts
-- first runtime startup seeds missing workspace skeleton files from the packaged `skel/` tree (for example `AGENTS.md`, `.pi/skills/`, `notes/`, `config.json.example`, `README.md`, and the Dream/notes bootstrap files)
-- if the core Dream memory files are missing, first startup also queues a silent Dream bootstrap so `notes/memory/` and daily summaries are populated instead of staying at placeholder state
-- Dream/AutoDream workspace bootstrap files are present for direct Bun installs as well as container installs
-- out-of-band Dream runs use a temporary `dream:` channel/session and clean it up after the cycle, so direct installs do not accumulate visible Dream chats
+- first runtime startup seeds missing workspace skeleton files from the packaged `skel/` tree (for example `AGENTS.md`, `.pi/skills/`, `cog/`, `notes/`, `config.json.example`, and `README.md`)
+- the seeded COG tree includes starter files under `cog/memory/` plus the default `cog-reflect`, `cog-housekeeping`, and `cog-foresight` scheduled tasks
+- `cogMemoryBootstrap` loads the current hot memory, patterns, foresight nudge, and domain registry into agent sessions when those files exist
 
 ## Notes
 
@@ -97,4 +96,4 @@ After install, the goal is that:
 - The Bun repo-install path now ships the bundled `cdp-browser` and `win-ui` extensions in the package tree alongside the existing optional extensions.
 - Build, pack, and install commands should be run from the repo root; `runtime/` is not a separate package.
 - If repo-install behavior differs slightly from the published package layout, those differences should stay small and documented.
-- Dream/AutoDream details, file sequence, and outputs are documented in [`runtime/docs/dream-memory.md`](../runtime/docs/dream-memory.md).
+- COG memory layout is documented in the main [README](../README.md) and [storage model](storage.md). Skill-specific behavior lives under `skel/.pi/skills/cog-*/SKILL.md`.

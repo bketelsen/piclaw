@@ -78,41 +78,20 @@ Rules:
 - `scope: notes` and `scope: skills` remain the built-in convenience filters
 - `scope: all` searches across the configured root set
 
-## Dream and AutoDream
+## COG memory system
 
-PiClaw has two memory-maintenance modes:
+PiClaw's durable memory lives under `~/.piclaw/cog/memory/`.
 
-- `Dream` — manual `/dream [days]`
-- `AutoDream` — the built-in nightly task
+- **Hot**: `hot-memory.md` and small per-domain hot files loaded every session
+- **Warm**: domain files such as `entities.md`, `action-items.md`, `calendar.md`, `health.md`, and `observations.md`
+- **Glacier**: archived observation blocks under `cog/memory/glacier/`
 
-Both run as out-of-band model turns on a temporary `dream:` channel.
-That temporary Dream channel is removed after the cycle ends.
+Before each agent session, `cogMemoryBootstrap` injects `hot-memory.md`, `cog-meta/patterns.md`, `cog-meta/foresight-nudge.md`, and `domains.yml` into the prompt when present.
 
-Dream uses a 4-step model-driven process:
+Built-in maintenance tasks:
 
-1. merge
-2. fix relative dates
-3. delete contradictions
-4. prune stale pointers and re-index
+- `cog-reflect` nightly
+- `cog-housekeeping` weekly
+- `cog-foresight` daily
 
-Search collection should stay narrow:
-
-- inspect daily/memory files first
-- inspect drifted memories
-- use narrow searches only for already suspected terms
-- avoid exhaustive transcript sweeps
-
-Main files touched:
-
-- `notes/daily/*.md`
-- `notes/daily/*.agent.json`
-- `notes/memory/days/*.md`
-- `notes/memory/user.md`
-- `notes/memory/feedback.md`
-- `notes/memory/project.md`
-- `notes/memory/reference.md`
-- `notes/memory/current-state.json`
-- `notes/memory/recent-context.md`
-- `notes/memory/MEMORY.md`
-
-See also: `config.json.example`
+Use `cog-setup` to create a new domain. Detailed behavior lives in `.pi/skills/cog-*/SKILL.md`.

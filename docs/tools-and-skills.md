@@ -7,7 +7,7 @@ This document lists the tools and skills exposed to the agent, plus common slash
 [Skills](#skills) ·
 [Slash commands](#slash-commands) ·
 [Skill pipeline](#skill-pipeline) ·
-[Dream / AutoDream](#dream-and-autodream)
+[COG memory](#cog-memory)
 
 ## Agent tools
 
@@ -587,7 +587,7 @@ Direct commands (no LLM round-trip):
 | `/meters on\|off\|toggle` | Toggle the web UI CPU/RAM HUD |
 | `/tasks [filter]` | List scheduled tasks (via extension) |
 | `/scheduled [filter]` | Alias for `/tasks` |
-| `/dream [days]` | Queue an out-of-band Dream cycle on a temporary `dream:` channel; runtime backs up notes, seeds daily notes from DB, the model follows Orient / Signal / Consolidate / Prune and Index, and runtime refreshes FTS at the end |
+| `/dream [days]` | Legacy note-maintenance command. Durable PiClaw memory now lives in COG under `~/.piclaw/cog/memory/`; scheduled `cog-reflect`, `cog-housekeeping`, and `cog-foresight` tasks are the primary maintenance path. |
 | `/mcp [status\|tools\|reconnect [server]\|setup]` | Open the MCP management panel in the web UI (or text status elsewhere), list MCP tools, reconnect bundled `pi-mcp-adapter` servers, or launch guided MCP setup |
 | `/mcp-auth <server>` | Show OAuth token-setup guidance for an MCP server managed by `pi-mcp-adapter` |
 
@@ -599,7 +599,7 @@ The bundled `pi-mcp-adapter` now prefers shared MCP config first: `~/.config/mcp
 
 `/image` writes generated images back into the workspace and renders them as workspace-backed timeline images plus file-path listings. `/flux` follows the same output pattern, but transparent background requests are currently supported only on `/image`.
 
-`/search` performs a workspace full‑text search (notes + skills) without calling the LLM:
+`/search` performs a workspace full‑text search (notes + skills + optional COG memory) without calling the LLM:
 
 ```
 /search "graphite power"
@@ -608,7 +608,7 @@ The bundled `pi-mcp-adapter` now prefers shared MCP config first: `~/.config/mcp
 /search --scope notes --limit 20 --offset 20 "token pricing"
 ```
 
-Supported flags: `--scope notes|skills|all`, `--limit`, `--offset`, `--refresh`, `--no-refresh`, `--max-kb`.
+Supported flags: `--scope notes|skills|memory|all`, `--limit`, `--offset`, `--refresh`, `--no-refresh`, `--max-kb`.
 
 Adaptive Card and side-conversation helpers are intentionally explicit web-facing affordances:
 - `send_adaptive_card` is the preferred internal tool for posting agent-owned Adaptive Cards in the web UI without routing through a local slash command.
@@ -624,42 +624,31 @@ Skills create tasks via IPC JSON files. Each task can optionally specify a `mode
 
 Tasks are isolated from the user's conversation using the **session tree** — the scheduler saves the tree position before execution and navigates back afterwards. This prevents the task's prompt/response from appearing in the user's conversation context while still preserving it in a side branch for inspection via `/tree`. See [runtime-flows.md](runtime-flows.md) for the full flow.
 
-## Dream and AutoDream
+## COG memory
 
-PiClaw has two memory-maintenance modes:
+PiClaw's primary memory system is COG under `~/.piclaw/cog/memory/`.
 
-- `Dream` — the manual `/dream [days]` command
-- `AutoDream` — the built-in nightly internal task
+| Skill | Purpose |
+|---|---|
+| `cog-commit` | Build commit messages from relevant memory context |
+| `cog-evolve` | Audit the structure and rules of the COG system |
+| `cog-explainer` | Write explanations and drafts in the user's voice |
+| `cog-foresight` | Produce one concrete cross-domain nudge |
+| `cog-history` | Recover prior facts and conversations with source pointers |
+| `cog-housekeeping` | Prune hot memory, archive observations, rebuild indexes |
+| `cog-humanizer` | Rewrite text so it sounds natural and specific |
+| `cog-personal` | Maintain the personal domain with SSOT rules |
+| `cog-reflect` | Distill recurring patterns from recent conversations |
+| `cog-scenario` | Model decision branches and write scenario files |
+| `cog-setup` | Bootstrap a new domain and its starter files |
 
-Both are now **model-driven** and run as out-of-band agent turns on a temporary `dream:` channel.
-The temporary dream channel is cleaned up after the cycle ends.
+Detailed procedures live in the corresponding `~/.piclaw/.pi/skills/cog-*/SKILL.md` files.
 
-Default windows:
-- manual Dream keeps the 7-day default unless you pass `/dream <days>`
-- nightly AutoDream defaults to a narrower 2-day window
+Built-in maintenance tasks:
 
-Dream/AutoDream follow the original 4-phase flow:
-- Orient — inspect startup memory and existing daily/memory state first
-- Signal — gather only narrow confirming evidence for suspected drift
-- Consolidate — merge, normalize dates, and correct contradictions at the source
-- Prune and Index — prune stale pointers, add references to newly important memories, shorten overly verbose `MEMORY.md` lines, and let runtime refresh FTS afterward
-
-Search behavior follows Claude-style rough criteria:
-- inspect existing daily/memory files first
-- inspect memories that drifted
-- use narrow `messages.search` queries only for things already suspected to matter
-- avoid exhaustive transcript sweeps
-
-AutoDream is gated, but it no longer requires a 24-hour gap.
-- if there is no prior consolidation, it runs
-- if there have been no sessions since the last consolidation, it skips
-- otherwise the nightly run proceeds
-
-Dream keeps the two note layers aligned:
-- `notes/daily/` — concise human-readable overview
-- `notes/memory/` — agent-facing durable memory and transcript-derived detail
-
-See also: [runtime/docs/dream-memory.md](../runtime/docs/dream-memory.md)
+- `cog-reflect` nightly (`0 2 * * *`)
+- `cog-housekeeping` weekly (`0 3 * * 0`)
+- `cog-foresight` daily (`0 7 * * *`)
 
 Model names are validated at task creation time — invalid or ambiguous model identifiers are rejected before the task is persisted.
 
