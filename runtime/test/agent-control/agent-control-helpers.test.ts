@@ -89,6 +89,41 @@ test("resolveShellCwd prefers configured WORKSPACE_DIR over legacy /workspace", 
   }
 });
 
+test("resolveShellCwd falls back to process cwd instead of legacy /workspace", () => {
+  const ws = createTempWorkspace("piclaw-shell-cwd-fallback-");
+
+  try {
+    const missingWorkspace = resolve(ws.workspace, "missing-home");
+    const helpersModuleUrl = new URL("../../src/agent-control/agent-control-helpers.js", import.meta.url).href;
+    const run = Bun.spawnSync({
+      cmd: [
+        "bun",
+        "-e",
+        `import { spyOn } from "bun:test";
+import * as fs from "fs";
+const realExistsSync = fs.existsSync;
+spyOn(fs, "existsSync").mockImplementation((target) => target === "/workspace" ? true : realExistsSync(target));
+process.chdir(${JSON.stringify(ws.workspace)});
+const { resolveShellCwd } = await import(${JSON.stringify(helpersModuleUrl)});
+console.log(resolveShellCwd());`,
+      ],
+      cwd: resolve(import.meta.dir, "../.."),
+      env: {
+        ...process.env,
+        PICLAW_WORKSPACE: missingWorkspace,
+        PICLAW_STORE: ws.store,
+        PICLAW_DATA: ws.data,
+        PICLAW_DB_IN_MEMORY: "1",
+      },
+    });
+
+    expect(run.exitCode, run.stderr.toString() || run.stdout.toString()).toBe(0);
+    expect(run.stdout.toString().trim()).toBe(ws.workspace);
+  } finally {
+    ws.cleanup();
+  }
+});
+
 test("truncateText and extractTextFromContent", () => {
   expect(truncateText("hello", 10)).toBe("hello");
   expect(truncateText("hello world", 6)).toBe("hello…");

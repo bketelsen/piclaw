@@ -55,8 +55,6 @@ export function formatThinkingLevelForDisplay(level: string, provider: string | 
 /** Return the preferred working directory for shell commands (configured workspace or cwd). */
 export function resolveShellCwd(): string {
   if (existsSync(WORKSPACE_DIR)) return WORKSPACE_DIR;
-  const legacyPreferred = "/workspace";
-  if (existsSync(legacyPreferred)) return legacyPreferred;
   return process.cwd();
 }
 
