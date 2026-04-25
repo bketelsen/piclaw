@@ -28,6 +28,7 @@ import { extname, resolve } from "path";
 import { createUuid } from "../../utils/ids.js";
 import type { WebChannelLike } from "./core/web-channel-contracts.js";
 import { rememberWebOrigin } from "./auth/request-origin.js";
+import { dispatchHealth } from "./http/dispatch-health.js";
 import { handleAgentRoutes } from "./http/dispatch-agent.js";
 import { handleAuthRoutes } from "./http/dispatch-auth.js";
 import { handleContentPrimaryRoutes, handleContentSecondaryRoutes } from "./http/dispatch-content.js";
@@ -107,6 +108,9 @@ export class RequestRouterService {
   private async route(req: Request): Promise<Response> {
     const url = new URL(req.url);
     const pathname = url.pathname;
+
+    const healthResponse = dispatchHealth(req);
+    if (healthResponse) return healthResponse;
 
     const flags = getRouteFlags(req, pathname);
     const guardResponse = await enforceRequestGuards(this.channel, req, pathname, flags);

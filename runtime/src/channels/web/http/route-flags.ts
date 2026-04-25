@@ -52,6 +52,8 @@ export type RouteFlags = {
   isDocsAsset: boolean;
   /** True when the request targets the agent avatar endpoint. */
   isAvatar: boolean;
+  /** True when the request targets the /health liveness endpoint. */
+  isHealth: boolean;
   /** True when the request method mutates state (POST/PUT/DELETE/PATCH). */
   isMutating: boolean;
   /** True when the request targets any auth endpoint. */
@@ -122,6 +124,7 @@ export function getRouteFlags(req: Request, pathname: string): RouteFlags {
     isPublicStatic: isStaticAsset && isPublicStaticPath(pathname),
     isDocsAsset: pathname.startsWith("/docs/"),
     isAvatar: isGetOrHead && pathname === "/avatar/agent",
+    isHealth: isGetOrHead && pathname === "/health",
     isMutating: req.method === "POST" || req.method === "PUT" || req.method === "DELETE" || req.method === "PATCH",
     isAuthEndpoint,
   };
@@ -148,6 +151,7 @@ export function shouldSkipAuthCheck(flags: RouteFlags, hasInternalAccess: boolea
     flags.isAppleIcon ||
     flags.isServiceWorker ||
     flags.isPublicStatic ||
-    flags.isAvatar
+    flags.isAvatar ||
+    flags.isHealth
   );
 }
