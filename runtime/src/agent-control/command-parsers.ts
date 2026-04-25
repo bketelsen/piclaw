@@ -36,7 +36,7 @@ function parseTotpAction(action: string | undefined): TotpAction {
 function parseSearchScope(value: string | undefined): SearchScope {
   if (!value) return undefined;
   const normalized = value.toLowerCase();
-  return normalized === "notes" || normalized === "skills" || normalized === "all"
+  return normalized === "notes" || normalized === "skills" || normalized === "memory" || normalized === "all"
     ? normalized
     : undefined;
 }
@@ -383,7 +383,7 @@ export function parseLogout(args: string, raw: string): AgentControlCommand {
 /** Parse /search-workspace arguments: query, scope, limit, offset, flags. */
 export function parseSearch(args: string, raw: string): AgentControlCommand {
   const tokens = splitArgs(args);
-  let scope: "notes" | "skills" | "all" | undefined;
+  let scope: "notes" | "skills" | "memory" | "all" | undefined;
   let limit: number | undefined;
   let offset: number | undefined;
   let refresh: boolean | undefined;
@@ -417,6 +417,7 @@ export function parseSearch(args: string, raw: string): AgentControlCommand {
     }
     if (token === "--notes") { scope = "notes"; i += 1; continue; }
     if (token === "--skills") { scope = "skills"; i += 1; continue; }
+    if (token === "--memory") { scope = "memory"; i += 1; continue; }
     if (token === "--all") { scope = "all"; i += 1; continue; }
     if (token === "--limit") {
       const next = tokens[i + 1];

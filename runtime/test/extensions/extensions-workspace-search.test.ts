@@ -36,10 +36,13 @@ describe("workspace-search extension", () => {
   async function seedWorkspace() {
     const notesDir = path.join(ws.workspace, "notes");
     const skillsDir = path.join(ws.workspace, ".pi", "skills", "demo");
+    const memoryDir = path.join(ws.workspace, "cog", "memory", "personal");
     await fs.mkdir(notesDir, { recursive: true });
     await fs.mkdir(skillsDir, { recursive: true });
+    await fs.mkdir(memoryDir, { recursive: true });
     await fs.writeFile(path.join(notesDir, "alpha.md"), "Alpha note about kittens.");
     await fs.writeFile(path.join(skillsDir, "SKILL.md"), "Demo skill that mentions kittens and puppies.");
+    await fs.writeFile(path.join(memoryDir, "hot-memory.md"), "Personal memory about kittens and errands.");
   }
 
   async function getSearchExtension() {
@@ -101,7 +104,7 @@ describe("workspace-search extension", () => {
     }
   });
 
-  test("scope filters to notes or skills", async () => {
+  test("scope filters to notes, skills, or memory", async () => {
     await seedWorkspace();
     const tool = await getSearchTool();
 
@@ -112,6 +115,10 @@ describe("workspace-search extension", () => {
     const skillsOnly = await executeWithContext(tool, { query: "kittens", scope: "skills", refresh: true });
     expect(skillsOnly.details.count).toBe(1);
     expect(skillsOnly.content[0].text).toContain(".pi/skills/demo/SKILL.md");
+
+    const memoryOnly = await executeWithContext(tool, { query: "kittens", scope: "memory", refresh: true });
+    expect(memoryOnly.details.count).toBe(1);
+    expect(memoryOnly.content[0].text).toContain("cog/memory/personal/hot-memory.md");
   });
 
   test("aggressively cleans up deleted files", async () => {

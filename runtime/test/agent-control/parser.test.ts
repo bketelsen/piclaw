@@ -426,6 +426,19 @@ EOF`;
     });
   });
 
+  test("parses memory search scope", () => {
+    expect(parseControlCommand("/search --scope memory current priorities")).toEqual({
+      type: "search_workspace",
+      query: "current priorities",
+      scope: "memory",
+      limit: undefined,
+      offset: undefined,
+      refresh: undefined,
+      max_kb: undefined,
+      raw: "/search --scope memory current priorities",
+    });
+  });
+
   // Unknown commands return null
   test("unknown command returns null", () => {
     expect(parseControlCommand("/unknowncommand")).toBeNull();

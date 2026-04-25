@@ -20,7 +20,7 @@ describe("built-in extension hook determinism", () => {
       "toolActivation",
       "sqlIntrospect",
       "workspaceSearch",
-      "workspaceMemoryBootstrap",
+      "cogMemoryBootstrap",
       "envTools",
       "exitProcess",
     ]);
@@ -29,7 +29,7 @@ describe("built-in extension hook determinism", () => {
     expect(audit.final_system_prompt).toContain("## Script discovery");
     expect(audit.final_system_prompt).toContain("## Database Introspection");
     expect(audit.final_system_prompt).toContain("## Workspace search");
-    expect(audit.final_system_prompt).toContain("## Workspace memory bootstrap");
+    expect(audit.final_system_prompt).not.toContain("## Workspace memory bootstrap");
     expect(audit.final_system_prompt).toContain("## Workspace environment tool");
     expect(audit.final_system_prompt).toContain("## Process exit");
     expect(audit.context_messages).toEqual([

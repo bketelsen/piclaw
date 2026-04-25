@@ -189,7 +189,7 @@ export async function handleSearchWorkspace(_session: AgentSession, command: Sea
   if (!query) {
     return {
       status: "error",
-      message: "Usage: /search <query> [--scope notes|skills|all] [--limit N] [--offset N] [--no-refresh] [--max-kb N]",
+      message: "Usage: /search <query> [--scope notes|skills|memory|all] [--limit N] [--offset N] [--no-refresh] [--max-kb N]",
     };
   }
 

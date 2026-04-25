@@ -41,6 +41,18 @@ describe("runtime startup helpers", () => {
       expect(existsSync(join(ws.workspace, "notes", "index.md"))).toBe(true);
       expect(existsSync(join(ws.workspace, "notes", "memory", "README.md"))).toBe(true);
       expect(existsSync(join(ws.workspace, ".pi", "skills"))).toBe(true);
+      expect(existsSync(join(ws.workspace, "cog", "memory", "domains.yml"))).toBe(true);
+      expect(existsSync(join(ws.workspace, "cog", "memory", "hot-memory.md"))).toBe(true);
+      expect(existsSync(join(ws.workspace, "cog", "memory", "cog-meta", "patterns.md"))).toBe(true);
+      expect(existsSync(join(ws.workspace, "cog", "memory", "cog-meta", "self-observations.md"))).toBe(true);
+      expect(existsSync(join(ws.workspace, "cog", "memory", "cog-meta", "improvements.md"))).toBe(true);
+      expect(existsSync(join(ws.workspace, "cog", "memory", "cog-meta", "foresight-nudge.md"))).toBe(true);
+      expect(existsSync(join(ws.workspace, "cog", "memory", "cog-meta", "scenarios", ".gitkeep"))).toBe(true);
+      expect(existsSync(join(ws.workspace, "cog", "memory", "personal", "hot-memory.md"))).toBe(true);
+      expect(existsSync(join(ws.workspace, "cog", "memory", "personal", "observations.md"))).toBe(true);
+      expect(existsSync(join(ws.workspace, "cog", "memory", "personal", "action-items.md"))).toBe(true);
+      expect(existsSync(join(ws.workspace, "cog", "memory", "personal", "entities.md"))).toBe(true);
+      expect(existsSync(join(ws.workspace, "cog", "memory", "glacier", ".gitkeep"))).toBe(true);
     } finally {
       ws.cleanup();
     }
@@ -205,6 +217,18 @@ describe("runtime startup helpers", () => {
       expect(files.some((file) => file !== "resume_pending_existing.json")).toBe(true);
     } finally {
       ws.cleanup();
+    }
+  });
+
+  test("startTelegramChannel returns null when telegram is not configured", async () => {
+    const restoreEnv = setEnv({ PICLAW_TELEGRAM_BOT_TOKEN: undefined, PICLAW_TELEGRAM_ALLOWED_USERS: undefined });
+
+    try {
+      const startup = await importFresh<typeof import("../../src/runtime/startup.js")>("../src/runtime/startup.js");
+      const channel = await startup.startTelegramChannel({} as any, {} as any, {} as any);
+      expect(channel).toBeNull();
+    } finally {
+      restoreEnv();
     }
   });
 

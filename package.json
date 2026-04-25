@@ -30,6 +30,7 @@
     "skel/.piclaw",
     "skel/AGENTS.md",
     "skel/README.md",
+    "skel/cog",
     "skel/config.json.example",
     "skel/Makefile",
     "skel/notes",

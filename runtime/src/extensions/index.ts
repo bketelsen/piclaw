@@ -15,7 +15,7 @@
  *   - sqlIntrospect: introspect_sql for read-only DB introspection.
  *   - scheduledTasks: /tasks and /scheduled commands for task listing.
  *   - workspaceSearch: search_workspace tool for FTS over workspace files.
- *   - workspaceMemoryBootstrap: initializes workspace memory primitives.
+ *   - cogMemoryBootstrap: injects the COG memory bootstrap when present.
  *   - uiThemeExtension: theme and appearance controls for the chat UI.
  *   - smartCompaction: smart context compaction helpers.
  *   - envTools: env for persistent workspace-scoped environment variables.
@@ -39,7 +39,7 @@ import { toolActivation } from "./tool-activation.js";
 import { sqlIntrospect } from "./sql-introspect.js";
 import { scheduledTasks } from "./scheduled-tasks.js";
 import { workspaceSearch } from "./workspace-search.js";
-import { workspaceMemoryBootstrap } from "./workspace-memory-bootstrap.js";
+import { cogMemoryBootstrap } from "./cog-memory-bootstrap.js";
 import { uiThemeExtension } from "./ui-theme.js";
 import { smartCompaction } from "./smart-compaction.js";
 import { envTools } from "./env-tools.js";
@@ -59,7 +59,7 @@ export function createBuiltinExtensionFactories(options?: {
     sqlIntrospect,
     scheduledTasks,
     workspaceSearch,
-    workspaceMemoryBootstrap,
+    cogMemoryBootstrap,
     uiThemeExtension,
     smartCompaction,
     envTools,

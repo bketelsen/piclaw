@@ -5,6 +5,8 @@
 import { copyFileSync, cpSync, existsSync, mkdirSync, readdirSync, rmSync, statSync, writeFileSync } from "fs";
 import { dirname, join, resolve } from "path";
 import type { AgentPool } from "../agent-pool.js";
+import { TELEGRAM_BOT_TOKEN } from "../core/config.js";
+import { TelegramChannel } from "../channels/telegram.js";
 import { WebChannel } from "../channels/web.js";
 import { setMessagesPostFn } from "../extensions/messages-crud.js";
 import {
@@ -47,6 +49,18 @@ const BOOTSTRAP_ENTRIES = [
   ".pi/mcp.json.example",
   "README.md",
   "config.json.example",
+  "cog/memory/domains.yml",
+  "cog/memory/hot-memory.md",
+  "cog/memory/cog-meta/patterns.md",
+  "cog/memory/cog-meta/self-observations.md",
+  "cog/memory/cog-meta/improvements.md",
+  "cog/memory/cog-meta/foresight-nudge.md",
+  "cog/memory/cog-meta/scenarios/.gitkeep",
+  "cog/memory/personal/hot-memory.md",
+  "cog/memory/personal/observations.md",
+  "cog/memory/personal/action-items.md",
+  "cog/memory/personal/entities.md",
+  "cog/memory/glacier/.gitkeep",
   "notes/index.md",
   "notes/memory/README.md",
   "notes/daily/.gitkeep",
@@ -257,6 +271,17 @@ export async function startWebChannel(queue: AgentQueue, agentPool: AgentPool): 
   });
 
   return web;
+}
+
+export async function startTelegramChannel(
+  state: RuntimeState,
+  queue: AgentQueue,
+  agentPool: AgentPool,
+): Promise<TelegramChannel | null> {
+  if (!TELEGRAM_BOT_TOKEN) return null;
+  const telegram = new TelegramChannel({ state, queue, agentPool });
+  await telegram.start();
+  return telegram;
 }
 
 /**

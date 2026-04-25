@@ -24,8 +24,8 @@ const log = createLogger("workspace-search");
 const AGGRESSIVE_WORKSPACE_INDEX_MEMORY_ENV = "PICLAW_AGGRESSIVE_WORKSPACE_INDEX_MEMORY";
 const AGGRESSIVE_WORKSPACE_INDEX_GC_EVERY_FILES = 8;
 
-/** Search scope: restrict to notes/, skills/, or search all indexed roots. */
-export type WorkspaceSearchScope = "notes" | "skills" | "all";
+/** Search scope: restrict to notes/, skills/, COG memory/, or search all indexed roots. */
+export type WorkspaceSearchScope = "notes" | "skills" | "memory" | "all";
 
 export type WorkspaceIndexState = "never_indexed" | "indexing" | "ready" | "stale" | "failed";
 
@@ -131,7 +131,7 @@ const clampNumber = (value: number | undefined, fallback: number, min: number, m
 };
 
 const normalizeScope = (scope: WorkspaceSearchScope | string | undefined): WorkspaceSearchScope => {
-  if (scope === "notes" || scope === "skills") return scope;
+  if (scope === "notes" || scope === "skills" || scope === "memory") return scope;
   return "all";
 };
 
@@ -139,9 +139,13 @@ const getWorkspaceRoot = (): string => {
   return path.resolve(process.env.PICLAW_WORKSPACE || WORKSPACE_DIR);
 };
 
-const getBuiltInRoots = (): string[] => {
+const getBuiltInRoots = (): Record<Exclude<WorkspaceSearchScope, "all">, string> => {
   const root = getWorkspaceRoot();
-  return [path.join(root, "notes"), path.join(root, ".pi", "skills")];
+  return {
+    notes: path.join(root, "notes"),
+    skills: path.join(root, ".pi", "skills"),
+    memory: path.join(root, "cog", "memory"),
+  };
 };
 
 const getConfiguredRoots = (): string[] => {
@@ -160,7 +164,7 @@ const getDefaultRoots = (): string[] => {
     if (!trimmed) return "";
     return path.isAbsolute(trimmed) ? path.resolve(trimmed) : path.join(root, trimmed);
   }).filter(Boolean);
-  return resolved.length > 0 ? resolved : getBuiltInRoots();
+  return resolved.length > 0 ? resolved : Object.values(getBuiltInRoots());
 };
 
 const toRelative = (absPath: string): string => {
@@ -250,8 +254,7 @@ function normalizeRoots(scope: string | undefined): string[] {
   const configuredRoots = getDefaultRoots();
   const builtInRoots = getBuiltInRoots();
   if (!scope || scope === "all") return configuredRoots;
-  if (scope === "notes") return [builtInRoots[0]];
-  if (scope === "skills") return [builtInRoots[1]];
+  if (scope === "notes" || scope === "skills" || scope === "memory") return [builtInRoots[scope]];
   return configuredRoots;
 }
 
@@ -418,7 +421,7 @@ function getAffectedScopes(paths: string[]): WorkspaceSearchScope[] {
     .map((entry) => entry.startsWith(getWorkspaceRoot()) ? toRelative(path.resolve(entry)) : entry);
 
   const scopes = new Set<WorkspaceSearchScope>();
-  for (const scope of ["notes", "skills", "all"] as const) {
+  for (const scope of ["notes", "skills", "memory", "all"] as const) {
     const roots = normalizeRoots(scope);
     if (relativePaths.some((entry) => pathMatchesRoots(entry, roots))) {
       scopes.add(scope);
@@ -538,7 +541,14 @@ export async function searchWorkspace(params: WorkspaceSearchParams): Promise<Wo
 
   const db = getDb();
   try {
-    const prefix = effectiveScope === "notes" ? "notes/%" : effectiveScope === "skills" ? ".pi/skills/%" : null;
+    const prefix =
+      effectiveScope === "notes"
+        ? "notes/%"
+        : effectiveScope === "skills"
+          ? ".pi/skills/%"
+          : effectiveScope === "memory"
+            ? "cog/memory/%"
+            : null;
 
     const stmt = prefix
       ? "SELECT path, size_bytes, mtime_ms, snippet(workspace_fts, 0, '[', ']', '…', 12) as snippet FROM workspace_fts WHERE workspace_fts MATCH ? AND path LIKE ? ORDER BY bm25(workspace_fts) LIMIT ? OFFSET ?"
@@ -552,7 +562,14 @@ export async function searchWorkspace(params: WorkspaceSearchParams): Promise<Wo
   } catch {
     // FTS query failed even after sanitization — fall back to LIKE
     try {
-      const prefix = effectiveScope === "notes" ? "notes/%" : effectiveScope === "skills" ? ".pi/skills/%" : null;
+      const prefix =
+        effectiveScope === "notes"
+          ? "notes/%"
+          : effectiveScope === "skills"
+            ? ".pi/skills/%"
+            : effectiveScope === "memory"
+              ? "cog/memory/%"
+              : null;
       const terms = query.split(/\s+/).filter(Boolean).map((t) => `%${t}%`);
       if (terms.length === 0) return { rows: [], limit, offset, error: "No searchable terms." };
 

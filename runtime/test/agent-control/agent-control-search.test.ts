@@ -61,6 +61,6 @@ describe("/search workspace command", () => {
       raw: "/search",
     });
     expect(result.status).toBe("error");
-    expect(result.message).toContain("Usage: /search");
+    expect(result.message).toContain("notes|skills|memory|all");
   });
 });

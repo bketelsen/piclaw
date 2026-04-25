@@ -12,7 +12,7 @@ import { refreshWorkspaceIndex, searchWorkspace, type WorkspaceSearchRow } from 
 const WorkspaceSearchSchema = Type.Object({
   query: Type.String({ description: "FTS query text (matches workspace content)." }),
   scope: Type.Optional(
-    Type.String({ description: "Scope to search: notes|skills|all (default all)." }),
+    Type.String({ description: "Scope to search: notes|skills|memory|all (default all)." }),
   ),
   limit: Type.Optional(Type.Integer({ description: "Max results (1-50).", minimum: 1, maximum: 50 })),
   offset: Type.Optional(Type.Integer({ description: "Offset for pagination.", minimum: 0 })),
@@ -58,7 +58,7 @@ async function execute(
 
 const WORKSPACE_SEARCH_HINT = [
   "## Workspace search",
-  "Use `search_workspace` for note/skill lookups in the workspace.",
+  "Use `search_workspace` for note, skill, and COG memory lookups in the workspace.",
   "Configured workspace-search roots are indexed by a background process.",
   "Searches do not block on indexing by default; use `refresh_workspace_index` or `refresh: true` when you want a blocking rebuild.",
 ].join("\n");

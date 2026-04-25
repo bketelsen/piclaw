@@ -93,6 +93,8 @@ const envConfig = readEnvFile([
   "PICLAW_REMOTE_SHORT_CIRCUIT_ENABLED",
   "PICLAW_REMOTE_INTEROP_DECISION_MODEL",
   "PICLAW_WEB_EXTERNAL_URL",
+  "PICLAW_TELEGRAM_BOT_TOKEN",
+  "PICLAW_TELEGRAM_ALLOWED_USERS",
   "PICLAW_LOG_LEVEL",
   "LOG_LEVEL",
 ]);
@@ -146,6 +148,8 @@ export const STORE_DIR = resolve(
 export const DATA_DIR = resolve(
   process.env.PICLAW_DATA || join(PICLAW_HOME, "data")
 );
+/** Directory for the filesystem-resident COG memory tree. */
+export const COG_MEMORY_DIR = join(PICLAW_HOME, "cog", "memory");
 
 // ---------------------------------------------------------------------------
 // TLS – optional HTTPS support for the web channel.
@@ -602,6 +606,20 @@ export const REMOTE_INTEROP_CONFIG = Object.freeze<RemoteInteropConfig>({
 export function getRemoteInteropConfig(): Readonly<RemoteInteropConfig> {
   return REMOTE_INTEROP_CONFIG;
 }
+
+export const TELEGRAM_BOT_TOKEN =
+  process.env.PICLAW_TELEGRAM_BOT_TOKEN ||
+  envConfig.PICLAW_TELEGRAM_BOT_TOKEN ||
+  "";
+
+export const TELEGRAM_ALLOWED_USERS = (
+  process.env.PICLAW_TELEGRAM_ALLOWED_USERS ||
+  envConfig.PICLAW_TELEGRAM_ALLOWED_USERS ||
+  ""
+)
+  .split(",")
+  .map((value) => value.trim())
+  .filter(Boolean);
 
 /** Directory for persisted Pi session files. */
 export const SESSIONS_DIR = resolve(DATA_DIR, "sessions");

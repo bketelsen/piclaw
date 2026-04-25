@@ -1,3 +1,7 @@
+/**
+ * @deprecated Replaced by cogMemoryBootstrap. Kept for compatibility with any
+ * remaining external imports until downstream code is updated.
+ */
 import { existsSync, readFileSync } from "fs";
 import { resolve } from "path";
 import type { ExtensionAPI, ExtensionFactory } from "@mariozechner/pi-coding-agent";

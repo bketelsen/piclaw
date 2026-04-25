@@ -195,7 +195,7 @@ export type AgentControlCommand =
   | {
       type: "search_workspace";
       query?: string;
-      scope?: "notes" | "skills" | "all";
+      scope?: "notes" | "skills" | "memory" | "all";
       limit?: number;
       offset?: number;
       refresh?: boolean;

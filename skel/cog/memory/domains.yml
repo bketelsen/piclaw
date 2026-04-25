@@ -1,0 +1,14 @@
+# COG Domains Manifest
+# Single source of truth for all registered domains.
+
+domains:
+  - id: personal
+    path: memory/personal
+    type: life
+    triggers: [personal, family, health, calendar, home, habits]
+    description: Day-to-day personal life
+    files:
+      - hot-memory.md
+      - observations.md
+      - action-items.md
+      - entities.md
