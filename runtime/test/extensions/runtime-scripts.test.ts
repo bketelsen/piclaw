@@ -3,7 +3,7 @@ import path from "node:path";
 import { describe, expect, test } from "bun:test";
 import "../helpers.js";
 import { createFakeExtensionApi } from "./fake-extension-api.js";
-import { importFresh, withTempWorkspaceEnv } from "../helpers.js";
+import { createTempWorkspace, importFresh, withTempWorkspaceEnv } from "../helpers.js";
 
 describe("runtime-scripts extension", () => {
   test("parses SCRIPT_JDOC JSON blocks from source", async () => {
@@ -105,6 +105,56 @@ console.log("ok");\n`;
       const module = result.details.scripts.find((entry: any) => entry.name === "helper");
       expect(module.role).toBe("module");
       expect(module.workspace_path).toBe("notes/tools/helper.ts");
+    });
+  });
+
+  test("custom workspaceDir treats workspace notes as entrypoints and getScriptRoots defaults to PICLAW_HOME", async () => {
+    await withTempWorkspaceEnv("piclaw-list-scripts-home-", {}, async (piclawHome) => {
+      const alternateWorkspace = createTempWorkspace("piclaw-list-scripts-alt-");
+      try {
+        const notesDir = path.join(alternateWorkspace.workspace, "notes", "tools");
+        fs.mkdirSync(notesDir, { recursive: true });
+        fs.writeFileSync(path.join(notesDir, "plain-note.ts"), "export const note = true;\n", "utf8");
+        const proc = Bun.spawnSync([
+          "bun",
+          "-e",
+          `import { getScriptRoots, loadScriptCatalogEntries } from "./src/extensions/runtime-scripts.ts";
+           const roots = getScriptRoots();
+           const entries = loadScriptCatalogEntries({
+             workspaceDir: process.env.ALT_WORKSPACE,
+             scope: "workspace",
+             role: "entrypoint",
+           });
+           console.log(JSON.stringify({
+             roots: roots.filter((root) => root.scope === "workspace").map((root) => ({
+               collection: root.collection,
+               root: root.root,
+             })),
+             entryNames: entries.map((entry) => entry.name),
+           }));`,
+        ], {
+          cwd: path.resolve(import.meta.dir, "../.."),
+          env: {
+            ...process.env,
+            PICLAW_WORKSPACE: piclawHome.workspace,
+            PICLAW_STORE: piclawHome.store,
+            PICLAW_DATA: piclawHome.data,
+            PICLAW_DB_IN_MEMORY: "1",
+            ALT_WORKSPACE: alternateWorkspace.workspace,
+          },
+          stdout: "pipe",
+          stderr: "pipe",
+        });
+        expect(proc.exitCode, `stderr: ${proc.stderr.toString()}`).toBe(0);
+        const result = JSON.parse(proc.stdout.toString());
+        expect(result.roots).toEqual([
+          { collection: "workspace-skill", root: path.join(piclawHome.workspace, ".pi", "skills") },
+          { collection: "workspace-note", root: path.join(piclawHome.workspace, "notes") },
+        ]);
+        expect(result.entryNames).toContain("plain-note");
+      } finally {
+        alternateWorkspace.cleanup();
+      }
     });
   });
 

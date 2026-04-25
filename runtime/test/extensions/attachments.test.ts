@@ -21,9 +21,10 @@ afterEach(() => {
 
 function makeFakeApi() {
   const tools = new Map<string, any>();
+  const handlers: Array<{ event: string; handler: (...args: any[]) => any }> = [];
   return {
     api: {
-      on() {},
+      on(event: string, handler: (...args: any[]) => any) { handlers.push({ event, handler }); },
       registerTool(tool: any) { tools.set(tool.name, tool); },
       registerCommand() {},
       registerShortcut() {},
@@ -48,6 +49,7 @@ function makeFakeApi() {
       unregisterProvider() {},
     } as unknown as ExtensionAPI,
     tools,
+    handlers,
   };
 }
 
@@ -303,6 +305,23 @@ test("export_attachment tool writes to workspace tmp", async () => {
   const result = await tool.execute("call", { id: mediaId });
   const outputPath = result.details?.output_path;
   expect(typeof outputPath).toBe("string");
+});
+
+test("export_attachment advertises ~/.piclaw/tmp paths in prompts", async () => {
+  const { fileAttachments } = await import("../../src/extensions/file-attachments.js");
+  const fake = makeFakeApi();
+  fileAttachments(fake.api);
+
+  const tool = fake.tools.get("export_attachment");
+  expect(tool.description).toContain("~/.piclaw/tmp");
+  expect(tool.description).not.toContain("/workspace/tmp");
+  expect(tool.promptSnippet).toContain("~/.piclaw/tmp");
+  expect(tool.promptSnippet).not.toContain("/workspace/tmp");
+
+  const beforeStart = fake.handlers.find((handler) => handler.event === "before_agent_start");
+  const promptUpdate = await beforeStart?.handler({ systemPrompt: "base prompt" });
+  expect(promptUpdate?.systemPrompt).toContain("~/.piclaw/tmp");
+  expect(promptUpdate?.systemPrompt).not.toContain("/workspace/tmp");
 });
 
 test("read_attachment validates image data with sharp and rejects corrupt images", async () => {

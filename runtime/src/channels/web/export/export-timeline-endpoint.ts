@@ -8,7 +8,7 @@
 import { existsSync, readFileSync, readdirSync } from "fs";
 import { join } from "path";
 import { marked } from "marked";
-import { getWebRuntimeConfig } from "../../../core/config.js";
+import { getWebRuntimeConfig, PICLAW_CONFIG_PATH } from "../../../core/config.js";
 import { isInternalSecretRequestAuthorized } from "../auth/internal-secret.js";
 import { jsonResponse } from "../http/http-utils.js";
 
@@ -177,7 +177,7 @@ function loadAllCss(runtimeDir: string): string {
 
 function loadConfig(): any {
   try {
-    return JSON.parse(readFileSync("/workspace/.piclaw/config.json", "utf8"));
+    return JSON.parse(readFileSync(PICLAW_CONFIG_PATH, "utf8"));
   } catch {
     return {};
   }

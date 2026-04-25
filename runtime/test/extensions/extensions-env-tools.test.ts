@@ -1,111 +1,206 @@
+import path from "node:path";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { readFileSync, writeFileSync } from "fs";
 
-import { createTempWorkspace, importFresh, setEnv } from "../helpers.js";
-import { createFakeExtensionApi } from "./fake-extension-api.js";
+import { createTempWorkspace } from "../helpers.js";
 
 describe("env-tools extension", () => {
   let ws: ReturnType<typeof createTempWorkspace>;
-  let restoreEnv: (() => void) | null = null;
 
   beforeEach(() => {
     ws = createTempWorkspace("piclaw-env-tools-");
-    restoreEnv = setEnv({
-      PICLAW_WORKSPACE: ws.workspace,
-      PICLAW_STORE: ws.store,
-      PICLAW_DATA: ws.data,
-      BAR: "copied-value",
-    });
     delete process.env.TEST_ENV_TOOL_VAR;
     delete process.env.KEEP_ME;
   });
 
   afterEach(() => {
-    restoreEnv?.();
-    restoreEnv = null;
     delete process.env.TEST_ENV_TOOL_VAR;
     delete process.env.KEEP_ME;
     ws.cleanup();
   });
 
-  async function getTool() {
-    const { envTools } = await importFresh<typeof import("../src/extensions/env-tools.js")>("../src/extensions/env-tools.js");
-    const fake = createFakeExtensionApi();
-    envTools(fake.api);
-    return fake.tools.get("env");
+  function runEnvToolScript(script: string, extraEnv: Record<string, string | undefined> = {}) {
+    const env = Object.fromEntries(
+      Object.entries({
+        ...process.env,
+        PICLAW_WORKSPACE: ws.workspace,
+        PICLAW_STORE: ws.store,
+        PICLAW_DATA: ws.data,
+        PICLAW_DB_IN_MEMORY: "1",
+        BAR: "copied-value",
+        ...extraEnv,
+      }).filter(([, value]) => value !== undefined),
+    ) as Record<string, string>;
+
+    const proc = Bun.spawnSync([
+      "bun",
+      "-e",
+      `import { envTools } from "./src/extensions/env-tools.ts";
+       const tools = new Map();
+       const handlers = [];
+       const api = {
+         on(event, handler) { handlers.push({ event, handler }); },
+         registerTool(tool) { tools.set(tool.name, tool); },
+         registerCommand() {},
+         registerShortcut() {},
+         registerFlag() {},
+         getFlag() { return undefined; },
+         registerMessageRenderer() {},
+         sendMessage() {},
+         sendUserMessage() {},
+         appendEntry() {},
+         setSessionName() {},
+         getSessionName() { return undefined; },
+         setLabel() {},
+         exec: async () => ({ exitCode: 0, stdout: "", stderr: "" }),
+         getActiveTools: () => [],
+         getAllTools: () => [],
+         setActiveTools() {},
+         getCommands: () => [],
+         setModel: async () => true,
+         getThinkingLevel: () => "off",
+         setThinkingLevel() {},
+         registerProvider() {},
+         unregisterProvider() {},
+       };
+       envTools(api);
+       const tool = tools.get("env");
+       ${script}`,
+    ], {
+      cwd: path.resolve(import.meta.dir, "../.."),
+      env,
+      stdout: "pipe",
+      stderr: "pipe",
+    });
+
+    expect(proc.exitCode, `stderr: ${proc.stderr.toString()}`).toBe(0);
+    return JSON.parse(proc.stdout.toString());
   }
 
-  test("get without a name lists managed variable names only", async () => {
-    const tool = await getTool();
+  test("uses PICLAW_HOME root paths and ~/.piclaw prompt text", () => {
+    const result = runEnvToolScript(`
+      const beforeStart = handlers.find((handler) => handler.event === "before_agent_start");
+      const promptUpdate = await beforeStart.handler({ systemPrompt: "base prompt" });
+      await tool.execute("env-root-1", { action: "set", name: "TEST_ENV_TOOL_VAR", value: "abc" });
+      console.log(JSON.stringify({
+        description: tool.description,
+        promptSnippet: tool.promptSnippet,
+        systemPrompt: promptUpdate.systemPrompt,
+      }));
+    `);
 
-    const empty = await tool.execute("env-1", { action: "get" });
-    expect(empty.content[0].text).toContain("No managed workspace environment variables found");
+    expect(result.description).toContain("~/.piclaw/.env.sh");
+    expect(result.description).toContain("~/.piclaw/env-tool.json");
+    expect(result.description).not.toContain("/workspace");
+    expect(result.promptSnippet).toContain("~/.piclaw/.env.sh");
+    expect(result.promptSnippet).not.toContain("/workspace");
+    expect(result.systemPrompt).toContain("~/.piclaw/.env.sh");
+    expect(result.systemPrompt).toContain("~/.piclaw/env-tool.json");
+    expect(result.systemPrompt).not.toContain("/workspace");
 
-    await tool.execute("env-2", { action: "set", name: "TEST_ENV_TOOL_VAR", value: "abc" });
-    const listed = await tool.execute("env-3", { action: "get" });
-    expect(listed.content[0].text).toContain("TEST_ENV_TOOL_VAR");
-    expect(listed.content[0].text).not.toContain("abc");
+    const envScript = readFileSync(`${ws.workspace}/.env.sh`, "utf8");
+    expect(envScript).toContain("export TEST_ENV_TOOL_VAR='abc'");
+
+    const stateJson = JSON.parse(readFileSync(`${ws.workspace}/env-tool.json`, "utf8"));
+    expect(stateJson).toEqual({ TEST_ENV_TOOL_VAR: "abc" });
   });
 
-  test("set persists the managed env, updates process.env immediately, and get returns the stored value", async () => {
-    const tool = await getTool();
+  test("get without a name lists managed variable names only", () => {
+    const result = runEnvToolScript(`
+      const empty = await tool.execute("env-1", { action: "get" });
+      await tool.execute("env-2", { action: "set", name: "TEST_ENV_TOOL_VAR", value: "abc" });
+      const listed = await tool.execute("env-3", { action: "get" });
+      console.log(JSON.stringify({
+        emptyText: empty.content[0].text,
+        listedText: listed.content[0].text,
+      }));
+    `);
 
-    const setResult = await tool.execute("env-4", { action: "set", name: "TEST_ENV_TOOL_VAR", value: "hello world" });
-    expect(setResult.details.applied_immediately).toBe(true);
-    expect(process.env.TEST_ENV_TOOL_VAR).toBe("hello world");
+    expect(result.emptyText).toContain("No managed workspace environment variables found");
+    expect(result.listedText).toContain("TEST_ENV_TOOL_VAR");
+    expect(result.listedText).not.toContain("abc");
+  });
+
+  test("set persists the managed env, updates process.env immediately, and get returns the stored value", () => {
+    const result = runEnvToolScript(`
+      const setResult = await tool.execute("env-4", { action: "set", name: "TEST_ENV_TOOL_VAR", value: "hello world" });
+      const getResult = await tool.execute("env-5", { action: "get", name: "TEST_ENV_TOOL_VAR" });
+      console.log(JSON.stringify({
+        setDetails: setResult.details,
+        currentValue: process.env.TEST_ENV_TOOL_VAR,
+        getText: getResult.content[0].text,
+        getDetails: getResult.details,
+      }));
+    `);
+
+    expect(result.setDetails.applied_immediately).toBe(true);
+    expect(result.currentValue).toBe("hello world");
 
     const envScript = readFileSync(`${ws.workspace}/.env.sh`, "utf8");
     expect(envScript).toContain("# >>> piclaw env tool >>>");
     expect(envScript).toContain("export TEST_ENV_TOOL_VAR='hello world'");
 
-    const stateJson = JSON.parse(readFileSync(`${ws.workspace}/.piclaw/env-tool.json`, "utf8"));
+    const stateJson = JSON.parse(readFileSync(`${ws.workspace}/env-tool.json`, "utf8"));
     expect(stateJson).toEqual({ TEST_ENV_TOOL_VAR: "hello world" });
 
-    const getResult = await tool.execute("env-5", { action: "get", name: "TEST_ENV_TOOL_VAR" });
-    expect(getResult.content[0].text).toBe("hello world");
-    expect(getResult.details.source).toBe("managed");
-    expect(getResult.details.persisted).toBe(true);
+    expect(result.getText).toBe("hello world");
+    expect(result.getDetails.source).toBe("managed");
+    expect(result.getDetails.persisted).toBe(true);
   });
 
-  test("set can copy from an existing environment variable via $NAME", async () => {
-    const tool = await getTool();
+  test("set can copy from an existing environment variable via $NAME", () => {
+    const result = runEnvToolScript(`
+      const setResult = await tool.execute("env-6", { action: "set", name: "TEST_ENV_TOOL_VAR", value: "$BAR" });
+      const getResult = await tool.execute("env-7", { action: "get", name: "TEST_ENV_TOOL_VAR" });
+      console.log(JSON.stringify({
+        setDetails: setResult.details,
+        currentValue: process.env.TEST_ENV_TOOL_VAR,
+        getText: getResult.content[0].text,
+      }));
+    `);
 
-    const setResult = await tool.execute("env-6", { action: "set", name: "TEST_ENV_TOOL_VAR", value: "$BAR" });
-    expect(setResult.details.copied_from_env).toBe("BAR");
-    expect(process.env.TEST_ENV_TOOL_VAR).toBe("copied-value");
-
-    const getResult = await tool.execute("env-7", { action: "get", name: "TEST_ENV_TOOL_VAR" });
-    expect(getResult.content[0].text).toBe("copied-value");
+    expect(result.setDetails.copied_from_env).toBe("BAR");
+    expect(result.currentValue).toBe("copied-value");
+    expect(result.getText).toBe("copied-value");
   });
 
-  test("clear removes one managed variable while preserving user content outside the managed block", async () => {
+  test("clear removes one managed variable while preserving user content outside the managed block", () => {
     writeFileSync(`${ws.workspace}/.env.sh`, "export KEEP_ME='yes'\n", "utf8");
-    const tool = await getTool();
 
-    await tool.execute("env-8", { action: "set", name: "TEST_ENV_TOOL_VAR", value: "abc" });
-    expect(process.env.TEST_ENV_TOOL_VAR).toBe("abc");
+    const result = runEnvToolScript(`
+      await tool.execute("env-8", { action: "set", name: "TEST_ENV_TOOL_VAR", value: "abc" });
+      const clearResult = await tool.execute("env-9", { action: "clear", name: "TEST_ENV_TOOL_VAR" });
+      console.log(JSON.stringify({
+        clearDetails: clearResult.details,
+        currentValue: process.env.TEST_ENV_TOOL_VAR ?? null,
+      }));
+    `);
 
-    const clearResult = await tool.execute("env-9", { action: "clear", name: "TEST_ENV_TOOL_VAR" });
-    expect(clearResult.details.cleared).toBe(true);
-    expect(process.env.TEST_ENV_TOOL_VAR).toBeUndefined();
+    expect(result.clearDetails.cleared).toBe(true);
+    expect(result.currentValue).toBeNull();
 
     const envScript = readFileSync(`${ws.workspace}/.env.sh`, "utf8");
     expect(envScript).toContain("export KEEP_ME='yes'");
     expect(envScript).not.toContain("TEST_ENV_TOOL_VAR");
   });
 
-  test("clear without a name clears all managed variables", async () => {
-    const tool = await getTool();
+  test("clear without a name clears all managed variables", () => {
+    const result = runEnvToolScript(`
+      await tool.execute("env-10", { action: "set", name: "TEST_ENV_TOOL_VAR", value: "abc" });
+      await tool.execute("env-11", { action: "set", name: "KEEP_ME", value: "def" });
+      const clearAll = await tool.execute("env-12", { action: "clear" });
+      const getAll = await tool.execute("env-13", { action: "get" });
+      console.log(JSON.stringify({
+        clearDetails: clearAll.details,
+        getDetails: getAll.details,
+        testEnv: process.env.TEST_ENV_TOOL_VAR ?? null,
+        keepEnv: process.env.KEEP_ME ?? null,
+      }));
+    `);
 
-    await tool.execute("env-10", { action: "set", name: "TEST_ENV_TOOL_VAR", value: "abc" });
-    await tool.execute("env-11", { action: "set", name: "KEEP_ME", value: "def" });
-    const clearAll = await tool.execute("env-12", { action: "clear" });
-
-    expect(clearAll.details.cleared).toBe(true);
-    expect(process.env.TEST_ENV_TOOL_VAR).toBeUndefined();
-    expect(process.env.KEEP_ME).toBeUndefined();
-
-    const getAll = await tool.execute("env-13", { action: "get" });
-    expect(getAll.details.count).toBe(0);
+    expect(result.clearDetails.cleared).toBe(true);
+    expect(result.testEnv).toBeNull();
+    expect(result.keepEnv).toBeNull();
+    expect(result.getDetails.count).toBe(0);
   });
 });

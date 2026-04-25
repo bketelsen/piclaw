@@ -3,7 +3,7 @@ import path from "node:path";
 import { isPathWithin } from "../utils/path-safety.js";
 import { Type } from "@sinclair/typebox";
 import type { AgentToolResult, ExtensionAPI, ExtensionFactory } from "@mariozechner/pi-coding-agent";
-import { WORKSPACE_DIR } from "../core/config.js";
+import { PICLAW_HOME } from "../core/config.js";
 import { normalizeScriptJDoc, type ScriptDiscoveryRole, type ScriptJDoc } from "./discovery-jdoc.js";
 
 export type ScriptCollection = "packaged-skill" | "workspace-skill" | "workspace-note";
@@ -180,7 +180,12 @@ export function parseScriptJDocFromSource(sourceText: string): ScriptJDoc | unde
   }
 }
 
-function detectRole(absolutePath: string, sourceText: string, metadata: ScriptJDoc | undefined): ScriptDiscoveryRole {
+function detectRole(
+  absolutePath: string,
+  sourceText: string,
+  metadata: ScriptJDoc | undefined,
+  workspaceDir = PICLAW_HOME,
+): ScriptDiscoveryRole {
   if (metadata?.role) return metadata.role;
   const tokens = absolutePath.toLowerCase().split(/[^a-z0-9]+/).filter(Boolean);
   if (tokens.includes("helper") || tokens.includes("helpers") || tokens.includes("sidecar")) return "module";
@@ -188,8 +193,8 @@ function detectRole(absolutePath: string, sourceText: string, metadata: ScriptJD
   if (/^#!\/.+/m.test(sourceText) || /process\.argv|Bun\.argv|parseArgs\s*\(/.test(sourceText)) return "entrypoint";
   if (absolutePath.includes(`${path.sep}runtime${path.sep}skills${path.sep}`)) return "entrypoint";
   if (absolutePath.includes(`${path.sep}skills${path.sep}`) && absolutePath.includes(`${path.sep}runtime${path.sep}extensions${path.sep}`)) return "entrypoint";
-  if (absolutePath.startsWith(path.join(WORKSPACE_DIR, ".pi", "skills") + path.sep)) return "entrypoint";
-  if (absolutePath.startsWith(path.join(WORKSPACE_DIR, "notes") + path.sep)) return "entrypoint";
+  if (absolutePath.startsWith(path.join(workspaceDir, ".pi", "skills") + path.sep)) return "entrypoint";
+  if (absolutePath.startsWith(path.join(workspaceDir, "notes") + path.sep)) return "entrypoint";
   return "module";
 }
 
@@ -207,7 +212,7 @@ function getRuntimeRoot(): string {
   return path.resolve(import.meta.dir, "../..");
 }
 
-export function getScriptRoots(workspaceDir = WORKSPACE_DIR): ScriptRootSpec[] {
+export function getScriptRoots(workspaceDir = PICLAW_HOME): ScriptRootSpec[] {
   const runtimeRoot = getRuntimeRoot();
   return [
     {
@@ -261,7 +266,7 @@ function buildInvocation(absolutePath: string, workspacePath: string | null): Sc
 }
 
 export function loadScriptCatalogEntries(options?: { workspaceDir?: string; scope?: ScriptScope; role?: ScriptRoleFilter }): ScriptCatalogEntry[] {
-  const workspaceDir = options?.workspaceDir ?? WORKSPACE_DIR;
+  const workspaceDir = options?.workspaceDir ?? PICLAW_HOME;
   const scope = options?.scope ?? "packaged";
   const role = options?.role ?? "entrypoint";
   const packageRoot = getPackageRoot();
@@ -273,7 +278,7 @@ export function loadScriptCatalogEntries(options?: { workspaceDir?: string; scop
       if (!root.include(absolutePath)) continue;
       const sourceText = fs.readFileSync(absolutePath, "utf8");
       const metadata = parseScriptJDocFromSource(sourceText);
-      const detectedRole = detectRole(absolutePath, sourceText, metadata);
+      const detectedRole = detectRole(absolutePath, sourceText, metadata, workspaceDir);
       if (role !== "all" && detectedRole !== role) continue;
       const workspacePath = isPathWithin(workspaceDir, absolutePath)
         ? path.relative(workspaceDir, absolutePath).replace(/\\/g, "/")
