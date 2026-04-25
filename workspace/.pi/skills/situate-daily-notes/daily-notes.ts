@@ -16,16 +16,18 @@
  * Today's note is always refreshed (metadata updated) but its content is preserved.
  *
  * Usage:
- *   bun run /workspace/.pi/skills/situate-daily-notes/daily-notes.ts [--days <n>] [--force] [--db <path>] [--chat <jid>]
+ *   bun run ~/.piclaw/.pi/skills/situate-daily-notes/daily-notes.ts [--days <n>] [--force] [--db <path>] [--chat <jid>]
  */
 
 import { Database } from "bun:sqlite";
 import { existsSync, mkdirSync, readFileSync } from "fs";
+import { homedir } from "os";
+import { join } from "path";
 import { parseArgs } from "util";
 import { buildInClause, resolveSessionScope, summariseSessionScope } from "./chat-session-scope";
 import { refreshAgentMemoryFromDailyNotes } from "./agent-memory-sidecar";
 
-const defaultDbPath = `${process.env.PICLAW_STORE || "/workspace/.piclaw/store"}/messages.db`;
+const defaultDbPath = `${process.env.PICLAW_STORE || join(homedir(), ".piclaw", "store")}/messages.db`;
 
 
 // --help support
@@ -50,7 +52,7 @@ const DB_PATH   = args.db!;
 const CHAT_JID  = args.chat!;
 const DAYS      = args.days ? parseInt(args.days, 10) : 0;
 const FORCE     = args.force!;
-const NOTES_DIR = "/workspace/notes/daily";
+const NOTES_DIR = join(process.env.PICLAW_HOME || join(homedir(), ".piclaw"), "notes", "daily");
 const SUMMARY_MARKER = "<!-- NEEDS_SUMMARY -->";
 const SUMMARY_UPDATE_MARKER = "<!-- NEEDS_SUMMARY_UPDATE -->";
 

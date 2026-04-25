@@ -18,6 +18,8 @@
 
 import { Database } from "bun:sqlite";
 import { existsSync, readFileSync, readdirSync } from "fs";
+import { homedir } from "os";
+import { join } from "path";
 import { parseArgs } from "util";
 import { execSync } from "child_process";
 import {
@@ -41,8 +43,8 @@ const { values: args } = parseArgs({
   args: Bun.argv.slice(2),
   options: {
     days: { type: "string", default: "7" },
-    out:  { type: "string", default: "/workspace/exports/situation.md" },
-    db:   { type: "string",  default: `${process.env.PICLAW_STORE || "/workspace/.piclaw/store"}/messages.db` },
+    out:  { type: "string", default: join(process.env.PICLAW_HOME || join(homedir(), ".piclaw"), "exports", "situation.md") },
+    db:   { type: "string",  default: `${process.env.PICLAW_STORE || join(homedir(), ".piclaw", "store")}/messages.db` },
     chat: { type: "string", default: "web:default" },
     "update-notes": { type: "boolean", default: false },
   },
@@ -53,7 +55,8 @@ const DB_PATH   = args.db!;
 const CHAT_JID  = args.chat!;
 const OUT_PATH  = args.out!;
 const DAYS      = parseInt(args.days!, 10);
-const NOTES_DIR = "/workspace/notes/daily";
+const PICLAW_HOME = process.env.PICLAW_HOME || join(homedir(), ".piclaw");
+const NOTES_DIR = join(PICLAW_HOME, "notes", "daily");
 const SUMMARY_MARKER = "<!-- NEEDS_SUMMARY -->";
 const SUMMARY_UPDATE_MARKER = "<!-- NEEDS_SUMMARY_UPDATE -->";
 const UPDATE_NOTES = args["update-notes"]!;
@@ -132,7 +135,7 @@ function extractSummaryUpdates(body: string): string[] {
 if (UPDATE_NOTES) {
   try {
     const cmd = [
-      "bun run /workspace/.pi/skills/situate-daily-notes/daily-notes.ts",
+      `bun run ${join(PICLAW_HOME, ".pi", "skills", "situate-daily-notes", "daily-notes.ts")}`,
       `--days ${DAYS}`,
       `--chat ${shellEscape(CHAT_JID)}`,
       `--db ${shellEscape(DB_PATH)}`,
@@ -344,8 +347,8 @@ const rg = run("curl -sH 'Metadata:true' 'http://169.254.169.254/metadata/instan
 const subId = run("curl -sH 'Metadata:true' 'http://169.254.169.254/metadata/instance/compute/subscriptionId?api-version=2021-02-01&format=text' --max-time 3");
 
 // ── 4. Preferences, notes index, tasks, skills ──────────────────────────
-const prefs = readFile("/workspace/notes/preferences.md");
-const index = readFile("/workspace/notes/index.md");
+const prefs = readFile(join(PICLAW_HOME, "notes", "preferences.md"));
+const index = readFile(join(PICLAW_HOME, "notes", "index.md"));
 
 let scheduledTasks = "None active.";
 if (existsSync(DB_PATH)) {
@@ -362,7 +365,7 @@ if (existsSync(DB_PATH)) {
 
 let skills = "(could not list)";
 try {
-  skills = execSync("ls /workspace/.pi/skills/", { timeout: 3000 })
+  skills = execSync(`ls ${shellEscape(join(PICLAW_HOME, ".pi", "skills"))}`, { timeout: 3000 })
     .toString().trim().split("\n").map(s => `\`${s}\``).join(", ");
 } catch {
   // Skill listing is optional for this situational report.
