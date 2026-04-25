@@ -106,12 +106,17 @@ type OptionalBundledExtension = {
   channels?: string[];
 };
 
+type PackagedExtensionEntry = {
+  packageName: string;
+  entry: string;
+};
+
 const OPTIONAL_EXTENSIONS: OptionalBundledExtension[] = [
   { path: resolve(EXTENSIONS_DIR, "integrations", "context-mode.ts") },
   { path: resolve(EXTENSIONS_DIR, "integrations", "bun-runner", "index.ts") },
 ];
 
-const PACKAGED_EXTENSION_ENTRIES = [] as const;
+const PACKAGED_EXTENSION_ENTRIES: readonly PackagedExtensionEntry[] = [];
 
 function getBundledExtensionEnvSignature(chatJid?: string): string {
   const channel = chatJid ? detectChannel(chatJid) ?? "" : "";

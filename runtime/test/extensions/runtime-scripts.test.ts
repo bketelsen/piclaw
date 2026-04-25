@@ -38,7 +38,7 @@ console.log("ok");\n`;
     expect(entries.length).toBeGreaterThan(10);
     expect(entries.some((entry) => entry.displayPath.endsWith("runtime/skills/operator/token-chart/token-chart.ts"))).toBe(true);
     expect(entries.some((entry) => entry.displayPath.includes("runtime/scripts/check-stale-dist.ts"))).toBe(false);
-    expect(entries.some((entry) => entry.displayPath.endsWith("render-proxmox-guest-compare.ts"))).toBe(true);
+    expect(entries.some((entry) => entry.displayPath.endsWith("runtime/skills/builtin/remote-peer/peer.ts"))).toBe(true);
   });
 
   test("registers list_scripts and supports query + intent", async () => {

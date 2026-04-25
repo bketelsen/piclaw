@@ -21,13 +21,8 @@ describe("built-in extension hook determinism", () => {
       "sqlIntrospect",
       "workspaceSearch",
       "workspaceMemoryBootstrap",
-      "sendAdaptiveCard",
-      "sendDashboardWidget",
-      "openWorkspaceFile",
       "envTools",
       "exitProcess",
-      "autoresearchSupervisor",
-      "imageProcessing",
     ]);
     expect(audit.context_hook_order).toEqual(["fileAttachments"]);
     expect(audit.final_system_prompt).toContain("## File Attachments");
@@ -35,7 +30,8 @@ describe("built-in extension hook determinism", () => {
     expect(audit.final_system_prompt).toContain("## Database Introspection");
     expect(audit.final_system_prompt).toContain("## Workspace search");
     expect(audit.final_system_prompt).toContain("## Workspace memory bootstrap");
-    expect(audit.final_system_prompt).toContain("## Dashboard widget posting");
+    expect(audit.final_system_prompt).toContain("## Workspace environment tool");
+    expect(audit.final_system_prompt).toContain("## Process exit");
     expect(audit.context_messages).toEqual([
       {
         role: "user",

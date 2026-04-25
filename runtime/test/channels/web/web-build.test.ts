@@ -7,7 +7,7 @@
 
 import { expect, test } from "bun:test";
 import "../../helpers.js";
-import { existsSync, readFileSync, statSync } from "fs";
+import { existsSync, statSync } from "fs";
 import { join } from "path";
 
 const WEB_BUILD_TEST_TIMEOUT_MS = 20_000;
@@ -35,9 +35,6 @@ test("build:web produces bundle assets", async () => {
   const loginMapPath = join(root, "web", "static", "dist", "login.bundle.js.map");
   const loginCssPath = join(root, "web", "static", "dist", "login.bundle.css");
 
-  const editorBundlePath = join(root, "web", "static", "dist", "editor.bundle.js");
-  const editorMapPath = join(root, "web", "static", "dist", "editor.bundle.js.map");
-
   expect(existsSync(appBundlePath)).toBe(true);
   expect(existsSync(appMapPath)).toBe(true);
   expect(existsSync(appCssPath)).toBe(true);
@@ -46,14 +43,6 @@ test("build:web produces bundle assets", async () => {
   expect(existsSync(loginMapPath)).toBe(true);
   expect(existsSync(loginCssPath)).toBe(true);
 
-  expect(existsSync(editorBundlePath)).toBe(true);
-  expect(existsSync(editorMapPath)).toBe(true);
-
-  const appBundle = readFileSync(appBundlePath, "utf8");
-  const editorBundle = readFileSync(editorBundlePath, "utf8");
-  expect(appBundle).toContain('#editor-vendor/codemirror');
-  expect(editorBundle).toContain('#editor-vendor/codemirror');
-
   expect(statSync(appBundlePath).size).toBeLessThan(1_500_000);
-  expect(statSync(editorBundlePath).size).toBeLessThan(500_000);
+  expect(statSync(loginBundlePath).size).toBeLessThan(500_000);
 }, WEB_BUILD_TEST_TIMEOUT_MS);

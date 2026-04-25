@@ -208,7 +208,7 @@ async function* adaptAzureReasoningEvents(events: AsyncIterableLike<any>): Async
   }
 }
 
-export { applyToolCallLimit } from "../utils/azure-tool-call-limit.js";
+export { applyToolCallLimit } from "./utils/azure-tool-call-limit.js";
 
 /** Re-exported response-input conversion helper from pi-ai internals. */
 export { convertResponsesMessages, convertResponsesTools };

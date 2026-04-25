@@ -2,17 +2,16 @@
 /**
  * postinstall.ts — Run after `bun add -g github:rcarmo/piclaw`.
  *
- * Repo installs should already contain the vendored runtime assets, including
- * Draw.io. This script only acts as a repair fallback for source checkouts or
- * incomplete package trees.
+ * Repo installs should already contain the vendored runtime assets this branch
+ * still ships. This script only acts as a repair fallback for source checkouts
+ * or incomplete package trees.
  *
  * Only uses bun and node:* builtins — no devDependencies required.
  *
  * Safe to re-run: checks whether output already exists.
  */
 
-import { existsSync } from "node:fs";
-import { resolve, dirname } from "node:path";
+import { dirname, resolve } from "node:path";
 import { spawnSync } from "node:child_process";
 
 const ROOT = dirname(import.meta.dir);
@@ -32,15 +31,6 @@ function run(label: string, cmd: string[], cwd = ROOT): boolean {
   return true;
 }
 
-// Draw.io should ship inside the repo/package. If it is missing, repair it as a
-// last resort so direct source installs still recover to a working runtime.
-const drawioIndex = resolve(ROOT, "runtime/extensions/viewers/drawio-editor/vendor/index.html");
-if (!existsSync(drawioIndex)) {
-  run("Repairing missing vendored draw.io", ["bun", "run", "build:vendor:drawio"]);
-} else {
-  console.log(`${LOG} draw.io vendor already present, skipping`);
-}
-
 // ── CodeMirror singleton enforcement ─────────────────────────────────────────
 // Bun can install duplicate nested copies of core CodeMirror packages.
 // Multiple instances of @codemirror/state break `instanceof` checks at runtime,
@@ -49,7 +39,7 @@ if (!existsSync(drawioIndex)) {
 const CM_SINGLETONS = ["@codemirror/commands", "@codemirror/state", "@codemirror/view", "@codemirror/language"];
 const nodeModules = resolve(ROOT, "node_modules");
 
-import { readdirSync, rmSync } from "node:fs";
+import { existsSync, readdirSync, rmSync } from "node:fs";
 
 function removeNestedCmDuplicates(pkg: string): number {
   // Find every nested node_modules/@codemirror/state (etc.) that is NOT the

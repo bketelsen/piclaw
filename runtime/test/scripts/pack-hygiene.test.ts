@@ -44,19 +44,19 @@ describe("pack-hygiene", () => {
     expect(findBlockedPackEntries(files)).toEqual([]);
   });
 
-  test("findMissingRequiredPackEntries flags missing drawio runtime assets", () => {
+  test("findMissingRequiredPackEntries flags missing required packaged entries", () => {
     const files = REQUIRED_PACK_ENTRIES.filter((entry) =>
-      entry !== "runtime/extensions/viewers/drawio-editor/vendor/js/app.min.js"
-      && entry !== "runtime/extensions/viewers/drawio-editor/vendor/drawio.meta.json"
+      entry !== "skel/.piclaw/config.json.example"
+      && entry !== "skel/notes/index.md"
     );
 
     expect(findMissingRequiredPackEntries(files)).toEqual([
-      "runtime/extensions/viewers/drawio-editor/vendor/js/app.min.js",
-      "runtime/extensions/viewers/drawio-editor/vendor/drawio.meta.json",
+      "skel/.piclaw/config.json.example",
+      "skel/notes/index.md",
     ]);
   });
 
-  test("findMissingRequiredPackEntries accepts complete drawio runtime assets", () => {
+  test("findMissingRequiredPackEntries accepts the complete required pack set", () => {
     expect(findMissingRequiredPackEntries([...REQUIRED_PACK_ENTRIES])).toEqual([]);
   });
 });

@@ -45,13 +45,13 @@ describe("audit-baseline-quality-deterministic", () => {
     expect(stderr.trim()).toBe("");
 
     const lines = stdout.trim().split(/\r?\n/);
-    expect(lines).toContain("channels-web-agent-flow\t49\tchannels web agent flow");
+    expect(lines).toContain("channels-web-agent-flow\t48\tchannels web agent flow");
     expect(lines).toContain("channels-web-auth-security\t17\tchannels web auth and security");
-    expect(lines).toContain("channels-web-http-routes\t38\tchannels web http and route surfaces");
-    expect(lines).toContain("channels-web-media-workspace-remote\t17\tchannels web media, workspace, and remote surfaces");
+    expect(lines).toContain("channels-web-http-routes\t37\tchannels web http and route surfaces");
+    expect(lines).toContain("channels-web-media-workspace-remote\t15\tchannels web media, workspace, and remote surfaces");
     expect(lines).toContain("web-ui-interaction-and-state\t85\tweb ui interaction and state");
-    expect(lines).toContain("web-ui-rendering-and-panes\t63\tweb ui rendering and panes");
-    expect(lines).toContain("web-ui-remote-and-workspace\t14\tweb ui remote and workspace");
+    expect(lines).toContain("web-ui-rendering-and-panes\t53\tweb ui rendering and panes");
+    expect(lines).toContain("web-ui-remote-and-workspace\t5\tweb ui remote and workspace");
   });
 
   test("follow-up ticket markdown captures reproducible failure evidence", () => {

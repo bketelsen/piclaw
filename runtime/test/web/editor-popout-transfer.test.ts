@@ -4,7 +4,7 @@ import {
   consumeEditorPopoutState,
   consumePanePopoutTransferToken,
   createEditorPopoutTransferPayload,
-} from '../../web/src/panes/editor-popout-transfer.js';
+} from '../../web/src/panes/pane-popout-transfer.js';
 
 function createStorage() {
   const map = new Map<string, string>();

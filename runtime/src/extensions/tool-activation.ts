@@ -41,40 +41,18 @@ export const TOOLSETS: ToolsetDefinition[] = [
   },
   {
     name: "workspace",
-    description: "Workspace search, document/diagram viewing, and image processing.",
-    toolNames: [
-      "search_workspace",
-      "open_drawio_editor",
-      "open_office_viewer",
-      "office_read",
-      "office_write",
-      "image_process",
-    ],
+    description: "Workspace search and index refresh helpers.",
+    toolNames: ["search_workspace", "refresh_workspace_index"],
   },
   {
     name: "automation",
     description: "Automation helpers for scripts, scheduled tasks, and large-output inspection.",
-    toolNames: ["schedule_task", "bun_run", "exec_batch", "search_tool_output"],
+    toolNames: ["schedule_task", "scheduled_tasks", "bun_run", "exec_batch", "search_tool_output"],
   },
   {
     name: "remote",
-    description: "Remote execution configuration and remote-capable infrastructure tools.",
-    toolNames: ["ssh", "proxmox", "portainer"],
-  },
-  {
-    name: "browser",
-    description: "Browser automation via Chrome DevTools Protocol.",
-    toolNames: ["cdp_browser"],
-  },
-  {
-    name: "ui",
-    description: "PiClaw web UI posting tools.",
-    toolNames: ["send_adaptive_card", "send_dashboard_widget"],
-  },
-  {
-    name: "experiments",
-    description: "Autonomous experiment orchestration.",
-    toolNames: ["start_autoresearch", "stop_autoresearch", "autoresearch_status"],
+    description: "No remote infrastructure tools are bundled in the stripped runtime.",
+    toolNames: [],
   },
   {
     name: "lifecycle",

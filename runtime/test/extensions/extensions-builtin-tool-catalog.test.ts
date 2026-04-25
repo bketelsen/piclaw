@@ -184,11 +184,11 @@ describe("built-in extension tool catalog regression", () => {
 
     // Tools from TOOLSETS that are provided by packaged/optional extensions
     // and are NOT expected to be registered by built-in factories.
-    const OPTIONAL_PACKAGED_TOOLS = new Set([
-      "read", "bash", "powershell", "edit", "write", // core SDK tools, not extensions
-       "bun_run", "exec_batch", "search_tool_output", // packaged integrations
-       "schedule_task",                                // registered by task scheduler, not extension factory
-     ]);
+     const OPTIONAL_PACKAGED_TOOLS = new Set([
+       "read", "bash", "powershell", "edit", "write", // core SDK tools, not extensions
+        "bun_run", "exec_batch", "search_tool_output", // packaged integrations
+        "schedule_task", "keychain",                    // registered outside the built-in extension factory set
+      ]);
 
     const toolsetToolNames = TOOLSETS.flatMap((ts) => ts.toolNames);
     const builtinToolsetTools = toolsetToolNames.filter(
