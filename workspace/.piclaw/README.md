@@ -4,16 +4,16 @@ This directory holds local Piclaw runtime configuration for the workspace.
 
 ## Workspace environment hook
 
-PiClaw also supports a workspace shell hook at `/workspace/.env.sh`.
+PiClaw also supports a workspace shell hook at `~/.piclaw/.env.sh`.
 
 This is a power-user feature. Use it when you intentionally want to customize the environment seen by the embedded terminal and the PiClaw runtime.
 
 Use it for workspace-scoped environment variables that should persist across container recreation, for example:
 
 ```bash
-export PATH="/workspace/.local/bin:$PATH"
-export GH_CONFIG_DIR=/workspace/.config/gh
-mkdir -p /workspace/.config/gh
+export PATH="$HOME/.piclaw/.local/bin:$PATH"
+export GH_CONFIG_DIR="$HOME/.piclaw/.config/gh"
+mkdir -p "$HOME/.piclaw/.config/gh"
 ```
 
 The file is sourced for interactive shells and on PiClaw startup. The default workspace `.gitignore` ignores `.env.sh` so local secrets and machine-specific paths do not get committed by accident.
@@ -23,16 +23,16 @@ The file is sourced for interactive shells and on PiClaw startup. The default wo
 One practical use case is making `gh auth login` persist from the embedded terminal inside PiClaw.
 
 ```bash
-export PATH="/workspace/.local/bin:$PATH"
-export GH_CONFIG_DIR=/workspace/.config/gh
-mkdir -p /workspace/.config/gh
+export PATH="$HOME/.piclaw/.local/bin:$PATH"
+export GH_CONFIG_DIR="$HOME/.piclaw/.config/gh"
+mkdir -p "$HOME/.piclaw/.config/gh"
 ```
 
-With that in `/workspace/.env.sh`, you can install `gh` into `/workspace/.local/bin`, open the embedded terminal, run `gh auth login`, and keep the GitHub CLI auth state in the mounted workspace across container recreation.
+With that in `~/.piclaw/.env.sh`, you can install `gh` into `~/.piclaw/.local/bin`, open the embedded terminal, run `gh auth login`, and keep the GitHub CLI auth state in the PICLAW_HOME directory across restarts.
 
 ### Responsibility boundary
 
-`/workspace/.env.sh` runs as part of the user-controlled workspace environment. If you put incompatible exports, shell logic, or PATH overrides in this file and PiClaw stops working correctly, that breakage is the user's responsibility.
+`~/.piclaw/.env.sh` runs as part of the user-controlled workspace environment. If you put incompatible exports, shell logic, or PATH overrides in this file and PiClaw stops working correctly, that breakage is the user's responsibility.
 
 ## FTS / workspace search
 

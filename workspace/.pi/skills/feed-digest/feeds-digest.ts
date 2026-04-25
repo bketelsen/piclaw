@@ -5,15 +5,18 @@
  */
 
 import { writeFileSync } from "fs";
+import { homedir } from "os";
+import { join } from "path";
 
 /** URL of the feed index page listing all RSS feed links. */
 const FEED_INDEX_URL = "https://feeds.carmo.io/feeds/index.html";
 /** Base URL prefix for resolving relative feed paths. */
 const FEED_BASE_URL = "https://feeds.carmo.io/feeds/";
+const PICLAW_HOME = process.env.PICLAW_HOME || join(homedir(), ".piclaw");
 /** Default output path for the digest markdown file. */
-const DEFAULT_OUT = "/workspace/notes/feeds-digest.md";
+const DEFAULT_OUT = join(PICLAW_HOME, "notes", "feeds-digest.md");
 /** Default output path for the links JSON index. */
-const DEFAULT_LINKS_OUT = "/workspace/notes/feeds-digest-links.json";
+const DEFAULT_LINKS_OUT = join(PICLAW_HOME, "notes", "feeds-digest-links.json");
 /** Default lookback window in hours. */
 const DEFAULT_HOURS = 12;
 /** Hamming distance threshold for near-duplicate detection. */

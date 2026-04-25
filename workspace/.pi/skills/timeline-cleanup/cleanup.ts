@@ -12,13 +12,16 @@
 import Database from "bun:sqlite";
 import { execSync } from "node:child_process";
 import { copyFileSync, statSync, rmSync, writeFileSync, chmodSync, existsSync } from "node:fs";
+import { homedir } from "os";
+import { join } from "path";
 import {
   resolveSessionScope,
   fallbackSessionScope,
   summariseSessionScope,
 } from "./chat-session-scope";
 
-const DB_PATH = `${process.env.PICLAW_STORE || "/workspace/.piclaw/store"}/messages.db`;
+const PICLAW_HOME = process.env.PICLAW_HOME || join(homedir(), ".piclaw");
+const DB_PATH = `${process.env.PICLAW_STORE || join(PICLAW_HOME, "store")}/messages.db`;
 
 export interface CleanupOptions {
   /** SQL LIKE patterns — each is wrapped in %...% automatically */

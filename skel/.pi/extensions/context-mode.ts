@@ -7,17 +7,31 @@
  */
 
 import { isBashToolResult } from "@mariozechner/pi-coding-agent";
+import { existsSync } from "node:fs";
+import { homedir } from "node:os";
+import { join } from "node:path";
 
-import {
+function resolveExistingPath(label: string, candidates: string[]): string {
+  for (const candidate of candidates) {
+    if (existsSync(candidate)) return candidate;
+  }
+  throw new Error(`Could not resolve ${label}. Tried: ${candidates.join(", ")}`);
+}
+
+const contextModeApiPath = resolveExistingPath("context mode API", [
+  join(homedir(), "projects", "piclaw", "runtime", "src", "extensions", "context-mode-api.ts"),
+  "/home/agent/piclaw/runtime/src/extensions/context-mode-api.ts",
+  "/usr/local/lib/bun/install/global/node_modules/piclaw/runtime/src/extensions/context-mode-api.js",
+]);
+
+const {
+  buildPreview,
   createBatchExecTool,
   createToolOutputSearchTool,
-} from "/workspace/piclaw/runtime/src/tools/context-tools.ts";
-import {
-  buildPreview,
-  saveToolOutput,
   readToolOutputFile,
+  saveToolOutput,
   startToolOutputCleanup,
-} from "/workspace/piclaw/runtime/src/tool-output.ts";
+} = await import(contextModeApiPath);
 
 const STORE_THRESHOLD_BYTES = parseInt(process.env.PICLAW_TOOL_OUTPUT_STORE_BYTES || "4096", 10);
 const STORE_THRESHOLD_LINES = parseInt(process.env.PICLAW_TOOL_OUTPUT_STORE_LINES || "40", 10);

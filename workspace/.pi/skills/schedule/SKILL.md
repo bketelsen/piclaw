@@ -52,7 +52,7 @@ cat > "$PICLAW_DATA/ipc/tasks/schedule_$(date +%s).json" <<EOF
   "type": "schedule_task",
   "chatJid": "$PICLAW_CHAT_JID",
   "task_kind": "shell",
-  "command": "ls -la /workspace",
+  "command": "ls -la ~/.piclaw",
   "cwd": ".",
   "timeout_sec": 30,
   "schedule_type": "interval",
@@ -91,7 +91,7 @@ LIMIT 10;
 
 ## Notes
 
-- Shell tasks are pre-validated (no newlines, no destructive patterns, cwd inside `/workspace`).
+- Shell tasks are pre-validated (no newlines, no destructive patterns, cwd inside `~/.piclaw`).
 - Use UTC for human-facing schedules unless asked otherwise.
 - Always acknowledge the created schedule and include next run time if available.
 

@@ -13,13 +13,13 @@ PiClaw ships `pi-mcp-adapter`, which exposes MCP servers to the agent through a 
 Preferred project-local config:
 
 ```bash
-/workspace/.pi/mcp.json
+~/.piclaw/.pi/mcp.json
 ```
 
 Starter example:
 
 ```bash
-cp /workspace/.pi/mcp.json.example /workspace/.pi/mcp.json
+cp ~/.piclaw/.pi/mcp.json.example ~/.piclaw/.pi/mcp.json
 ```
 
 The adapter also understands the global Pi config at:

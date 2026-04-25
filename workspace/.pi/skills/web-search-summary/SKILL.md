@@ -12,12 +12,12 @@ Search the web and generate lightweight summaries using HTML-to-Markdown convers
 
 1. Run a summarized search:
    ```bash
-   bun /workspace/.pi/skills/web-search-summary/web-search-summary.ts --query "your query"
+   bun ~/.piclaw/.pi/skills/web-search-summary/web-search-summary.ts --query "your query"
    ```
 
 2. Adjust fetch depth or summary length:
    ```bash
-   bun /workspace/.pi/skills/web-search-summary/web-search-summary.ts --query "your query" --fetch-limit 3 --max-sentences 4 --max-chars 800
+   bun ~/.piclaw/.pi/skills/web-search-summary/web-search-summary.ts --query "your query" --fetch-limit 3 --max-sentences 4 --max-chars 800
    ```
 
 ## Options

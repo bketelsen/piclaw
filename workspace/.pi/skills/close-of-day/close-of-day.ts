@@ -11,13 +11,15 @@
 import { Database } from "bun:sqlite";
 import { execSync } from "node:child_process";
 import { existsSync } from "node:fs";
+import { homedir } from "os";
+import { join } from "path";
 import { parseArgs } from "util";
 import {
   resolveSessionScope,
   fallbackSessionScope,
   summariseSessionScope,
   type SessionScope,
-} from "/workspace/scripts/lib/chat-session-scope";
+} from "../situate-daily-notes/chat-session-scope";
 
 type MessagesParams = Record<string, unknown>;
 
@@ -29,12 +31,12 @@ function resolveExistingPath(label: string, candidates: string[]): string {
 }
 
 const dbModulePath = resolveExistingPath("piclaw db module", [
-  "/workspace/piclaw/runtime/src/db.ts",
+  join(homedir(), "projects", "piclaw", "runtime", "src", "db.ts"),
   "/home/agent/piclaw/runtime/src/db.ts",
   "/usr/local/lib/bun/install/global/node_modules/piclaw/runtime/src/db.ts",
 ]);
 const messagesCrudModulePath = resolveExistingPath("messages-crud module", [
-  "/workspace/piclaw/runtime/src/extensions/messages-crud.ts",
+  join(homedir(), "projects", "piclaw", "runtime", "src", "extensions", "messages-crud.ts"),
   "/home/agent/piclaw/runtime/src/extensions/messages-crud.ts",
   "/usr/local/lib/bun/install/global/node_modules/piclaw/runtime/src/extensions/messages-crud.ts",
 ]);
@@ -109,7 +111,7 @@ const argConfig = parseArgs({
     "include-media": { type: "boolean", default: false },
     "report-only": { type: "boolean", default: false },
     "skip-backup": { type: "boolean", default: false },
-    "backup-cmd": { type: "string", default: "/workspace/.piclaw/restic/backup.sh" },
+    "backup-cmd": { type: "string", default: join(process.env.PICLAW_HOME || join(homedir(), ".piclaw"), "restic", "backup.sh") },
   },
   strict: true,
 });
@@ -122,7 +124,8 @@ const cleanupOnly = argConfig.values["cleanup-only"] || false;
 const situateOnly = argConfig.values["situate-only"] || false;
 const reportOnly = argConfig.values["report-only"] || false;
 const skipBackup = argConfig.values["skip-backup"] || false;
-const backupCommand = String(argConfig.values["backup-cmd"] || "/workspace/.piclaw/restic/backup.sh");
+const PICLAW_HOME = process.env.PICLAW_HOME || join(homedir(), ".piclaw");
+const backupCommand = String(argConfig.values["backup-cmd"] || join(PICLAW_HOME, "restic", "backup.sh"));
 
 const DRY_RUN = argConfig.values.apply ? false : Boolean(argConfig.values["dry-run"]);
 const DO_CLEANUP = Boolean(argConfig.values.cleanup);
@@ -130,9 +133,9 @@ const DO_CLEANUP = Boolean(argConfig.values.cleanup);
 const sinceFromDays = new Date(Date.now() - Math.max(1, DAYS) * 86_400_000).toISOString();
 const SINCE = (argConfig.values.since && argConfig.values.since.trim()) || sinceFromDays;
 const TODAY = new Date().toISOString().slice(0, 10);
-const REPORT_PATH = argConfig.values.report || `/workspace/exports/close-of-day-${TODAY}.md`;
+const REPORT_PATH = argConfig.values.report || join(PICLAW_HOME, "exports", `close-of-day-${TODAY}.md`);
 
-const DB_PATH = `${process.env.PICLAW_STORE || "/workspace/.piclaw/store"}/messages.db`;
+const DB_PATH = `${process.env.PICLAW_STORE || join(PICLAW_HOME, "store")}/messages.db`;
 
 /** Resolve the full session scope so cleanup covers all web branches. */
 function resolveCleanupScope(): SessionScope {
@@ -405,7 +408,7 @@ function deleteByRows(rowIds: number[], dryRun: boolean, force: boolean): Delete
 
 async function runSituate(): Promise<void> {
   const cmd = [
-    "bun run /workspace/scripts/situate.ts",
+    `bun run ${join(PICLAW_HOME, ".pi", "skills", "situate-daily-notes", "situate.ts")}`,
     `--days ${Math.max(1, DAYS)}`,
     "--chat",
     CHAT_JID,

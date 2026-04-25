@@ -19,7 +19,7 @@ The wrapper auto-installs Playwright if missing (logs to `/tmp/twitter-playwrigh
 For the quick scraper:
 
 ```bash
-cd /workspace && bun add linkedom
+cd ~/.piclaw && bun add linkedom
 ```
 
 ## Usage
@@ -27,7 +27,7 @@ cd /workspace && bun add linkedom
 Using the wrapper script:
 
 ```bash
-/workspace/.pi/skills/twitter-summary/run <handle> [hours] [output.json]
+~/.piclaw/.pi/skills/twitter-summary/run <handle> [hours] [output.json]
 ```
 
 `<handle>` is required. No default user handle is configured in the scripts.
@@ -36,13 +36,13 @@ Examples:
 
 ```bash
 # Fetch last 16 hours for an explicit handle
-/workspace/.pi/skills/twitter-summary/run <handle> 16 /tmp/twitter_fetch.json
+~/.piclaw/.pi/skills/twitter-summary/run <handle> 16 /tmp/twitter_fetch.json
 
 # Direct Playwright invocation
-bun /workspace/.pi/skills/twitter-summary/playwright-twitter-summary.ts --handle=<handle> --hours=24
+bun ~/.piclaw/.pi/skills/twitter-summary/playwright-twitter-summary.ts --handle=<handle> --hours=24
 
 # Quick (no browser) invocation
-bun /workspace/.pi/skills/twitter-summary/quick-twitter-summary.ts --handle=<handle> --hours=12
+bun ~/.piclaw/.pi/skills/twitter-summary/quick-twitter-summary.ts --handle=<handle> --hours=12
 ```
 
 ## Output

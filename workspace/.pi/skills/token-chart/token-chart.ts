@@ -5,6 +5,7 @@
  */
 
 import { readdirSync, statSync, readFileSync, mkdirSync, writeFileSync, existsSync } from "fs";
+import { homedir } from "os";
 import { basename, dirname, join } from "path";
 import Database from "bun:sqlite";
 
@@ -20,12 +21,15 @@ const args = process.argv.slice(2);
 const daysArgIndex = args.indexOf("--days");
 const days = daysArgIndex >= 0 ? parseInt(args[daysArgIndex + 1], 10) : 7;
 const targetDays = Number.isFinite(days) && days > 0 ? days : 7;
+const piclawHome = process.env.PICLAW_HOME || join(homedir(), ".piclaw");
+const defaultDataDir = process.env.PICLAW_DATA || join(piclawHome, "data");
+const defaultStoreDir = process.env.PICLAW_STORE || join(piclawHome, "store");
 
 const sessionsArgIndex = args.indexOf("--sessions-dir");
 const sessionsCandidate = sessionsArgIndex >= 0 ? args[sessionsArgIndex + 1] : undefined;
 const sessionsDir = sessionsCandidate && !sessionsCandidate.startsWith("--")
   ? sessionsCandidate
-  : "/workspace/.piclaw/data/sessions";
+  : join(piclawHome, "data", "sessions");
 
 const sourceArgIndex = args.indexOf("--source");
 const sourceCandidate = sourceArgIndex >= 0 ? args[sourceArgIndex + 1] : undefined;
@@ -39,13 +43,13 @@ const chatJidCandidate = chatJidIndex >= 0 ? args[chatJidIndex + 1] : undefined;
 const chatJid = chatJidCandidate && !chatJidCandidate.startsWith("--")
   ? chatJidCandidate
   : process.env.PICLAW_CHAT_JID || "web:default";
-const dataDir = process.env.PICLAW_DATA || "/workspace/.piclaw/data";
+const dataDir = defaultDataDir;
 const messagesDir = join(dataDir, "ipc", "messages");
 const mediaDir = join(dataDir, "ipc", "media");
 const outputSvgArgIndex = args.indexOf("--output-svg");
 const outputSvgCandidate = outputSvgArgIndex >= 0 ? args[outputSvgArgIndex + 1] : undefined;
 const outputSvg = outputSvgCandidate && !outputSvgCandidate.startsWith("--") ? outputSvgCandidate : undefined;
-const storeDir = process.env.PICLAW_STORE || "/workspace/.piclaw/store";
+const storeDir = defaultStoreDir;
 const dbPath = join(storeDir, "messages.db");
 
 const now = new Date();

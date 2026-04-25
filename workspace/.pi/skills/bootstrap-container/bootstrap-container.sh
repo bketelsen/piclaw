@@ -9,7 +9,7 @@ if [ "$1" = "--help" ] || [ "$1" = "-h" ]; then
   exit 0
 fi
 
-WORKSPACE="${PICLAW_WORKSPACE:-/workspace}"
+WORKSPACE="${PICLAW_HOME:-$HOME/.piclaw}"
 BROWSERS_PATH="${PLAYWRIGHT_BROWSERS_PATH:-$WORKSPACE/.cache/ms-playwright}"
 PACKAGE_JSON="$WORKSPACE/package.json"
 NODE_MODULES="$WORKSPACE/node_modules"

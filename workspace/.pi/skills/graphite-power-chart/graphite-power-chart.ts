@@ -13,6 +13,7 @@
  * - Test sine-wave generator for offline visual checks.
  */
 import { mkdirSync, writeFileSync } from "fs";
+import { homedir } from "os";
 import { basename, join, dirname } from "path";
 
 
@@ -208,7 +209,8 @@ const unitSuffix = unit ? ` ${unit}` : "";
 const ipcEnabled = args.includes("--ipc");
 const nudgeEnabled = args.includes("--nudge");
 const chatJid = getArg("--chat-jid") || process.env.PICLAW_CHAT_JID || "web:default";
-const dataDir = process.env.PICLAW_DATA || "/workspace/.piclaw/data";
+const piclawHome = process.env.PICLAW_HOME || join(homedir(), ".piclaw");
+const dataDir = process.env.PICLAW_DATA || join(piclawHome, "data");
 const messagesDir = join(dataDir, "ipc", "messages");
 const mediaDir = join(dataDir, "ipc", "media");
 

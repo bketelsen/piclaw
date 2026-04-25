@@ -8,20 +8,20 @@ distribution: public
 
 Build a deduped markdown digest from all feeds on https://feeds.carmo.io, filtered by a time window.
 The script stores:
-- Markdown digest: `/workspace/notes/feeds-digest.md`
-- Link index (JSON): `/workspace/notes/feeds-digest-links.json`
+- Markdown digest: `~/.piclaw/notes/feeds-digest.md`
+- Link index (JSON): `~/.piclaw/notes/feeds-digest-links.json`
 
 ## Usage
 
 ```bash
-/workspace/.pi/skills/feed-digest/run [--hours N] [--simhash N] [--out path] [--links-out path]
+~/.piclaw/.pi/skills/feed-digest/run [--hours N] [--simhash N] [--out path] [--links-out path]
 ```
 
 Defaults:
 - `--hours 12`
 - `--simhash 8`
-- `--out /workspace/notes/feeds-digest.md`
-- `--links-out /workspace/notes/feeds-digest-links.json`
+- `--out ~/.piclaw/notes/feeds-digest.md`
+- `--links-out ~/.piclaw/notes/feeds-digest-links.json`
 
 ## Notes
 

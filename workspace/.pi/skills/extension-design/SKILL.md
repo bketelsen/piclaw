@@ -9,7 +9,7 @@ distribution: public
 Use this when creating or reviewing extensions to avoid the broken import pattern.
 
 ## Avoid this pattern
-Do **not** import from the workspace source tree (for example `/workspace/piclaw/runtime/src/...` or `/workspace/.../node_modules`).
+Do **not** import from the workspace source tree (for example `~/projects/piclaw/runtime/src/...` or `~/.piclaw/.../node_modules`).
 The running agent uses the **installed** package, and workspace paths can drift or break after reloads.
 
 ## Use the installed package instead
@@ -27,10 +27,10 @@ import { createBatchExecTool } from "/home/agent/.bun/install/global/node_module
 
 ## Quick audit
 ```bash
-rg -n "/workspace/piclaw/runtime/src|/workspace/.*/node_modules" /workspace/.pi/extensions
+rg -n "$HOME/projects/piclaw/runtime/src|$HOME/.piclaw/.*/node_modules" ~/.piclaw/.pi/extensions
 ```
 
 ## Update skel when changing extensions
 ```bash
-cp /workspace/.pi/extensions/<name>.ts /workspace/piclaw/skel/.pi/extensions/<name>.ts
+cp ~/.piclaw/.pi/extensions/<name>.ts ~/projects/piclaw/skel/.pi/extensions/<name>.ts
 ```

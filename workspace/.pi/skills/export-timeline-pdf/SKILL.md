@@ -12,24 +12,24 @@ Export chat history through piclaw's internal localhost HTML export endpoint and
 
 1. Export the last 50 messages:
    ```bash
-   bun /workspace/.pi/skills/export-timeline-pdf/export-timeline-pdf.ts --chat web:default --last 50
+   bun ~/.piclaw/.pi/skills/export-timeline-pdf/export-timeline-pdf.ts --chat web:default --last 50
    ```
 
 2. Export a date range:
    ```bash
-   bun /workspace/.pi/skills/export-timeline-pdf/export-timeline-pdf.ts --chat web:default \
+   bun ~/.piclaw/.pi/skills/export-timeline-pdf/export-timeline-pdf.ts --chat web:default \
      --from "2026-03-01T00:00:00Z" --to "2026-03-05T23:59:59Z"
    ```
 
 3. Export a specific message range by row ID:
    ```bash
-   bun /workspace/.pi/skills/export-timeline-pdf/export-timeline-pdf.ts --chat web:default \
+   bun ~/.piclaw/.pi/skills/export-timeline-pdf/export-timeline-pdf.ts --chat web:default \
      --from-row 1234 --to-row 1300
    ```
 
 4. Dark theme:
    ```bash
-   bun /workspace/.pi/skills/export-timeline-pdf/export-timeline-pdf.ts --chat web:default --last 20 --theme dark
+   bun ~/.piclaw/.pi/skills/export-timeline-pdf/export-timeline-pdf.ts --chat web:default --last 20 --theme dark
    ```
 
 ## Options
@@ -43,7 +43,7 @@ Export chat history through piclaw's internal localhost HTML export endpoint and
 | `--to-row` | End message row ID | (all) |
 | `--last` | Export only the last N messages | (all) |
 | `--theme` | `light` or `dark` | `light` |
-| `--out` | Output PDF path | `/workspace/exports/timeline-<chat>.pdf` |
+| `--out` | Output PDF path | `~/.piclaw/exports/timeline-<chat>.pdf` |
 | `--port` | Piclaw web port | auto-detect / `8080` |
 | `--auth-key` | Internal export auth key | env/config lookup |
 | `--html-only` | Save HTML sidecar without rendering PDF | off |
@@ -57,7 +57,7 @@ The script resolves it in this order:
 2. `PICLAW_EXPORT_AUTH_KEY`
 3. `PICLAW_INTERNAL_SECRET`
 4. `PICLAW_WEB_INTERNAL_SECRET`
-5. `web.internalSecret` from `/workspace/.piclaw/config.json`
+5. `web.internalSecret` from `~/.piclaw/config.json`
 
 ## Prerequisites
 
