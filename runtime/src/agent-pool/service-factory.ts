@@ -10,6 +10,13 @@ import { AgentRuntimeFacade } from "./runtime-facade.js";
 import { AgentSessionBinder } from "./session-binder.js";
 import { AgentSessionManager, type PoolEntry } from "./session-manager.js";
 import { AgentToolFactory } from "./tool-factory.js";
+
+/** Module-level registry for additional extension factories to inject into every session. */
+const _extraExtensionFactories: ExtensionFactory[] = [];
+
+export function addExtensionFactory(factory: ExtensionFactory): void {
+  _extraExtensionFactories.push(factory);
+}
 import { AgentTurnCoordinator } from "./turn-coordinator.js";
 import { lightweightPrewarmSession } from "./session.js";
 import { recordMessageUsage } from "./usage.js";
@@ -51,7 +58,7 @@ export interface AgentPoolServices {
 
 async function resolveSessionExtensionFactories(chatJid: string): Promise<ExtensionFactory[]> {
   void chatJid;
-  return [];
+  return [..._extraExtensionFactories];
 }
 
 /**

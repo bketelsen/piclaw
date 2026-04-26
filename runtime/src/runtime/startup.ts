@@ -25,6 +25,8 @@ import { patchConsoleTimestamps } from "./console-timestamps.js";
 import type { RuntimeState } from "./state.js";
 import { launchWorkspaceIndexProcess } from "../workspace-index-process.js";
 import { loadAgentDefinitions, setLoadedAgentDefinitions } from "../agents/agent-definition.js";
+import { setDelegateChannelFns, delegateTool } from "../extensions/delegate-tool.js";
+import { addExtensionFactory } from "../agent-pool/service-factory.js";
 import { SystemMetricsSampler } from "../channels/web/agent/system-metrics.js";
 
 const log = createLogger("runtime.startup");
@@ -313,6 +315,23 @@ export async function startWebChannel(queue: AgentQueue, agentPool: AgentPool): 
     web.broadcastEvent(isBot ? "agent_response" : "new_post", interaction);
     return interaction.id;
   });
+
+  // Wire the delegate tool with channel context so Pi can dispatch agents
+  // directly from within a turn without going through the HTTP API.
+  const _processChatFn = (chatJid: string) => {
+    const pc = (web as unknown as { processChat: (chatJid: string, agentId: string) => Promise<void> }).processChat;
+    web.queue.enqueue(
+      () => pc.call(web, chatJid, "default"),
+      `chat:${chatJid}:delegate-${Date.now()}`,
+      `chat:${chatJid}`,
+    );
+  };
+  setDelegateChannelFns({
+    broadcastEvent: (eventType, data) => web.broadcastEvent(eventType, data),
+    processChat: _processChatFn,
+    agentPool,
+  });
+  addExtensionFactory(delegateTool);
 
   return web;
 }
