@@ -359,6 +359,7 @@ function MainApp({ locationParams, navigate }) {
             onDelegateStarted: surface.delegateState.applyDelegateStarted,
             onDelegateDone: surface.delegateState.applyDelegateDone,
             refreshActiveDelegates: surface.refreshActiveDelegates,
+            delegateState: surface.delegateState,
         },
         timeline,
         interaction,
