@@ -7,6 +7,7 @@ import { AttachmentPreviewModal } from '../components/attachment-preview-modal.j
 import { AgentRequestModal, AgentStatus } from '../components/status.js';
 import { Timeline } from '../components/timeline.js';
 import { SystemMetersHud } from '../components/system-meters-hud.js';
+import { DelegateBadge, DelegateSidebar } from '../components/delegate-sidebar.js';
 
 export interface MainShellRenderOptions {
   [key: string]: any;
@@ -17,9 +18,10 @@ export function buildMainShellClassName(options: {
   editorOpen: boolean;
   chatOnlyMode: boolean;
   zenMode: boolean;
+  delegateSidebarOpen?: boolean;
 }): string {
-  const { workspaceOpen, editorOpen, chatOnlyMode, zenMode } = options;
-  return `app-shell${workspaceOpen ? '' : ' workspace-collapsed'}${editorOpen ? ' editor-open' : ''}${chatOnlyMode ? ' chat-only' : ''}${zenMode ? ' zen-mode' : ''}`;
+  const { workspaceOpen, editorOpen, chatOnlyMode, zenMode, delegateSidebarOpen } = options;
+  return `app-shell${workspaceOpen ? '' : ' workspace-collapsed'}${editorOpen ? ' editor-open' : ''}${chatOnlyMode ? ' chat-only' : ''}${zenMode ? ' zen-mode' : ''}${delegateSidebarOpen ? ' delegate-sidebar-open' : ''}`;
 }
 
 export function extractPostedUserMessageId(response: unknown): number | null {
@@ -222,6 +224,7 @@ export function renderMainShell(options: MainShellRenderOptions): any {
     applyModelState,
     setPendingRequest,
     pendingRequestRef,
+    delegateState,
   } = options;
 
   const handleComposeFocus = () => {
@@ -230,8 +233,21 @@ export function renderMainShell(options: MainShellRenderOptions): any {
   };
 
   return html`
-    <div class=${buildMainShellClassName({ workspaceOpen, editorOpen, chatOnlyMode, zenMode })} ref=${appShellRef}>
+    <div class=${buildMainShellClassName({ workspaceOpen, editorOpen, chatOnlyMode, zenMode, delegateSidebarOpen: delegateState?.sidebarOpen })} ref=${appShellRef}>
       <${SystemMetersHud} mode="overlay" />
+      <${DelegateBadge}
+        activeCount=${delegateState?.activeDelegates?.length ?? 0}
+        completedCount=${delegateState?.completedDelegates?.length ?? 0}
+        hasUnread=${delegateState?.hasUnread ?? false}
+        onToggle=${delegateState?.toggleSidebar}
+      />
+      <${DelegateSidebar}
+        open=${delegateState?.sidebarOpen ?? false}
+        activeDelegates=${delegateState?.activeDelegates ?? []}
+        completedDelegates=${delegateState?.completedDelegates ?? []}
+        onClose=${delegateState?.closeSidebar}
+        onScrollToPost=${scrollToMessage}
+      />
       ${isRenameBranchFormOpen && html`
         <div class="rename-branch-overlay" onPointerDown=${(event: any) => {
           if (event.target === event.currentTarget) {

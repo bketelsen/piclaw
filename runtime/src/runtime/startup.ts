@@ -299,6 +299,11 @@ export async function startWebChannel(queue: AgentQueue, agentPool: AgentPool): 
   const web = new WebChannel({ queue, agentPool });
   await web.start();
   captureStartupMemorySnapshot(agentPool, { label: "post-web-start" });
+
+  // Register extension factories BEFORE any session creation (warmup, recovery, resume).
+  // Extensions are baked in when a session is first created — late registration misses it.
+  addExtensionFactory(delegateTool);
+
   queueStartupSessionWarmup(agentPool, resolveStartupSessionWarmupOptions());
   web.recoverInflightRuns();
   // Run an immediate pending-resume scan at startup so deferred queued

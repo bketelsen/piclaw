@@ -38,6 +38,11 @@ const EXACT_AGENT_ROUTES: ExactAgentRoute[] = [
   },
   {
     method: "GET",
+    path: "/agent/delegates",
+    handle: (channel, req) => channel.handleAgentDelegates(req),
+  },
+  {
+    method: "GET",
     path: "/agent/status",
     handle: (channel, req) => channel.handleAgentStatus(req),
   },

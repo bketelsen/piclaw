@@ -115,6 +115,9 @@ export interface HandleAppSseEventDependencies {
   removeStalledPost: () => void;
   setPosts: StateSetter<any[] | null>;
   preserveTimelineScrollTop: (mutate: () => void) => void;
+  onDelegateStarted?: (payload: unknown) => void;
+  onDelegateDone?: (payload: unknown) => void;
+  refreshActiveDelegates?: () => void;
 }
 
 /**
@@ -187,6 +190,9 @@ export function handleAppSseEvent(
     setPosts,
     preserveTimelineScrollTop,
   } = deps;
+
+  if (eventType === 'delegate_started') { deps.onDelegateStarted?.(data); return; }
+  if (eventType === 'delegate_done') { deps.onDelegateDone?.(data); return; }
 
   const { turnId, isCurrentChatEvent } = resolveSseEventRoutingContext(eventType, data, currentChatJid);
 
@@ -289,6 +295,7 @@ export function handleAppSseEvent(
       void refreshTimeline();
     }
     refreshModelAndQueueState();
+    void deps.refreshActiveDelegates?.();
     return;
   }
 

@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from '../vendor/preact-htm.js';
+import { useMemo, useRef, useState, useCallback } from '../vendor/preact-htm.js';
 import {
   readStoredWorkspaceOpenPreference,
 } from './workspace-visibility.js';
@@ -9,6 +9,7 @@ import {
   describeSearchScope,
   loadStoredBtwSession,
 } from './app-shell-state.js';
+import { useDelegateState } from './use-delegate-state.js';
 
 export function resolveCurrentBranchRecord(options: {
   activeChatAgents: any[];
@@ -157,6 +158,14 @@ export function useMainAppSurfaceState(options: {
   );
   const renameBranchNameInputRef = useRef<any>(null);
 
+  const delegateState = useDelegateState();
+  const refreshActiveDelegates = useCallback(() => {
+    fetch('/agent/delegates')
+      .then((r) => r.json())
+      .then((d: any) => delegateState.resyncActive(d?.active ?? []))
+      .catch(() => {});
+  }, [delegateState.resyncActive]);
+
   return {
     connectionStatus,
     setConnectionStatus,
@@ -270,5 +279,7 @@ export function useMainAppSurfaceState(options: {
     setRenameBranchNameDraft,
     renameBranchDraftState,
     renameBranchNameInputRef,
+    delegateState,
+    refreshActiveDelegates,
   };
 }

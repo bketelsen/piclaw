@@ -152,6 +152,7 @@ export interface WebChannelLike
   handlePost(req: Request, isReply: boolean): Promise<Response>;
 
   handleAgentStatus(req: Request): Response;
+  handleAgentDelegates(req: Request): Response;
   handleAgentContext(req: Request): Promise<Response>;
   handleAgentDebug(req: Request): Promise<Response>;
   handleAgentCommands(req: Request): Promise<Response>;

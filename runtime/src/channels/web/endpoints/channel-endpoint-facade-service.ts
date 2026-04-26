@@ -21,6 +21,7 @@ import {
   handleTimelineRequest,
 } from "./content-endpoints.js";
 import { deletePostResponse } from "../timeline-service.js";
+import { getActiveDelegates } from "../../../agents/delegate-runner.js";
 import { handleAgentsRequest, handleAvatarRequest } from "./identity-endpoints.js";
 import { handleManifestRequest, type ManifestIconMeta } from "../manifest.js";
 import { handleInternalPostRequest, handleUpdatePostRequest } from "../post-mutations.js";
@@ -145,6 +146,10 @@ export class WebChannelEndpointFacadeService {
 
   handleAgentStatus(req: Request): Response {
     return handleAgentStatusRequest(req, this.options.endpointContexts.agentStatus());
+  }
+
+  handleAgentDelegates(_req: Request): Response {
+    return this.options.json({ active: getActiveDelegates() }, 200);
   }
 
   async handleAgentContext(req: Request): Promise<Response> {

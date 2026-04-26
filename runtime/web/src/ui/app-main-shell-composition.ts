@@ -14,6 +14,7 @@ export interface ComposeMainAppShellOptionsInput {
   agentState: Record<string, any>;
   composeState: Record<string, any>;
   modelState: Record<string, any>;
+  delegateState?: any;
 }
 
 export function composeMainAppShellOptions(input: ComposeMainAppShellOptionsInput) {
@@ -29,6 +30,7 @@ export function composeMainAppShellOptions(input: ComposeMainAppShellOptionsInpu
     agentState,
     composeState,
     modelState,
+    delegateState,
   } = input;
 
   const panePopoutOptions = {
@@ -154,6 +156,7 @@ export function composeMainAppShellOptions(input: ComposeMainAppShellOptionsInpu
     ...agentState,
     ...composeState,
     ...modelState,
+    delegateState,
   };
 
   return {

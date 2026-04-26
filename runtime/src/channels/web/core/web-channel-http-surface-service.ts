@@ -23,6 +23,7 @@ type WebChannelHttpSurfaceEndpointFacade = Pick<
   | "handleInternalPost"
   | "handlePost"
   | "handleAgentStatus"
+  | "handleAgentDelegates"
   | "handleAgentContext"
   | "handleAgentDebug"
   | "handleAgentCommands"
@@ -165,6 +166,10 @@ export class WebChannelHttpSurfaceService {
 
   handleAgentStatus(req: Request): Response {
     return this.channel.endpointFacade.handleAgentStatus(req);
+  }
+
+  handleAgentDelegates(req: Request): Response {
+    return this.channel.endpointFacade.handleAgentDelegates(req);
   }
 
   async handleAgentContext(req: Request): Promise<Response> {

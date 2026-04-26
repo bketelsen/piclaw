@@ -40,6 +40,9 @@ interface UseMainAppOrchestrationCompositionOptions {
     agents: Record<string, unknown>;
     removingPostIds: Set<string | number>;
     btwSession: any;
+    onDelegateStarted?: (payload: unknown) => void;
+    onDelegateDone?: (payload: unknown) => void;
+    refreshActiveDelegates?: () => void;
   };
   timeline: Record<string, any>;
   interaction: Record<string, any>;
@@ -200,6 +203,9 @@ export function composeMainAppLifecycleCompositionOptions(options: UseMainAppOrc
     thoughtExpandedRef: refs.thoughtExpandedRef,
     draftExpandedRef: refs.draftExpandedRef,
     steerQueuedTurnIdRef: refs.steerQueuedTurnIdRef,
+    onDelegateStarted: shellState.onDelegateStarted,
+    onDelegateDone: shellState.onDelegateDone,
+    refreshActiveDelegates: shellState.refreshActiveDelegates,
   };
 }
 

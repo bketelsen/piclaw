@@ -482,6 +482,11 @@ export function installWebChannelPrototype(
       writable: true,
       value: withHttpSurface((service, req: Request) => service.handleAgentStatus(req)),
     },
+    handleAgentDelegates: {
+      configurable: true,
+      writable: true,
+      value: withHttpSurface((service, req: Request) => service.handleAgentDelegates(req)),
+    },
     handleAgentContext: {
       configurable: true,
       writable: true,

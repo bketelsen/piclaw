@@ -311,6 +311,9 @@ interface ComposeRealtimeLifecycleOptionsInput {
   setPosts: StateSetter<any[] | null>;
   preserveTimelineScrollTop: (mutate: () => void) => void;
   finalizeStalledResponse: () => void;
+  onDelegateStarted?: (payload: unknown) => void;
+  onDelegateDone?: (payload: unknown) => void;
+  refreshActiveDelegates?: () => void;
   connectionStatus: string;
   agentStatus: any;
   refreshAgentStatus: () => Promise<any>;
@@ -387,6 +390,9 @@ export function composeRealtimeLifecycleOptions(input: ComposeRealtimeLifecycleO
     agentStatus: input.agentStatus,
     refreshAgentStatus: input.refreshAgentStatus,
     refreshAutoresearchStatus: input.refreshAutoresearchStatus,
+    onDelegateStarted: input.onDelegateStarted,
+    onDelegateDone: input.onDelegateDone,
+    refreshActiveDelegates: input.refreshActiveDelegates,
   };
 }
 

@@ -73,7 +73,7 @@ export function dispatchDelegate(opts: DelegateOptions): void {
       mainChatJid: opts.mainChatJid,
       err,
     });
-    _injectResult(opts, null, String(err));
+    _injectResult(opts, null, String(err), undefined, undefined, undefined);
   });
 }
 
@@ -96,6 +96,13 @@ async function _runDelegate(opts: DelegateOptions): Promise<void> {
     task,
     startedAt,
     delegateJid,
+  });
+
+  opts.broadcastEvent("delegate_started", {
+    agent_name: agentDef.name,
+    task,
+    started_at: startedAt,
+    delegate_jid: delegateJid,
   });
 
   log.info("Delegate started", {
@@ -141,7 +148,7 @@ async function _runDelegate(opts: DelegateOptions): Promise<void> {
     status: error ? "error" : "success",
   });
 
-  _injectResult(opts, result, error, elapsed);
+  _injectResult(opts, result, error, elapsed, startedAt, delegateJid);
 }
 
 function _buildPrompt(systemPrompt: string, context: string, task: string): string {
@@ -158,6 +165,8 @@ function _injectResult(
   result: string | null,
   error: string | null,
   elapsedSec?: number,
+  startedAt?: string,
+  delegateJid?: string,
 ): void {
   const { mainChatJid, agentDef, broadcastEvent, processChat } = opts;
   const elapsedStr = elapsedSec !== undefined ? `, ${elapsedSec}s` : "";
@@ -219,6 +228,17 @@ function _injectResult(
     });
 
     broadcastEvent("new_post", interaction);
+
+    broadcastEvent("delegate_done", {
+      agent_name: agentDef.name,
+      task: opts.task,
+      started_at: startedAt ?? null,
+      delegate_jid: delegateJid ?? null,
+      completed_at: new Date().toISOString(),
+      elapsed_sec: elapsedSec ?? 0,
+      status: error ? "error" : "success",
+      row_id: rowId,
+    });
 
     // Trigger Pi to respond to the delegate result.
     processChat(mainChatJid);

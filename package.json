@@ -117,5 +117,9 @@
     "ts-prune": "^0.10.3",
     "typescript": "5.9.3"
   },
-  "x-dependency-policy": "Pinned exact versions only (no ^/~ ranges)."
+  "x-dependency-policy": "Pinned exact versions only (no ^/~ ranges).",
+  "trustedDependencies": [
+    "koffi",
+    "protobufjs"
+  ]
 }

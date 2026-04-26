@@ -284,6 +284,9 @@ export function useRealtimeLifecycleOrchestration(options: UseRealtimeLifecycleO
     updateUserProfile,
     viewStateRef,
     wasAgentActiveRef,
+    onDelegateStarted,
+    onDelegateDone,
+    refreshActiveDelegates,
   ]);
 
   useEffect(() => {

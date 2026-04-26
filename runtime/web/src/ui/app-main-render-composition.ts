@@ -188,5 +188,6 @@ export function composeRenderedMainAppOptions(input: {
       setActiveModel: input.surface.setActiveModel,
       applyModelState: input.orchestration.chatRefreshLifecycle.applyModelState,
     },
+    delegateState: input.surface.delegateState,
   });
 }
