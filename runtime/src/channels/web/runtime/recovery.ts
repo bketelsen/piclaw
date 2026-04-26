@@ -332,6 +332,9 @@ export function resumePendingChats(
     : Array.from(new Set([...Object.keys(cursors), ...store.getKnownChatJids()]));
 
   for (const jid of resolvedJids) {
+    // Only resume web-channel chats — Telegram/other chats have their own
+    // delivery mechanism and can't be served by the web channel's sendMessage.
+    if (!jid.startsWith("web:")) continue;
     const since = Object.prototype.hasOwnProperty.call(cursors, jid) ? cursors[jid] : "";
     const messages = store.getMessagesSince(jid, since, ctx.assistantName);
     const deferred = store.getDeferredQueuedFollowups(jid);
