@@ -954,6 +954,8 @@ export class SSEClient {
         bindJsonEvent('model_changed');
         bindJsonEvent('ui_theme');
         bindJsonEvent('ui_meters');
+        bindJsonEvent('delegate_started');
+        bindJsonEvent('delegate_done');
 
         [
             'extension_ui_request',
