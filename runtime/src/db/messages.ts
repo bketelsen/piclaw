@@ -95,6 +95,10 @@ function buildInteraction(row: StoredMessageRow, mediaIds: number[] = []): Inter
   if (contentBlocks?.length) data.content_blocks = contentBlocks;
   if (linkPreviews?.length) data.link_previews = linkPreviews;
   if (row.thread_id !== null && row.thread_id !== undefined) data.thread_id = row.thread_id;
+  // Carry sender_name for non-standard senders (e.g. delegate agents).
+  if (!row.is_bot_message && row.sender && !row.sender.startsWith("web-")) {
+    data.sender_name = row.sender_name;
+  }
   return {
     id: row.rowid,
     chat_jid: row.chat_jid,

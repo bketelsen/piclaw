@@ -10,11 +10,13 @@ This document outlines the main components, how they fit together, and where the
 flowchart TB
   subgraph Clients[Clients]
     WEBUI[Web UI\nBrowser]
+    TG[Telegram\nBot API]
     WA[WhatsApp\nBaileys]
   end
 
   subgraph Channels[Ingress and delivery]
     WEBCH[WebChannel\nHTTP + SSE + WebSocket routes]
+    TGCH[TelegramChannel]
     WACH[WhatsAppChannel]
   end
 
@@ -34,7 +36,7 @@ flowchart TB
   subgraph Workers[Background workers]
     IPC[IPC watcher]
     SCHED[Task scheduler]
-    DREAM[Dream / AutoDream\nout-of-band model turns\non temporary dream: chats]
+    DREAM[legacy /dream note maintenance\nout-of-band model turns\non temporary dream: chats]
   end
 
   subgraph Data[State and storage]
@@ -44,8 +46,10 @@ flowchart TB
   end
 
   WEBUI --> WEBCH
+  TG --> TGCH
   WA --> WACH
   WEBCH --> ROUTER
+  TGCH --> ROUTER
   WACH --> ROUTER
   ROUTER --> QUEUE
   IPC --> QUEUE
@@ -70,13 +74,13 @@ flowchart TB
 ```mermaid
 flowchart LR
   USER[Interactive user turn] --> CHATLANE[chat:{jid} lane]
-  DREAMTURN[Dream / AutoDream] --> DREAMLANE[dream:{jid} lane]
+  DREAMTURN[legacy /dream maintenance] --> DREAMLANE[dream:{jid} lane]
 
   CHATLANE --> MAIN[AgentPool + warm chat session]
   DREAMLANE --> TEMP[AgentPool + temporary dream: session]
 
   MAIN --> CHATOUT[Normal chat replies]
-  TEMP --> DREAMOUT[Dream summary + memory updates]
+  TEMP --> DREAMOUT[legacy note summary + memory updates]
 ```
 
 ### Reading guide
@@ -104,10 +108,10 @@ piclaw/
 │   │   ├── agent-pool.ts            # AgentSession pool + side-prompt primitive
 │   │   ├── agent-pool/              # Session helpers, logging, slash commands
 │   │   ├── agent-control/           # Slash command handling + parsers
-│   │   ├── agent-memory/            # Daily-note seeding + Dream memory refresh helpers
-│   │   ├── dream.ts                 # Dream / AutoDream orchestration
+│   │   ├── agent-memory/            # Daily-note seeding + legacy note-refresh helpers
+│   │   ├── dream.ts                 # legacy /dream orchestration
 │   │   ├── extensions/              # Built-in inline extension factories
-│   │   ├── channels/                # WhatsApp + web channels
+│   │   ├── channels/                # Web + WhatsApp + Telegram channels
 │   │   │   └── web/                 # HTTP handlers, SSE, adaptive cards, workspace, auth, extension routes
 │   │   ├── tools/                   # Bash tracking + context wrappers
 │   │   ├── db/                      # SQLite schema + accessors
@@ -158,7 +162,7 @@ These are compiled into the package and registered via `extensionFactories` on t
 | `sqlIntrospect` | `introspect_sql` (read-only SQLite queries) |
 | `scheduledTasks` | `schedule_task`, `scheduled_tasks`, `/tasks`, `/scheduled` |
 | `workspaceSearch` | `search_workspace`, `refresh_workspace_index` |
-| `workspaceMemoryBootstrap` | startup memory bootstrap hook (`before_agent_start`) |
+| `cogMemoryBootstrap` | startup COG memory bootstrap hook (`before_agent_start`) |
 | `dreamMaintenance` | `/dream` memory-consolidation slash command |
 | `uiThemeExtension` | `/theme`, `/tint` web UI theme controls |
 | `smartCompaction` | Smart compaction via `session_before_compact` hook (DB-driven file lists, junk-path filtering, working-indicator UI) |
@@ -194,32 +198,14 @@ In addition to the inline factories, piclaw ships **packaged runtime extensions*
 
 These packaged runtime extensions use relative imports into `runtime/src/...` where needed. Piclaw also loads selected bundled Pi-package extensions from `node_modules/` (currently `pi-mcp-adapter`). A `node_modules` symlink next to the `extensions/` directory is created automatically at startup so jiti can resolve deep package imports for both the local packaged extension tree and bundled npm/Pi-package extensions. `runtime/src/extensions/` remains a separate built-in factory surface and should not be confused with the filesystem-backed packaged extension tree.
 
-Dream-backed startup memory now follows a compact-index pattern inside the workspace:
-- `notes/memory/MEMORY.md` is the startup index and is kept under the session budget (line-capped and under ~25KB)
-- typed memory files (`user.md`, `feedback.md`, `project.md`, `reference.md`) hold the richer agent-facing detail
-- optional sparse files under `notes/memory/days/` preserve durable transcript-derived signals only when a day needs an extra agent-facing memory beyond the human-readable `notes/daily/*.md` overview
-- runtime no longer auto-generates a mirrored `notes/memory/days/*.md` for every complete daily note; the model owns that sparse subtree, while `MEMORY.md` falls back to linking the daily note when no sparse day-memory file exists
-- the built-in nightly AutoDream task and the manual `/dream` command now execute as out-of-band model turns on a temporary `dream:` channel
-- Dream work is queued on a dedicated `dream:<chatJid>` lane so long consolidations do not block the interactive `chat:<chatJid>` lane
-- runtime creates a pre-Dream `.zip` backup, prunes older Dream backups (default keep: 10), and seeds in-window daily notes from the database before the model turn starts
-- Dream ends with a runtime-owned workspace FTS refresh so newly written memory files are searchable immediately
-- the temporary dream channel/session is cleaned up after the cycle completes
-
-Dream/AutoDream use the original model-driven 4-phase flow:
-1. Orient
-2. Signal
-3. Consolidate
-4. Prune and Index
-
-In the Prune and Index phase, Dream should both remove stale pointers and add concise references to newly important memories; overly verbose index lines should be shortened with detail moved into the target file.
-
-Search collection is intentionally narrow:
-- inspect existing daily/memory files first
-- inspect drifted memories
-- only then run narrow transcript/message searches for known suspicions
-- avoid exhaustive transcript sweeps
-
-See [runtime/docs/dream-memory.md](../runtime/docs/dream-memory.md) for the detailed feature description.
+COG-backed startup memory now follows a layered filesystem pattern inside the workspace:
+- `cog/memory/hot-memory.md` is the always-loaded global summary and stays short
+- `cog/memory/<domain>/...` holds warm domain files that are pulled by matching COG skills
+- `cog/memory/cog-meta/` stores shared patterns, reflection state, foresight, and scenarios
+- `cog/memory/glacier/` stores archived observation blocks plus an index
+- `cogMemoryBootstrap` injects `hot-memory.md`, `cog-meta/patterns.md`, `cog-meta/foresight-nudge.md`, and `domains.yml` into the system prompt before agent startup
+- startup seeds `cog/memory/` from the packaged skeleton and installs the `cog-reflect`, `cog-housekeeping`, and `cog-foresight` scheduled tasks
+- `search_workspace` can index `cog/memory/` when that root is included in `workspaceSearchRoots`
 
 For infrastructure integrations, the intended uniform contract is:
 - session-scoped profile actions: `get` / `set` / `clear`
@@ -350,8 +336,9 @@ There is no longer a supported path where an empty terminal turn both:
 ## Notes
 
 - The agent pool keeps one warm session per chat JID and evicts idle sessions after a TTL.
-- The web UI is the primary interface; the WhatsApp channel is optional (skipped entirely when `WHATSAPP_PHONE` is not configured).
-- Web and WhatsApp share the same storage and agent pool.
+- The web UI is the primary interface; WhatsApp and Telegram are optional secondary channels.
+- WhatsApp startup is skipped when `WHATSAPP_PHONE` is not configured, and Telegram startup is skipped when `PICLAW_TELEGRAM_BOT_TOKEN` is not configured.
+- Web, WhatsApp, and Telegram share the same storage and agent pool.
 - Core utilities (config/env/chat context) live in `runtime/src/core`; shared helpers live in `runtime/src/utils`.
 - Chat context (chat JID + channel) is tracked in AsyncLocalStorage; tools/extensions read from the scoped context (defaults to `web:default` / `web`) rather than env variables.
 - SSH-backed core-tool state is session-scoped and persisted in SQLite (`ssh_configs`). `AgentPool` injects a per-session `ssh-core` extension and can hot-swap the live SSH backend for an existing warm session.

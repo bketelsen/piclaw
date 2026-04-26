@@ -181,6 +181,10 @@ const webConfig =
   piclawConfig.web && typeof piclawConfig.web === "object"
     ? (piclawConfig.web as Record<string, unknown>)
     : piclawConfig;
+const telegramConfig =
+  piclawConfig.telegram && typeof piclawConfig.telegram === "object"
+    ? (piclawConfig.telegram as Record<string, unknown>)
+    : piclawConfig;
 const toolsConfig =
   piclawConfig.tools && typeof piclawConfig.tools === "object"
     ? (piclawConfig.tools as Record<string, unknown>)
@@ -607,15 +611,49 @@ export function getRemoteInteropConfig(): Readonly<RemoteInteropConfig> {
   return REMOTE_INTEROP_CONFIG;
 }
 
+function pickTelegramAllowedUsers(config: Record<string, unknown>, keys: string[]): string[] {
+  for (const key of keys) {
+    const value = config[key];
+    if (Array.isArray(value)) {
+      const items = value
+        .map((item) => {
+          if (typeof item === "string") return item.trim();
+          if (typeof item === "number" && Number.isFinite(item)) return String(item);
+          return "";
+        })
+        .filter(Boolean);
+      if (items.length > 0) return items;
+      continue;
+    }
+    if (typeof value === "string" && value.trim()) {
+      const items = value
+        .split(",")
+        .map((item) => item.trim())
+        .filter(Boolean);
+      if (items.length > 0) return items;
+    }
+  }
+  return [];
+}
+
 export const TELEGRAM_BOT_TOKEN =
   process.env.PICLAW_TELEGRAM_BOT_TOKEN ||
   envConfig.PICLAW_TELEGRAM_BOT_TOKEN ||
+  pickString(telegramConfig, [
+    "botToken",
+    "bot_token",
+    "PICLAW_TELEGRAM_BOT_TOKEN",
+  ]) ||
   "";
 
 export const TELEGRAM_ALLOWED_USERS = (
   process.env.PICLAW_TELEGRAM_ALLOWED_USERS ||
   envConfig.PICLAW_TELEGRAM_ALLOWED_USERS ||
-  ""
+  pickTelegramAllowedUsers(telegramConfig, [
+    "allowedUsers",
+    "allowed_users",
+    "PICLAW_TELEGRAM_ALLOWED_USERS",
+  ]).join(",")
 )
   .split(",")
   .map((value) => value.trim())

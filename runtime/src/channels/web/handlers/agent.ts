@@ -48,6 +48,8 @@ import "../../../extensions/local-core-tool-status-hints.js";
 import "../../../extensions/generic-tool-status-hints.js";
 import { createUuid } from "../../../utils/ids.js";
 import { createLogger } from "../../../utils/logger.js";
+import { getLoadedAgentDefinitions } from "../../../agents/agent-definition.js";
+import { dispatchDelegate } from "../../../agents/delegate-runner.js";
 import type { AttachmentInfo } from "../../../agent-pool/attachments.js";
 import { checkPendingShutdown } from "../../../runtime/shutdown-registry.js";
 import { DEFAULT_BASE_RETRY_MS, getRetryAtIso } from "../../../queue/retry-policy.js";
@@ -453,6 +455,54 @@ export async function handleAgentMessage(
   if (!hasPayload) return channel.json({ error: "Missing 'content' field" }, 400);
 
   const requestMode = normalized.mode ?? "auto";
+  // ── Delegate agent intercept ──────────────────────────────────────────
+  // Check @name against loaded agent definitions BEFORE branch-forward logic.
+  const earlyMention = content.trim().length > 0 ? parseLeadingAgentMention(content) : null;
+  if (earlyMention) {
+    const agentDefs = getLoadedAgentDefinitions();
+    const agentDef = agentDefs.get(earlyMention.agentName);
+    if (agentDef) {
+      const task = earlyMention.remainder.trim();
+      if (!task) {
+        return channel.json({ error: `Missing task for @${earlyMention.agentName}` }, 400);
+      }
+      // Store the user message so it appears in the timeline.
+      const userInteraction = storeAgentUserMessage(channel, chatJid, {
+        content: typeof normalized.content === "string" ? normalized.content : content,
+        mediaIds: normalized.mediaIds,
+        contentBlocks: normalized.contentBlocks,
+        linkPreviews: normalized.linkPreviews,
+      });
+      if (userInteraction) {
+        channel.broadcastEvent("new_post", userInteraction);
+        setChatCursor(chatJid, userInteraction.timestamp);
+      }
+      dispatchDelegate({
+        agentDef,
+        task,
+        context: "",  // Pi will synthesize context in a future turn; bare task for now
+        mainChatJid: chatJid,
+        agentPool: channel.agentPool,
+        broadcastEvent: (eventType, data) => channel.broadcastEvent(eventType, data),
+        processChat: (jid) => {
+          const pc = (channel as unknown as { processChat: (jid: string, agentId: string) => Promise<void> }).processChat;
+          channel.queue.enqueue(
+            () => pc.call(channel, jid, agentId),
+            `chat:${jid}:delegate-${Date.now()}`,
+            `chat:${jid}`,
+          );
+        },
+      });
+      return channel.json({
+        status: "delegated",
+        agent: earlyMention.agentName,
+        task,
+        message: `Delegated to @${earlyMention.agentName}. Result will appear in this chat when complete.`,
+      });
+    }
+  }
+  // ── End delegate intercept ─────────────────────────────────────────────
+
   const mention = content.trim().length > 0 ? parseLeadingAgentMention(content) : null;
   const mentionTarget = mention
     ? (typeof (channel.agentPool as { findChatByAgentName?: (name: string) => { chat_jid: string; agent_name: string } | null }).findChatByAgentName === "function"
@@ -655,6 +705,31 @@ export async function handleAgentMessage(
       { thread_id: null, command: metersCommand, ui_only: true },
       200
     );
+  }
+
+  // ── /agents — list loaded agent definitions ─────────────────────────────
+  if (trimmed === "/agents") {
+    const defs = getLoadedAgentDefinitions();
+    const msg = defs.size === 0
+      ? "No agent definitions loaded."
+      : [...defs.values()].map(
+          (d) => `**@${d.name}** — ${d.description}\n  tools: ${d.tools.join(", ")} | max_turns: ${d.maxTurns}`
+        ).join("\n\n");
+    await channel.sendMessage(chatJid, msg, { forceRoot: true });
+    return channel.json({ command: "/agents", ui_only: true }, 200);
+  }
+
+  // ── /agent-status — list running delegates ────────────────────────────
+  if (trimmed === "/agent-status") {
+    const { getActiveDelegates } = await import("../../../agents/delegate-runner.js");
+    const active = getActiveDelegates();
+    const msg = active.length === 0
+      ? "No delegates currently running."
+      : active.map(
+          (d) => `**@${d.agentName}** running since ${d.startedAt}\nTask: ${d.task.slice(0, 120)}`
+        ).join("\n\n");
+    await channel.sendMessage(chatJid, msg, { forceRoot: true });
+    return channel.json({ command: "/agent-status", ui_only: true }, 200);
   }
 
   // Model/thinking commands: execute without writing to the timeline.

@@ -10,13 +10,14 @@ config files, secrets, authentication, and notifications.
 [Workspace env hook](#workspace-environment-hook-workspaceenvsh) ·
 [Provider setup](#provider-setup-via-login) ·
 [Runtime & agent](#runtime-and-agent) ·
+[COG memory](#cog-memory) ·
 [MCP](#mcp-server-config-pi-mcp-adapter) ·
 [SSH remote tools](#ssh-backed-remote-core-tools) ·
 [Authentication](#authentication-totp--passkeys) ·
 [Keychain](#keychain-secrets) ·
+[Telegram](#telegram) ·
 [WhatsApp](#whatsapp-pairing) ·
 [Pushover](#pushover-notifications) ·
-[Dream](#dream-and-autodream) ·
 [External workspace](#using-an-external-workspace) ·
 [Cross-instance interop](#cross-instance-interop)
 
@@ -452,7 +453,7 @@ Notes:
 ### Workspace search / FTS roots
 
 Piclaw's `search_workspace` tool uses SQLite FTS over a configurable set of workspace roots.
-Dream and AutoDream refresh this index at the end of memory maintenance so generated note outputs are searchable immediately.
+COG memory can be indexed too; add `cog/memory` if you want the built-in `memory` scope to return COG files.
 
 Default roots:
 
@@ -467,6 +468,7 @@ Override them with either `.piclaw/config.json`:
     "workspaceSearchRoots": [
       "notes",
       ".pi/skills",
+      "cog/memory",
       "docs",
       "workitems"
     ]
@@ -477,7 +479,7 @@ Override them with either `.piclaw/config.json`:
 or an environment variable:
 
 ```bash
-PICLAW_WORKSPACE_SEARCH_ROOTS="notes,.pi/skills,docs,workitems"
+PICLAW_WORKSPACE_SEARCH_ROOTS="notes,.pi/skills,cog/memory,docs,workitems"
 ```
 
 Rules:
@@ -488,54 +490,30 @@ Rules:
 - `search_workspace` can still refresh indexing on demand per call
 - `refresh_workspace_index` forces a full rebuild for the configured roots
 - the web workspace explorer now shows the current index status, last indexed time, indexed file count, configured roots, and a one-click reindex control
-- `scope: notes` and `scope: skills` remain the built-in convenience filters; `scope: all` searches across the configured root set
+- `scope: notes`, `scope: skills`, and `scope: memory` are the built-in convenience filters; `scope: all` searches across the configured root set
 
-### Dream and AutoDream
+## COG memory
 
-Memory maintenance has two trigger modes:
+PiClaw's durable agent memory lives under `${PICLAW_HOME}/cog/memory` (`COG_MEMORY_DIR` in runtime config). On a fresh install, startup seeds the tree from `skel/cog/memory/`.
 
-- `Dream` — manual `/dream [days]`
-- `AutoDream` — built-in nightly scheduled task (`builtin-dream-midnight`)
+Before each agent turn, the `cogMemoryBootstrap` extension appends the current:
 
-Both modes now run as out-of-band model turns on a temporary `dream:` channel.
-The dream channel is cleaned up after the cycle ends.
-Before the model turn begins, runtime creates a pre-Dream `.zip` backup of `notes/daily/` and `notes/memory/`, prunes older Dream backups (default keep: 10), and refreshes/seeds in-window daily notes from the messages database.
+- `hot-memory.md`
+- `cog-meta/patterns.md`
+- `cog-meta/foresight-nudge.md`
+- `domains.yml`
 
-Default windows:
+to the system prompt when those files exist.
 
-- manual `Dream` keeps the historical default of 7 days unless you pass `/dream <days>`
-- nightly `AutoDream` now defaults to a narrower 2-day window
+The runtime also seeds three scheduled COG maintenance tasks in local runtime time:
 
-AutoDream is gated, but nightly cadence no longer waits for a full 24-hour gap.
-It runs when there has been activity since the last consolidation.
+| Task | Default cron | Purpose |
+|---|---|---|
+| `cog-reflect` | `0 2 * * *` | Mine recent conversations and refresh reflective meta-memory |
+| `cog-housekeeping` | `0 3 * * 0` | Prune hot memory, archive older observations, rebuild indexes |
+| `cog-foresight` | `0 7 * * *` | Write one concrete cross-domain nudge to `cog-meta/foresight-nudge.md` |
 
-| Variable | Default | Purpose |
-|----------|---------|---------||
-| `PICLAW_DREAM_CRON` | `0 1 * * *` | Cron schedule for AutoDream. Evaluated in the runtime timezone (`TZ` / runtime timing config), so the default is 01:00 local runtime time. |
-| `PICLAW_DREAM_MODEL` | _(unset — inherits session model)_ | Pin Dream to a specific model label (e.g. `anthropic/claude-sonnet-4-20250514`). The scheduler switches before the Dream turn and restores the original model afterward. |
-| `PICLAW_DREAM_BACKUP_KEEP` | `10` | Number of pre-Dream note backups to retain |
-
-- if there is no prior consolidation, AutoDream runs
-- if there have been no sessions since the last consolidation, AutoDream skips
-- otherwise the nightly run proceeds even if the previous consolidation was late the night before
-
-The model follows the original 4-phase Dream flow:
-
-1. Orient
-2. Signal
-3. Consolidate
-4. Prune and Index
-
-In the Prune and Index phase, Dream should both remove stale pointers and add concise references to newly important memories; verbose `MEMORY.md` lines should be shortened with detail moved into the linked file.
-
-Search collection should stay narrow:
-
-- inspect daily/memory files first
-- inspect drifted memories
-- use narrow message searches for already suspected terms
-- avoid exhaustive transcript sweeps
-
-See [runtime/docs/dream-memory.md](../runtime/docs/dream-memory.md) for the detailed file sequence and outputs.
+Use the `cog-setup` skill to add a new domain and its starter files.
 
 ## Authentication (TOTP + passkeys)
 
@@ -616,6 +594,36 @@ Quick example:
 PICLAW_KEYCHAIN_KEY="your-master-key" \
   piclaw keychain set github/token --type token --secret "ghp_xxx"
 ```
+
+## Telegram
+
+Telegram is optional. If `PICLAW_TELEGRAM_BOT_TOKEN` is unset or empty, piclaw skips Telegram startup and all other channels behave normally.
+
+Set the bot token and the list of allowed Telegram user IDs:
+
+```bash
+PICLAW_TELEGRAM_BOT_TOKEN=123456:replace-me
+PICLAW_TELEGRAM_ALLOWED_USERS=123456789,987654321
+```
+
+Or in `.piclaw/config.json`:
+
+```json
+{
+  "telegram": {
+    "botToken": "123456:replace-me",
+    "allowedUsers": ["123456789", "987654321"]
+  }
+}
+```
+
+To find your user ID, message your bot once and inspect the sender ID:
+
+```bash
+curl -s "https://api.telegram.org/bot$PICLAW_TELEGRAM_BOT_TOKEN/getUpdates" | jq '.result[]?.message?.from?.id'
+```
+
+Telegram is currently DM-only. Start piclaw, open a direct chat with your bot, and replies will appear in that same conversation.
 
 ## WhatsApp pairing
 

@@ -30,7 +30,7 @@ GLOBAL_LOCK := $(BUN_ROOT)/install/global/bun.lock
 PI_AGENT_VERSION ?= $(shell jq -r '.dependencies["@mariozechner/pi-coding-agent"] // "0.58.3"' package.json)
 WEB_BUILD_TEST_TIMEOUT_MS ?= 20000
 
-.PHONY: help dev build build-piclaw build-web build-ts typecheck vendor update-mermaid-vendor pack \
+.PHONY: help dev build build-piclaw build-web build-ts typecheck vendor update-mermaid-vendor pack deploy \
         install local-install restart lint test test-coverage ci-fast ci-integration \
         sync-version bump-minor bump-patch push
 
@@ -138,6 +138,13 @@ local-install: pack ## Pack and install piclaw globally (no restart)
 	fi; \
 	printf '%s\n' "[local-install] Install complete (no restart)"; \
 	printf '%s\n' "[local-install] Done (v$${VERSION})"
+
+deploy: local-install ## Build, install globally, and restart the systemd user service if active
+	@if systemctl --user is-active piclaw >/dev/null 2>&1; then \
+		systemctl --user restart piclaw && echo "[deploy] piclaw restarted"; \
+	else \
+		echo "[deploy] piclaw service not active — installed but not started"; \
+	fi
 
 install: local-install ## Pack and install piclaw globally
 

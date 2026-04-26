@@ -15,7 +15,7 @@ It is for people who want one stateful agent workspace they can run locally or i
 - **Practical built-ins** — code editing, Office/PDF/CSV/image/video viewing, draw.io, VNC, browser automation, image processing, MCP, infra tools, and optional cross-instance IPC for paired remote peers
 - **Agent-first workflows** — steering, queued follow-ups, side prompts, autoresearch loops, scheduled tasks, and visual artifact generation
 - **Context conservation** — small always-active tool baseline with staged discovery via `list_tools` / `list_scripts`
-- **Optional auth/channels** — passkeys/TOTP for the web UI, plus optional WhatsApp integration
+- **Optional auth/channels** — passkeys/TOTP for the web UI, plus optional WhatsApp and Telegram integrations
 
 ## Quick start
 
@@ -67,11 +67,34 @@ Most users only need a few environment variables:
 | `PICLAW_WEB_TOTP_SECRET` | _(empty)_ | Base32 TOTP secret; enables login gate (or initialize with `/totp`) |
 | `PICLAW_WEB_PASSKEY_MODE` | `totp-fallback` | `totp-fallback`, `passkey-only`, or `totp-only` |
 | `PICLAW_ASSISTANT_NAME` | `PiClaw` | Display name in the UI |
+| `PICLAW_TELEGRAM_BOT_TOKEN` | _(empty)_ | Enable Telegram DM access with a BotFather token |
+| `PICLAW_TELEGRAM_ALLOWED_USERS` | _(empty)_ | Comma-separated Telegram user IDs allowed to use the bot |
 | `PICLAW_ENABLE_M365_EXPERIMENTAL` | `0` | Enable the experimental Microsoft 365 extension bundle |
 | `PICLAW_KEYCHAIN_KEY` | _(empty)_ | Master key for encrypted secret storage |
 | `PICLAW_TRUST_PROXY` | `0` | Enable when behind a reverse proxy or tunnel |
 
 For the full list, auth setup (TOTP/passkeys), session-scoped SSH-backed remote tools, reverse proxy configuration, SSHFS/FUSE support, and the workspace environment hook, see [docs/configuration.md](docs/configuration.md).
+
+## Telegram
+
+Telegram is optional. If `PICLAW_TELEGRAM_BOT_TOKEN` is unset, PiClaw starts exactly as before with no Telegram connection attempts.
+
+1. Create a bot with [@BotFather](https://t.me/BotFather) and copy the bot token.
+2. Set your Telegram config:
+
+```bash
+export PICLAW_TELEGRAM_BOT_TOKEN="123456:replace-me"
+export PICLAW_TELEGRAM_ALLOWED_USERS="123456789"
+```
+
+To find your Telegram user ID, send your bot any direct message once, then inspect the sender ID from Telegram's Bot API:
+
+```bash
+curl -s "https://api.telegram.org/bot$PICLAW_TELEGRAM_BOT_TOKEN/getUpdates" | jq '.result[]?.message?.from?.id'
+```
+
+Use the numeric `from.id` value in `PICLAW_TELEGRAM_ALLOWED_USERS`. Then start PiClaw and message the bot directly; replies appear in the same chat. The first version is DM-only and does not support group chats.
+
 ## COG memory system
 
 PiClaw now ships with a filesystem-resident COG memory tree under `~/.piclaw/cog/memory/`. It keeps always-on context small, pulls domain detail only when a matching skill needs it, and archives older observations into glacier files instead of letting active memory sprawl.

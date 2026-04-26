@@ -146,6 +146,27 @@ describe("core config", () => {
     );
   });
 
+  test("loads Telegram settings from config.json when env vars are unset", async () => {
+    await withFreshConfig(
+      {
+        env: {
+          PICLAW_TELEGRAM_BOT_TOKEN: undefined,
+          PICLAW_TELEGRAM_ALLOWED_USERS: undefined,
+        },
+        config: {
+          telegram: {
+            botToken: "config-telegram-token",
+            allowedUsers: ["42", 77],
+          },
+        },
+      },
+      async ({ config }) => {
+        expect(config.TELEGRAM_BOT_TOKEN).toBe("config-telegram-token");
+        expect(config.TELEGRAM_ALLOWED_USERS).toEqual(["42", "77"]);
+      },
+    );
+  });
+
   test("CLI flags override env-derived web server settings", async () => {
     await withFreshConfig(
       {

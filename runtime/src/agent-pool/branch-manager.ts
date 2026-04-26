@@ -89,6 +89,10 @@ function buildForkedChatJid(sourceChatJid: string): string {
   return `${root}:branch:${createUuid("chat").split("-").pop()}`;
 }
 
+function shouldAutoRenameChatJid(chatJid: string): boolean {
+  return chatJid.startsWith("web:");
+}
+
 function createVolatileBranchRecord(chatJid: string, session?: AgentSession | null): ChatBranchRecord {
   return {
     branch_id: `volatile:${chatJid}`,
@@ -159,19 +163,22 @@ export class AgentBranchManager {
       }
     }
 
-    // Auto-rename the JID to web:<agent_name> so @-mentions work naturally.
-    const desiredJid = `web:${renamed.agent_name}`;
-    if (renamed.chat_jid !== desiredJid) {
-      try {
-        const jidResult = await this.renameChatJid(renamed.chat_jid, desiredJid);
-        return jidResult.branch;
-      } catch (err) {
-        this.options.onWarn?.("JID auto-rename after agent rename failed; agent_name updated but JID unchanged", {
-          operation: "rename_chat_branch.auto_rename_jid",
-          chatJid: renamed.chat_jid,
-          desiredJid,
-          err,
-        });
+    // Only web chats use agent-name JIDs. External channels keep their transport
+    // address stable so message delivery continues to target the real chat.
+    if (shouldAutoRenameChatJid(renamed.chat_jid)) {
+      const desiredJid = `web:${renamed.agent_name}`;
+      if (renamed.chat_jid !== desiredJid) {
+        try {
+          const jidResult = await this.renameChatJid(renamed.chat_jid, desiredJid);
+          return jidResult.branch;
+        } catch (err) {
+          this.options.onWarn?.("JID auto-rename after agent rename failed; agent_name updated but JID unchanged", {
+            operation: "rename_chat_branch.auto_rename_jid",
+            chatJid: renamed.chat_jid,
+            desiredJid,
+            err,
+          });
+        }
       }
     }
 

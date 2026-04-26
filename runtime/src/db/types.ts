@@ -38,6 +38,8 @@ export interface InteractionData {
   content: string;
   /** Optional truncation metadata (present when content was clipped). */
   content_meta?: InteractionContentMeta;
+  /** Optional sender display name override (e.g. delegate agents). */
+  sender_name?: string;
   /** ID of the pi-agent that produced this interaction (agent responses). */
   agent_id?: string;
   /** Web-channel thread id this interaction belongs to. */

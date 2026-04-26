@@ -24,6 +24,7 @@ import { createLogger } from "../utils/logger.js";
 import { patchConsoleTimestamps } from "./console-timestamps.js";
 import type { RuntimeState } from "./state.js";
 import { launchWorkspaceIndexProcess } from "../workspace-index-process.js";
+import { loadAgentDefinitions, setLoadedAgentDefinitions } from "../agents/agent-definition.js";
 import { SystemMetricsSampler } from "../channels/web/agent/system-metrics.js";
 
 const log = createLogger("runtime.startup");
@@ -48,6 +49,7 @@ const BOOTSTRAP_ENTRIES = [
   "AGENTS.md",
   ".mcp.json.example",
   ".pi/skills",
+  ".pi/agents",
   ".pi/mcp.json.example",
   "README.md",
   "config.json.example",
@@ -209,6 +211,7 @@ export function initializeRuntimeEnvironment(state: RuntimeState): void {
     });
   }
   launchWorkspaceIndexProcess({ scope: "all" });
+  setLoadedAgentDefinitions(loadAgentDefinitions());
   const toolOutputConfig = getToolOutputConfig();
   startToolOutputCleanup(toolOutputConfig.retentionMs, toolOutputConfig.cleanupIntervalMs);
   state.loadTimestamps();

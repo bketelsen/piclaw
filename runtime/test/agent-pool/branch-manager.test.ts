@@ -191,6 +191,41 @@ test("AgentBranchManager preserves non-web channel prefixes when forking chats",
   ws.cleanup();
 });
 
+test("AgentBranchManager preserves the existing channel prefix when renaming chats", async () => {
+  const ws = createTempWorkspace("piclaw-branch-rename-telegram-");
+  restoreEnv = setEnv({ PICLAW_WORKSPACE: ws.workspace, PICLAW_STORE: ws.store, PICLAW_DATA: ws.data });
+
+  const db = await importFresh<typeof import("../src/db.js")>("../src/db.js");
+  db.initDatabase();
+
+  const session = {
+    sessionName: "Telegram Bot",
+    setSessionName(name: string) {
+      this.sessionName = name;
+    },
+    isStreaming: false,
+    isCompacting: false,
+    isRetrying: false,
+    isBashRunning: false,
+  };
+
+  const fixture = createManager();
+  fixture.pool.set("telegram:42", {
+    runtime: createRuntime(session),
+    lastUsed: Date.now(),
+  });
+
+  fixture.manager.ensureBranchRegistration("telegram:42", session as any);
+  const branch = await fixture.manager.renameChatBranch("telegram:42", { agentName: "Inbox Helper" });
+
+  expect(branch.agent_name).toBe("inbox-helper");
+  expect(branch.chat_jid).toBe("telegram:42");
+  expect(session.sessionName).toBe("inbox-helper");
+  expect(fixture.warns).toEqual([]);
+
+  ws.cleanup();
+});
+
 test("AgentBranchManager prunes inactive branches and disposes cached sessions", async () => {
   const ws = createTempWorkspace("piclaw-branch-prune-");
   restoreEnv = setEnv({ PICLAW_WORKSPACE: ws.workspace, PICLAW_STORE: ws.store, PICLAW_DATA: ws.data });

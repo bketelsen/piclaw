@@ -3,6 +3,7 @@
  */
 
 import { deleteExpiredWebSessions, getWebSession } from "../../../db.js";
+import { getRequestOriginParts } from "../http/client.js";
 
 function parseCookies(req: Request): Record<string, string> {
   const header = req.headers.get("cookie") || "";
@@ -30,7 +31,8 @@ export function buildSessionCookieHeader(
 ): string {
   const rawTtl = Number.isFinite(sessionTtl) ? sessionTtl : 0;
   const ttl = Math.max(60, rawTtl || 0);
-  const secure = req.url.startsWith("https://") || tlsConfigured;
+  const { proto } = getRequestOriginParts(req);
+  const secure = proto === "https" || req.url.startsWith("https://") || tlsConfigured;
   const parts = [
     `piclaw_session=${encodeURIComponent(token)}`,
     `Max-Age=${ttl}`,
