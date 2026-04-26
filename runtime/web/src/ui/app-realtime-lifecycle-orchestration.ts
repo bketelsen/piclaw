@@ -88,6 +88,11 @@ interface UseRealtimeLifecycleOrchestrationOptions {
   agentStatus: any;
   refreshAgentStatus: () => Promise<any>;
   refreshAutoresearchStatus: () => Promise<void>;
+
+  // delegate sidebar
+  onDelegateStarted?: (payload: unknown) => void;
+  onDelegateDone?: (payload: unknown) => void;
+  refreshActiveDelegates?: () => void;
 }
 
 export function useRealtimeLifecycleOrchestration(options: UseRealtimeLifecycleOrchestrationOptions) {
@@ -162,6 +167,9 @@ export function useRealtimeLifecycleOrchestration(options: UseRealtimeLifecycleO
     agentStatus,
     refreshAgentStatus,
     refreshAutoresearchStatus,
+    onDelegateStarted,
+    onDelegateDone,
+    refreshActiveDelegates,
   } = options;
 
   const handleSseEvent = useCallback((eventType: string, data: any) => {
@@ -224,6 +232,9 @@ export function useRealtimeLifecycleOrchestration(options: UseRealtimeLifecycleO
       removeStalledPost,
       setPosts,
       preserveTimelineScrollTop,
+      onDelegateStarted,
+      onDelegateDone,
+      refreshActiveDelegates,
     });
   }, [
     activeChatJidRef,
