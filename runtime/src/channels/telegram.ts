@@ -223,6 +223,7 @@ export class TelegramChannel {
     });
 
     this.bot.on("message:text", async (ctx) => {
+      log.info("Telegram text message received", { operation: "telegram.on_text", chatType: ctx.chat?.type, userId: ctx.from?.id });
       await this.handleTextMessage(ctx);
     });
     this.bot.on("message:photo", async (ctx) => {
