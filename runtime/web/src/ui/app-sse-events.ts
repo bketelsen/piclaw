@@ -191,7 +191,7 @@ export function handleAppSseEvent(
     preserveTimelineScrollTop,
   } = deps;
 
-  if (eventType === 'delegate_started') { deps.onDelegateStarted?.(data); return; }
+  if (eventType === 'delegate_started') { console.log('[SSE] delegate_started received', data); deps.onDelegateStarted?.(data); return; }
   if (eventType === 'delegate_done') { deps.onDelegateDone?.(data); return; }
 
   const { turnId, isCurrentChatEvent } = resolveSseEventRoutingContext(eventType, data, currentChatJid);
