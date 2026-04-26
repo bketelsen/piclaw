@@ -235,8 +235,10 @@ export class TelegramChannel {
 
   async start(): Promise<void> {
     if (this.started || !this.token) return;
+    log.info("Starting Telegram bot", { operation: "telegram.start", hasToken: Boolean(this.token), allowedUsers: [...this.allowedUsers] });
     await this.bot.start({ drop_pending_updates: true });
     this.started = true;
+    log.info("Telegram bot started", { operation: "telegram.start.done" });
   }
 
   async stop(): Promise<void> {
@@ -365,8 +367,23 @@ export class TelegramChannel {
     const userId = ctx.from?.id;
     const messageId = ctx.msg?.message_id;
     if (chatId === undefined || userId === undefined || !messageId) return;
-    if (ctx.chat?.type !== "private") return;
-    if (!this.allowedUsers.has(String(userId))) return;
+    if (ctx.chat?.type !== "private") {
+      log.info("Dropping non-private Telegram message", {
+        operation: "telegram.persist_inbound_message.non_private",
+        chatType: ctx.chat?.type,
+        chatId,
+        userId,
+      });
+      return;
+    }
+    if (!this.allowedUsers.has(String(userId))) {
+      log.warn("Dropping Telegram message from unauthorized user", {
+        operation: "telegram.persist_inbound_message.unauthorized",
+        userId: String(userId),
+        allowedUsers: [...this.allowedUsers],
+      });
+      return;
+    }
 
     const chatJid = `telegram:${chatId}`;
     const timestamp = new Date((ctx.msg?.date ?? Math.floor(Date.now() / 1000)) * 1000).toISOString();
