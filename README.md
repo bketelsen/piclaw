@@ -131,6 +131,171 @@ The built-in maintenance pipeline keeps the tree healthy in local runtime time:
 
 If you want `search_workspace` to index COG memory alongside notes and skills, add `cog/memory` to `tools.workspaceSearchRoots` in `~/.piclaw/config.json`.
 
+## Agent delegation
+
+PiClaw ships a built-in delegation system that lets Pi (or you directly) dispatch specialist background agents. Each agent runs in an isolated session and injects its result back into the main chat when done.
+
+### @agentName syntax
+
+Prefix your message with `@agentName` followed by the task:
+
+```
+@coder add pagination to the /posts endpoint in ~/projects/myapp
+@architect design a caching layer for the current Redis setup
+@researcher summarise the tradeoffs between SQLite WAL and rollback journal modes
+```
+
+PiClaw intercepts the message immediately, dispatches the agent asynchronously, and returns an acknowledgment. The agent's output appears in chat when it finishes, and Pi auto-responds to it.
+
+### Bundled agents
+
+| Agent | What it does |
+|---|---|
+| `architect` | Designs systems, writes technical plans, evaluates tradeoffs — read-only tools |
+| `coder` | Implements features and fixes bugs — has write access |
+| `reviewer` | Reviews code or designs for correctness, security, and style — read-only |
+| `researcher` | Searches the web and workspace, summarises findings — read-only |
+| `devops` | Handles infra, deployment, and shell automation — write access |
+| `docs-writer` | Writes and updates documentation — read/write |
+| `context-engineer` | Maintains `AGENTS.md`, skills, and prompt scaffolding — read/write |
+| `council` | Multi-provider debate (see below) |
+
+### @council: multi-provider debate
+
+`@council` routes your question through three AI models in four phases:
+
+1. **Position** — each model posts an independent initial answer (parallel)
+2. **Critique** — each model critiques the others (parallel)
+3. **Revision** — each model updates its position with all critiques in context (parallel)
+4. **Synthesis** — the designated synthesizer produces one definitive recommendation
+
+Default members are `claude` (Claude Sonnet), `codex` (GPT Codex), and `gemini` (Gemini Pro). Example:
+
+```
+@council should we use a monorepo or separate repos for the new service?
+```
+
+The synthesis appears in chat with a summary of each member's final position and where they agreed or diverged.
+
+### /agents and /agent-status commands
+
+| Command | What it does |
+|---|---|
+| `/agents` | List all loaded agent definitions with their descriptions |
+| `/agent-status` | List currently running delegate tasks |
+
+### Agent status sidebar
+
+A live panel on the right side of the chat UI shows all running and recently completed delegates. Each card displays the agent name, elapsed time (updated per second while running), and the task summary. When a delegate completes, a **View result** button scrolls the chat to the injected message. A badge on the panel tab shows the active count and an unread indicator when new results land.
+
+The sidebar receives updates over SSE — no polling. Open it with the **Agents** tab on the right edge of the chat.
+
+### Custom agent definitions
+
+Agent definitions are Markdown files with YAML frontmatter. Bundled agents live in `skel/.pi/agents/` (read-only). User-defined agents go in `~/.piclaw/.pi/agents/` and win on name conflict:
+
+```markdown
+---
+name: my-agent
+description: Does something specific.
+tools: [read, bash, grep, find]
+max_turns: 15
+---
+
+Your system prompt here.
+```
+
+`tools` is an explicit allowlist — nothing is granted implicitly. Available tool names are the same as Pi's built-in tool set.
+
+### delegate tool (Pi-internal)
+
+Pi can also dispatch agents directly from within a turn without any HTTP round-trip. The `delegate` tool is available in Pi's tool set and accepts `agent`, `task`, and an optional `context` briefing. This is how AGENTS.md rules like _"delegate coding tasks to coder"_ work automatically during agentic sessions.
+
+---
+
+## Production deployment
+
+### systemd user service
+
+On Linux, run PiClaw as a `systemd --user` service so it starts on login and restarts automatically. Create `~/.config/systemd/user/piclaw.service`:
+
+```ini
+[Unit]
+Description=PiClaw agent
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=%h/.piclaw
+Environment=HOME=/home/YOUR_USER
+Environment=PICLAW_HOME=%h/.piclaw
+Environment=PICLAW_STORE=%h/.piclaw/store
+Environment=PICLAW_DATA=%h/.piclaw/data
+Environment=PICLAW_AGENT_TIMEOUT=1800000
+ExecStart=/usr/local/bin/piclaw --port 8080
+Restart=always
+RestartSec=2
+
+[Install]
+WantedBy=default.target
+```
+
+Then enable and start it:
+
+```bash
+loginctl enable-linger $USER
+systemctl --user daemon-reload
+systemctl --user enable --now piclaw.service
+```
+
+Keep `PICLAW_STORE` and `PICLAW_DATA` on persistent storage. The startup recovery flow reads `PICLAW_DATA/ipc/tasks` to resume in-flight operations after a crash or restart.
+
+For full Azure VM deployment instructions including Caddy reverse proxy setup, see [docs/azure/README.md](docs/azure/README.md).
+
+### TOTP authentication
+
+Gate the web UI behind a 6-digit authenticator code:
+
+```bash
+export PICLAW_WEB_TOTP_SECRET="your-base32-secret"
+```
+
+Or initialize from the UI with no pre-configuration:
+
+1. Leave `PICLAW_WEB_TOTP_SECRET` unset and start PiClaw.
+2. Run `/totp` in chat — PiClaw generates a QR code.
+3. Scan with any TOTP app (Authy, 1Password, Google Authenticator).
+4. Confirm with the first live code. Only on success does PiClaw commit the secret.
+
+To reset TOTP: run `/totp reset <current-code>`.
+
+Optionally add WebAuthn passkeys after enrolment:
+
+1. Sign in with TOTP.
+2. Run `/passkey enrol` in chat and follow the browser prompt.
+
+Passkey mode is controlled by `PICLAW_WEB_PASSKEY_MODE` (`totp-fallback` by default; also `passkey-only` or `totp-only`).
+
+### Reverse proxy
+
+Set `PICLAW_TRUST_PROXY=1` when running behind a reverse proxy or tunnel (Caddy, nginx, Cloudflare Tunnel, etc.). This tells PiClaw to read `Forwarded` / `X-Forwarded-*` headers for the real client IP, protocol, and host — needed for correct TOTP lockout tracking, redirect URIs, and passkey origin validation.
+
+```bash
+export PICLAW_TRUST_PROXY=1
+```
+
+Do **not** set this on a publicly exposed instance without a proxy in front — it would allow clients to spoof their IP.
+
+### /health endpoint
+
+`GET /health` returns `200 OK` with a plain-text body when PiClaw is running. Use it for load-balancer health checks or uptime monitors. The endpoint requires no authentication and serves no session data.
+
+### Restic backups
+
+The container image ships a pinned `restic` binary with Azure Blob backend support. The backup script is at `~/.piclaw/restic/backup.sh`. See [docs/storage.md](docs/storage.md) for full details.
+
+---
+
 ## Other install methods
 
 ### Global install

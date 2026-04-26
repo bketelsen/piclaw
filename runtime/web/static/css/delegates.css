@@ -118,11 +118,14 @@
 
 /* Unread count badge */
 .delegate-tab-badge {
-    font-size: 9px;
+    font-size: 13px;
     font-weight: 700;
     line-height: 1;
     color: var(--accent-color);
     font-variant-numeric: tabular-nums;
+    padding: 2px 5px;
+    min-width: 18px;
+    text-align: center;
 }
 
 /* ── Sidebar header ──────────────────────────────────────────────────────── */
