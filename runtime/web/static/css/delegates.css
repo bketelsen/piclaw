@@ -58,7 +58,7 @@
 /* ── Badge tab ───────────────────────────────────────────────────────────── */
 
 .delegate-tab {
-    display: none; /* shown via .has-delegates */
+    display: flex; /* always visible */
     position: fixed;
     right: 0;
     top: 50%;

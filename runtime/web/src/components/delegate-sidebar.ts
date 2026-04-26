@@ -52,7 +52,7 @@ function CompletedDelegateCard({ delegate, onScrollToPost }) {
 // ── DelegateBadge ─────────────────────────────────────────────────────────────
 
 export function DelegateBadge({ activeCount, completedCount, hasUnread, onToggle }) {
-    if (activeCount + completedCount === 0) return null;
+    // Always render — even when idle, the tab provides access to agent status
 
     return html`
         <button
