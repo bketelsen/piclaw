@@ -42,6 +42,24 @@ export interface AgentDefinition {
   systemPrompt: string;
   /** Absolute path of the source file — for debugging and reload. */
   sourcePath: string;
+  /** If set, this agent runs as a multi-provider debate council. */
+  council?: CouncilConfig;
+}
+
+export interface CouncilMember {
+  /** Short identifier used in prompts and JIDs. */
+  id: string;
+  /** Full model label e.g. "github-copilot/claude-sonnet-4.6" */
+  model: string;
+  /** Role description injected into the member's system prompt. */
+  role: string;
+}
+
+export interface CouncilConfig {
+  members: CouncilMember[];
+  /** id of the member that produces the final synthesis. */
+  synthesizer: string;
+  maxRounds: number;
 }
 
 // Module-level registry, populated at startup.
@@ -131,8 +149,9 @@ export function parseAgentDefinition(filePath: string): AgentDefinition | null {
   const model = typeof fields.model === "string" && fields.model.trim() ? fields.model.trim() : undefined;
   const maxTurns = parseMaxTurns(fields.max_turns);
   const systemPrompt = body.trim();
+  const council = parseCouncilConfig(frontmatter);
 
-  return { name, description, model, tools, maxTurns, systemPrompt, sourcePath: filePath };
+  return { name, description, model, tools, maxTurns, systemPrompt, sourcePath: filePath, ...(council ? { council } : {}) };
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -199,4 +218,57 @@ function parseMaxTurns(raw: unknown): number {
   const n = Number.parseInt(String(raw ?? ""), 10);
   if (Number.isFinite(n) && n > 0) return Math.min(n, 100);
   return 20;
+}
+
+/**
+ * Parse the `council:` block from raw YAML frontmatter.
+ * Handles the multi-line list format:
+ *   council:
+ *     members:
+ *       - id: claude
+ *         model: github-copilot/claude-sonnet-4.6
+ *         role: Senior architect.
+ *     synthesizer: claude
+ *     max_rounds: 3
+ */
+function parseCouncilConfig(frontmatter: string): CouncilConfig | null {
+  const councilStart = frontmatter.indexOf("\ncouncil:");
+  if (councilStart === -1) return null;
+
+  const block = frontmatter.slice(councilStart + 1);
+  const lines = block.split("\n");
+
+  const members: CouncilMember[] = [];
+  let synthesizer = "";
+  let maxRounds = 3;
+  let currentMember: Partial<CouncilMember> | null = null;
+
+  for (const line of lines) {
+    // Detect list item start
+    if (/^\s+-\s+id:\s*/.test(line)) {
+      if (currentMember?.id) members.push(currentMember as CouncilMember);
+      currentMember = { id: line.replace(/^\s+-\s+id:\s*/, "").trim() };
+      continue;
+    }
+    if (currentMember) {
+      const modelMatch = /^\s+model:\s*(.+)/.exec(line);
+      if (modelMatch) { currentMember.model = modelMatch[1].trim(); continue; }
+      const roleMatch = /^\s+role:\s*(.+)/.exec(line);
+      if (roleMatch) { currentMember.role = roleMatch[1].trim(); continue; }
+      // Leaving member block
+      if (/^\s+\w+:/.test(line) && !/^\s+(model|role|id):/.test(line)) {
+        if (currentMember?.id) { members.push(currentMember as CouncilMember); currentMember = null; }
+      }
+    }
+    const synthMatch = /^\s+synthesizer:\s*(.+)/.exec(line);
+    if (synthMatch) { synthesizer = synthMatch[1].trim(); continue; }
+    const roundsMatch = /^\s+max_rounds:\s*(\d+)/.exec(line);
+    if (roundsMatch) { maxRounds = parseInt(roundsMatch[1], 10) || 3; continue; }
+  }
+  if (currentMember?.id) members.push(currentMember as CouncilMember);
+
+  if (members.length === 0) return null;
+  if (!synthesizer && members[0]) synthesizer = members[0].id;
+
+  return { members, synthesizer, maxRounds };
 }

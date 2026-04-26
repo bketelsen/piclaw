@@ -50,6 +50,7 @@ import { createUuid } from "../../../utils/ids.js";
 import { createLogger } from "../../../utils/logger.js";
 import { getLoadedAgentDefinitions } from "../../../agents/agent-definition.js";
 import { dispatchDelegate } from "../../../agents/delegate-runner.js";
+import { dispatchCouncil } from "../../../agents/council-runner.js";
 import type { AttachmentInfo } from "../../../agent-pool/attachments.js";
 import { checkPendingShutdown } from "../../../runtime/shutdown-registry.js";
 import { DEFAULT_BASE_RETRY_MS, getRetryAtIso } from "../../../queue/retry-policy.js";
@@ -477,21 +478,42 @@ export async function handleAgentMessage(
         channel.broadcastEvent("new_post", userInteraction);
         setChatCursor(chatJid, userInteraction.timestamp);
       }
+      const _processChatFn = (jid: string) => {
+        const pc = (channel as unknown as { processChat: (jid: string, agentId: string) => Promise<void> }).processChat;
+        channel.queue.enqueue(
+          () => pc.call(channel, jid, agentId),
+          `chat:${jid}:delegate-${Date.now()}`,
+          `chat:${jid}`,
+        );
+      };
+      const _broadcastFn = (eventType: string, data: unknown) => channel.broadcastEvent(eventType, data);
+
+      if (agentDef.council) {
+        dispatchCouncil({
+          agentDef,
+          scenario: task,
+          mainChatJid: chatJid,
+          agentPool: channel.agentPool,
+          broadcastEvent: _broadcastFn,
+          processChat: _processChatFn,
+        });
+        return channel.json({
+          status: "delegated",
+          agent: earlyMention.agentName,
+          mode: "council",
+          task,
+          message: `Council convened for @${earlyMention.agentName}. Result will appear in this chat when complete.`,
+        });
+      }
+
       dispatchDelegate({
         agentDef,
         task,
         context: "",  // Pi will synthesize context in a future turn; bare task for now
         mainChatJid: chatJid,
         agentPool: channel.agentPool,
-        broadcastEvent: (eventType, data) => channel.broadcastEvent(eventType, data),
-        processChat: (jid) => {
-          const pc = (channel as unknown as { processChat: (jid: string, agentId: string) => Promise<void> }).processChat;
-          channel.queue.enqueue(
-            () => pc.call(channel, jid, agentId),
-            `chat:${jid}:delegate-${Date.now()}`,
-            `chat:${jid}`,
-          );
-        },
+        broadcastEvent: _broadcastFn,
+        processChat: _processChatFn,
       });
       return channel.json({
         status: "delegated",
