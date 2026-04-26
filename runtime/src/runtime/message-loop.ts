@@ -69,8 +69,11 @@ export async function processMessages(chatJid: string, deps: MessageProcessingDe
     deps.state.markCommandProcessed(chatJid, message.id);
   }
 
-  // Check trigger on non-command messages only
-  const hasTrigger = promptMessages.some((m) => deps.triggerPattern.test(m.content.trim()));
+  // Check trigger on non-command messages only.
+  // For Telegram private chats (jid starts with telegram:), all messages are
+  // implicitly addressed to Miles — skip the trigger pattern gate.
+  const isTelegramChat = chatJid.startsWith("telegram:");
+  const hasTrigger = isTelegramChat || promptMessages.some((m) => deps.triggerPattern.test(m.content.trim()));
   if (!hasTrigger) return true;
 
   const channel = detectChannel(chatJid);
