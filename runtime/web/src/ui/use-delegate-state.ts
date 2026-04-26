@@ -16,6 +16,7 @@ export function useDelegateState() {
   }, []);
 
   const applyDelegateStarted = useCallback((payload) => {
+    console.log('[DELEGATE] applyDelegateStarted called', payload);
     const d = {
       agentName: String(payload?.agent_name ?? ''),
       task: String(payload?.task ?? ''),
