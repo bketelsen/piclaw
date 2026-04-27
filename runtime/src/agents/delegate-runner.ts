@@ -14,9 +14,7 @@
  *      called so Pi auto-responds to the result.
  */
 
-import { join } from "path";
-import { mkdirSync } from "fs";
-import { DATA_DIR } from "../core/config.js";
+import { SpecialistPool, SPECIALIST_JID_PREFIX } from "./specialist-pool.js";
 import { storeMessage, getDb } from "../db.js";
 import { createLogger } from "../utils/logger.js";
 import type { AgentPool } from "../agent-pool.js";
@@ -57,6 +55,13 @@ export interface ActiveDelegate {
 // In-memory registry of running delegates for /agent-status.
 const _activeDelegates = new Map<string, ActiveDelegate>();
 
+// Lazily-initialised persistent specialist pool.
+let _specialistPool: SpecialistPool | null = null;
+function _getSpecialistPool(agentPool: AgentPool): SpecialistPool {
+  if (!_specialistPool) _specialistPool = new SpecialistPool(agentPool);
+  return _specialistPool;
+}
+
 export function getActiveDelegates(): ActiveDelegate[] {
   return [..._activeDelegates.values()];
 }
@@ -82,13 +87,8 @@ async function _runDelegate(opts: DelegateOptions): Promise<void> {
   const startedAt = new Date().toISOString();
 
   const stamp = Date.now();
-  const delegateJid = `${mainChatJid}__delegate-${agentDef.name}-${stamp}`;
-  const delegateSessionDir = join(
-    DATA_DIR,
-    "sessions",
-    delegateJid.replace(/[^a-zA-Z0-9._-]/g, "_"),
-  );
-  mkdirSync(delegateSessionDir, { recursive: true });
+  // Phase 1: use a persistent session JID per specialist slug.
+  const delegateJid = `${SPECIALIST_JID_PREFIX}${agentDef.name}`;
 
   const activeKey = `${agentDef.name}-${stamp}`;
   _activeDelegates.set(activeKey, {
@@ -114,24 +114,14 @@ async function _runDelegate(opts: DelegateOptions): Promise<void> {
     maxTurns: agentDef.maxTurns,
   });
 
-  const toolGrants = new Set(agentDef.tools);
-  const toolCeilingFilter = (toolName: string) => toolGrants.has(toolName);
   const fullPrompt = _buildPrompt(agentDef.systemPrompt, context, task);
+  const pool = _getSpecialistPool(agentPool);
 
   let result: string | null = null;
   let error: string | null = null;
 
   try {
-    const output = await agentPool.runAgent(fullPrompt, delegateJid, {
-      toolCeilingFilter,
-      timeoutMs: agentDef.maxTurns * 60_000,
-    });
-
-    if (output.status === "success" || output.status === "tool_complete") {
-      result = output.result ?? "(no output)";
-    } else {
-      error = output.error ?? "Delegate failed with unknown error.";
-    }
+    result = await pool.runTurn(agentDef.name, agentDef, fullPrompt);
   } catch (err) {
     error = err instanceof Error ? err.message : String(err);
   } finally {

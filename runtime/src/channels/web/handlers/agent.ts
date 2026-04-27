@@ -732,12 +732,19 @@ export async function handleAgentMessage(
   // ── /agents — list loaded agent definitions ─────────────────────────────
   if (trimmed === "/agents") {
     const defs = getLoadedAgentDefinitions();
-    const msg = defs.size === 0
+    const agentList = defs.size === 0
       ? "No agent definitions loaded."
       : [...defs.values()].map(
           (d) => `**@${d.name}** — ${d.description}\n  tools: ${d.tools.join(", ")} | max_turns: ${d.maxTurns}`
         ).join("\n\n");
-    await channel.sendMessage(chatJid, msg, { forceRoot: true });
+    const commandsSection = [
+      "",
+      "",
+      "**Commands:**",
+      "`/agent-status` — list running delegates",
+      "`/reset-specialist <slug>` — clear a specialist's accumulated session context",
+    ].join("\n");
+    await channel.sendMessage(chatJid, agentList + commandsSection, { forceRoot: true });
     return channel.json({ command: "/agents", ui_only: true }, 200);
   }
 
@@ -752,6 +759,51 @@ export async function handleAgentMessage(
         ).join("\n\n");
     await channel.sendMessage(chatJid, msg, { forceRoot: true });
     return channel.json({ command: "/agent-status", ui_only: true }, 200);
+  }
+
+  // ── /reset-specialist <slug> — clear a specialist's accumulated session context ──
+  if (trimmed.startsWith("/reset-specialist")) {
+    const slugMatch = trimmed.match(/^\/reset-specialist(?:\s+([a-z][a-z0-9-]*))?$/);
+    if (!slugMatch) {
+      // Malformed — treat as unknown slash command and fall through to extension handler.
+    } else {
+      const slug = (slugMatch[1] ?? "").trim().toLowerCase();
+      if (!slug) {
+        const knownSlugs = [...getLoadedAgentDefinitions().keys()].join(", ");
+        await channel.sendMessage(
+          chatJid,
+          `Usage: \`/reset-specialist <slug>\`\nKnown agents: ${knownSlugs}`,
+          { forceRoot: true },
+        );
+        return channel.json({ command: "/reset-specialist", ui_only: true }, 200);
+      }
+
+      const { SPECIALIST_JID_PREFIX } = await import("../../../agents/specialist-pool.js");
+      const jid = `${SPECIALIST_JID_PREFIX}${slug}`;
+
+      // Check if a session for this specialist currently exists in the pool.
+      const poolMap = (channel.agentPool as unknown as { pool?: Map<string, unknown> }).pool;
+      const hasSession = poolMap?.has(jid) ?? false;
+
+      if (!hasSession) {
+        await channel.sendMessage(
+          chatJid,
+          `No specialist session found for @${slug}`,
+          { forceRoot: true },
+        );
+        return channel.json({ command: "/reset-specialist", slug, ui_only: true }, 200);
+      }
+
+      // disposeChatSession is the public API that calls sessionManager.recreate(jid).
+      await channel.agentPool.disposeChatSession(jid);
+
+      await channel.sendMessage(
+        chatJid,
+        `Specialist session reset: @${slug} (${jid})`,
+        { forceRoot: true },
+      );
+      return channel.json({ command: "/reset-specialist", slug, ui_only: true }, 200);
+    }
   }
 
   // Model/thinking commands: execute without writing to the timeline.
