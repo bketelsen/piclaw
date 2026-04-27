@@ -42,7 +42,12 @@ export class SpecialistPool {
   ): Promise<string> {
     const jid = `${SPECIALIST_JID_PREFIX}${slug}`;
     const toolGrants = new Set(agentDef.tools);
-    const result = await this.agentPool.runAgent(prompt, jid, {
+    // Prepend the specialist's system prompt to the task prompt so it runs
+    // with its own identity, not Miles's default system prompt.
+    const fullPrompt = agentDef.systemPrompt?.trim()
+      ? `${agentDef.systemPrompt.trim()}\n\n${prompt}`
+      : prompt;
+    const result = await this.agentPool.runAgent(fullPrompt, jid, {
       toolCeilingFilter: (name) => toolGrants.has(name),
       timeoutMs: agentDef.maxTurns * 60_000,
     });

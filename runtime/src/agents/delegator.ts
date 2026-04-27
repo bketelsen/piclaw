@@ -13,6 +13,31 @@ export interface Delegation {
 const MENTION_RE = /@([a-z][a-z0-9-]*)/g;
 
 /**
+ * Build a Set of character positions that fall inside backtick spans (inline
+ * code or fenced code blocks). @mentions inside these regions are NOT
+ * delegation signals — they are examples or instructions to the user.
+ */
+function backtickRanges(text: string): Array<[number, number]> {
+  const ranges: Array<[number, number]> = [];
+  // Fenced code blocks: ```...```
+  const fenceRe = /```[\s\S]*?```/g;
+  let m: RegExpExecArray | null;
+  while ((m = fenceRe.exec(text)) !== null) {
+    ranges.push([m.index, m.index + m[0].length]);
+  }
+  // Inline code: `...`
+  const inlineRe = /`[^`\n]+`/g;
+  while ((m = inlineRe.exec(text)) !== null) {
+    ranges.push([m.index, m.index + m[0].length]);
+  }
+  return ranges;
+}
+
+function isInsideRange(pos: number, ranges: Array<[number, number]>): boolean {
+  return ranges.some(([start, end]) => pos >= start && pos < end);
+}
+
+/**
  * Parse a Team-Lead response for @agent-slug mentions.
  * Only slugs present in knownSlugs are returned.
  * Each slug appears at most once (first mention wins).
@@ -24,12 +49,14 @@ export function extractDelegations(
   const known = new Set(knownSlugs);
   const seen = new Set<string>();
   const delegations: Delegation[] = [];
+  const codeRanges = backtickRanges(response);
 
   let match: RegExpExecArray | null;
   MENTION_RE.lastIndex = 0;
   while ((match = MENTION_RE.exec(response)) !== null) {
     const slug = match[1];
     if (!known.has(slug) || seen.has(slug)) continue;
+    if (isInsideRange(match.index, codeRanges)) continue; // skip code-fence / backtick spans
     seen.add(slug);
     delegations.push({
       agentSlug: slug,
