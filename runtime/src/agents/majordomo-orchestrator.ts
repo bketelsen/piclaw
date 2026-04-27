@@ -274,6 +274,12 @@ export class MajordomoOrchestrator {
    * runAgent() returns.
    */
   async dispatchOne(slug: string, task: string, context: string): Promise<void> {
+    // Skip if this slug is already pending from a Phase 3 @mention dispatch
+    // (Miles called both the delegate tool AND mentioned @slug in text).
+    if (this.pendingSlugs.has(slug)) {
+      log.info("Majordomo: dispatchOne skipped — slug already pending from @mention dispatch", { slug });
+      return;
+    }
     const prompt = context ? `[Context]\n${context}\n\n[Task]\n${task}` : task;
     const turn: AgentTurn = {
       taskId: taskIdFromPrompt(prompt),
