@@ -1974,8 +1974,11 @@ export async function processChat(
 
   // Phase 3: @mention hook — check if Miles delegated via @mentions in response text,
   // or via the delegate tool during the turn (which sets isLeadHeld directly).
+  // Skip the hook when Miles is responding to a synthesis message (sender: majordomo:orchestrator)
+  // — that is his summary turn, not a new delegation, and re-hooking causes infinite dispatch.
   const _majordomo = getMajordomoOrchestrator();
-  if (_majordomo && chatJid === _majordomo.mainChatJid && output.result) {
+  const _isSynthesisTurn = currentMessage?.sender === "majordomo:orchestrator";
+  if (_majordomo && chatJid === _majordomo.mainChatJid && output.result && !_isSynthesisTurn) {
     // Preserve existing hold state (Phase 2 delegate-tool path) — only call
     // handleLeadOutput if not already held, to avoid overwriting pending state.
     let _held = _majordomo.isLeadHeld;
