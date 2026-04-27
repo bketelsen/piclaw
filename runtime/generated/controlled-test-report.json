@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-04-27T02:46:52.654Z",
+  "generated_at": "2026-04-27T02:59:00.985Z",
   "package_dir": "/home/bjk/projects/piclaw",
   "runtime_dir": "/home/bjk/projects/piclaw/runtime",
   "stage_size": 25,
@@ -10,9 +10,9 @@
   ],
   "total_files": 409,
   "stages_completed": 1,
-  "elapsed_ms": 34336,
-  "max_peak_process_tree_rss_kb": 232232,
-  "max_peak_cgroup_memory_bytes": 486014976,
+  "elapsed_ms": 34345,
+  "max_peak_process_tree_rss_kb": 232108,
+  "max_peak_cgroup_memory_bytes": 498176000,
   "failed_stage_index": 1,
   "exit_code": 1,
   "stages": [
@@ -46,12 +46,12 @@
         "test/agent-pool/run-agent-blank-turn-recovery.test.ts",
         "test/agent-pool/run-agent-orchestrator.test.ts"
       ],
-      "elapsed_ms": 34335,
+      "elapsed_ms": 34344,
       "exit_code": 1,
-      "peak_process_tree_rss_kb": 232232,
-      "peak_cgroup_memory_bytes": 486014976,
-      "peak_process_tree_at_ms": 1010,
-      "peak_cgroup_at_ms": 1010,
+      "peak_process_tree_rss_kb": 232108,
+      "peak_cgroup_memory_bytes": 498176000,
+      "peak_process_tree_at_ms": 1011,
+      "peak_cgroup_at_ms": 32314,
       "samples": 35
     }
   ]

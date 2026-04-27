@@ -51,6 +51,7 @@ import { createLogger } from "../../../utils/logger.js";
 import { getLoadedAgentDefinitions } from "../../../agents/agent-definition.js";
 import { dispatchDelegate } from "../../../agents/delegate-runner.js";
 import { dispatchCouncil } from "../../../agents/council-runner.js";
+import { getMajordomoOrchestrator } from "../../../agents/majordomo-orchestrator.js";
 import type { AttachmentInfo } from "../../../agent-pool/attachments.js";
 import { checkPendingShutdown } from "../../../runtime/shutdown-registry.js";
 import { DEFAULT_BASE_RETRY_MS, getRetryAtIso } from "../../../queue/retry-policy.js";
@@ -1560,7 +1561,7 @@ export async function processChat(
     return persistVisibleFailureOutcome(markerBase, reason === "timeout" ? detail : undefined, options);
   };
 
-  const finalizeSuccessfulRun = async () => {
+  const finalizeSuccessfulRun = async (options: { holdLane?: boolean } = {}) => {
     endChatRun(chatJid);
 
     const cursorAfterEnd = getChatCursor(chatJid);
@@ -1606,6 +1607,11 @@ export async function processChat(
       remainingCount: remainingPersisted.length,
       remainingMessages: remainingPersisted.map(m => `${m.id}@${m.timestamp}`),
     });
+
+    if (options.holdLane) {
+      // Cursor advanced, "done" emitted. Caller stalls the lane until specialists finish.
+      return;
+    }
 
     if (remainingPersisted.length > 0) {
       channel.resumeChat(chatJid);
@@ -1964,6 +1970,27 @@ export async function processChat(
       turn_id: turnId,
     });
     return;
+  }
+
+  // Phase 3: @mention hook — check if Miles delegated via @mentions in response text,
+  // or via the delegate tool during the turn (which sets isLeadHeld directly).
+  const _majordomo = getMajordomoOrchestrator();
+  if (_majordomo && chatJid === _majordomo.mainChatJid && output.result) {
+    // Preserve existing hold state (Phase 2 delegate-tool path) — only call
+    // handleLeadOutput if not already held, to avoid overwriting pending state.
+    let _held = _majordomo.isLeadHeld;
+    if (!_held) {
+      _held = await _majordomo.handleLeadOutput(output.result, prompt);
+    }
+    if (_held) {
+      // Advance cursor and emit "done" without calling resumeChat.
+      await finalizeSuccessfulRun({ holdLane: true });
+      // Stall this lane item until all specialists finish.
+      await _majordomo.waitForSpecialists();
+      // Synthesis message is now in DB — re-trigger processChat to pick it up first.
+      channel.resumeChat(chatJid);
+      return;
+    }
   }
 
   await finalizeSuccessfulRun();

@@ -59,6 +59,56 @@ Prefer \`delegate\` over implementing anything yourself for:
 If you could delegate the task, you MUST. Never implement something yourself when a delegate agent can do it.
 `.trim();
 
+const MAJORDOMO_ROUTING_HINT = `
+## Majordomo routing
+
+You receive every message first. Decide:
+
+1. **Handle directly** — factual questions, conversational replies, quick file reads,
+   anything you can complete in one turn without specialized tool sequences.
+
+2. **Delegate explicitly** — tasks requiring deep coding, multi-file refactoring,
+   architecture design, long research sessions, deployment sequences, or document
+   authoring. Use the \`delegate\` tool or mention @agent-slug naturally in your reply.
+
+When you mention @agent-slug in your reply text, the orchestrator parses it and
+dispatches that agent. You do NOT need to call the delegate tool for this to work —
+natural @mentions are intercepted automatically.
+
+Routing signals:
+- "implement / build / write code / fix bug" → @coder
+- "design / architecture / system design" → @architect
+- "review / audit / security check" → @reviewer
+- "research / find / what is / compare" → @researcher
+- "deploy / infra / docker / systemd / server" → @devops
+- "document / write docs / explain for users" → @docs-writer
+- "update AGENTS.md / skill / memory" → @context-engineer
+
+You are suppressed while specialists run. When they finish you will receive
+their combined output and produce a synthesis for Brian.
+`.trim();
+
+const SYNTHESIS_TRIGGER_HINT = `
+## Specialist results synthesis
+
+When you receive a message from **[Specialist Results]**, one or more specialists
+you previously delegated to have finished their work and the results are ready.
+
+**Rules for this turn:**
+
+1. Read all specialist outputs in the message carefully.
+2. Synthesize them into a single, coherent reply for Brian. Do NOT dump raw
+   specialist output at him — curate, integrate, and highlight what matters.
+3. If a specialist is marked \`(error after Xs)\`, acknowledge the failure and
+   describe what partial information or alternative path is available.
+4. Do NOT issue any new @mentions or call the \`delegate\` tool in this turn.
+   This is a synthesis-only turn. Delegating again here creates an infinite loop.
+5. Format your response normally: Markdown, tables, code blocks as appropriate.
+
+If you later receive another [Specialist Results] message, treat it as a fresh
+delegation batch — not a continuation of this one.
+`.trim();
+
 
 function ok(data: Record<string, unknown>): AgentToolResult<Record<string, unknown>> {
   return { content: [{ type: "text", text: JSON.stringify(data) }], details: data };
@@ -70,7 +120,7 @@ function err(message: string): AgentToolResult<Record<string, unknown>> {
 
 export const delegateTool: ExtensionFactory = (pi: ExtensionAPI) => {
   pi.on("before_agent_start", async (event) => ({
-    systemPrompt: `${event.systemPrompt}\n\n${DELEGATE_TOOL_HINT}`,
+    systemPrompt: `${event.systemPrompt}\n\n${DELEGATE_TOOL_HINT}\n\n${MAJORDOMO_ROUTING_HINT}\n\n${SYNTHESIS_TRIGGER_HINT}`,
   }));
 
   pi.registerTool({
