@@ -956,6 +956,10 @@ export class SSEClient {
         bindJsonEvent('ui_meters');
         bindJsonEvent('delegate_started');
         bindJsonEvent('delegate_done');
+        bindJsonEvent('majordomo_dispatch');
+        bindJsonEvent('specialist_started');
+        bindJsonEvent('specialist_done');
+        bindJsonEvent('majordomo_synthesis_ready');
 
         [
             'extension_ui_request',

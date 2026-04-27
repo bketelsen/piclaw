@@ -13,6 +13,7 @@ import { getLoadedAgentDefinitions } from "../agents/agent-definition.js";
 import { dispatchDelegate } from "../agents/delegate-runner.js";
 import { dispatchCouncil } from "../agents/council-runner.js";
 import type { AgentPool } from "../agent-pool.js";
+import { getMajordomoOrchestrator } from "../agents/majordomo-orchestrator.js";
 
 // Injected at startup by the web channel — same pattern as setMessagesPostFn.
 type DelegateChannelFns = {
@@ -116,6 +117,19 @@ export const delegateTool: ExtensionFactory = (pi: ExtensionAPI) => {
         });
       }
 
+      // Route through the majordomo orchestrator if it is wired up.
+      const orchestrator = getMajordomoOrchestrator();
+      if (orchestrator) {
+        await orchestrator.dispatchOne(agentName, task, context);
+        return ok({
+          status: "dispatched",
+          mode: "majordomo",
+          agent: agentName,
+          message: `@${agentName} dispatched via orchestrator. Result will appear when done.`,
+        });
+      }
+
+      // Fallback: existing fire-and-forget path (orchestrator not yet wired).
       dispatchDelegate({
         agentDef,
         task,

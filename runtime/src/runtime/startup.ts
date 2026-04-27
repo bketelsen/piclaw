@@ -28,6 +28,7 @@ import { loadAgentDefinitions, setLoadedAgentDefinitions } from "../agents/agent
 import { setDelegateChannelFns, delegateTool } from "../extensions/delegate-tool.js";
 import { addExtensionFactory } from "../agent-pool/service-factory.js";
 import { SystemMetricsSampler } from "../channels/web/agent/system-metrics.js";
+import { MajordomoOrchestrator, setMajordomoOrchestrator } from "../agents/majordomo-orchestrator.js";
 
 const log = createLogger("runtime.startup");
 const WORKSPACE_SKEL_DIR = resolve(import.meta.dir, "../../../skel");
@@ -337,6 +338,18 @@ export async function startWebChannel(queue: AgentQueue, agentPool: AgentPool): 
     agentPool,
   });
   addExtensionFactory(delegateTool);
+
+  // Phase 2: Wire the MajordomoOrchestrator singleton.
+  // This must come AFTER setDelegateChannelFns so the delegate tool can
+  // fall through to the fire-and-forget path if the orchestrator is not set
+  // during the brief window between web channel start and this call.
+  const orchestrator = new MajordomoOrchestrator({
+    mainChatJid: DEFAULT_SCHEDULED_TASK_CHAT_JID,
+    agentPool,
+    broadcastEvent: (eventType, data) => web.broadcastEvent(eventType, data),
+    processChat: _processChatFn,
+  });
+  setMajordomoOrchestrator(orchestrator);
 
   return web;
 }
