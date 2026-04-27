@@ -21,6 +21,7 @@ import { existsSync, readdirSync, readFileSync } from "fs";
 import { join, resolve } from "path";
 import { PICLAW_HOME } from "../core/config.js";
 import { createLogger } from "../utils/logger.js";
+import type { SkillDeclaration } from "./task-router.js";
 
 const log = createLogger("agents.agent-definition");
 
@@ -44,6 +45,8 @@ export interface AgentDefinition {
   sourcePath: string;
   /** If set, this agent runs as a multi-provider debate council. */
   council?: CouncilConfig;
+  /** Declared skill proficiencies for TaskRouter matching. */
+  skills?: SkillDeclaration[];
 }
 
 export interface CouncilMember {
@@ -150,8 +153,13 @@ export function parseAgentDefinition(filePath: string): AgentDefinition | null {
   const maxTurns = parseMaxTurns(fields.max_turns);
   const systemPrompt = body.trim();
   const council = parseCouncilConfig(frontmatter);
+  const skills = parseSkillList(fields.skills);
 
-  return { name, description, model, tools, maxTurns, systemPrompt, sourcePath: filePath, ...(council ? { council } : {}) };
+  return {
+    name, description, model, tools, maxTurns, systemPrompt, sourcePath: filePath,
+    ...(council ? { council } : {}),
+    ...(skills.length > 0 ? { skills } : {}),
+  };
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -218,6 +226,22 @@ function parseMaxTurns(raw: unknown): number {
   const n = Number.parseInt(String(raw ?? ""), 10);
   if (Number.isFinite(n) && n > 0) return Math.min(n, 100);
   return 20;
+}
+
+/**
+ * Parse a skill list from frontmatter.
+ * Handles:  skills: [typescript:0.9, react:0.8, bun:0.7]
+ */
+export function parseSkillList(raw: unknown): SkillDeclaration[] {
+  if (!Array.isArray(raw)) return [];
+  return raw.map((item) => {
+    const s = String(item).trim();
+    const colonIdx = s.lastIndexOf(":");
+    if (colonIdx === -1) return { name: s, proficiency: 0.8 };
+    const name = s.slice(0, colonIdx).trim();
+    const proficiency = Math.min(1, Math.max(0, parseFloat(s.slice(colonIdx + 1)) || 0.8));
+    return { name, proficiency };
+  });
 }
 
 /**

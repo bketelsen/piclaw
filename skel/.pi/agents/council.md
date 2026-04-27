@@ -3,6 +3,7 @@ name: council
 description: Multi-provider debate council. Runs three competing AI models through position→critique→revision→synthesis on any question or decision.
 tools: [read, bash, grep, find, ls]
 max_turns: 5
+skills: [debate:0.9, synthesis:0.85, multimodel:0.95]
 council:
   members:
     - id: claude
